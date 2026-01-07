@@ -1,96 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* NextPlay - Sporty Bold Design System
+   All colors are HSL for consistency
 */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
+    /* Core brand - Vibrant athletic green */
+    --primary: 145 70% 42%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Accent - Energetic orange for CTAs and alerts */
+    --accent: 24 95% 53%;
+    --accent-foreground: 0 0% 100%;
+    
+    /* Background - Clean off-white with subtle warmth */
+    --background: 40 20% 98%;
+    --foreground: 220 25% 10%;
+    
+    /* Cards - Pure white for elevation */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
+    --card-foreground: 220 25% 10%;
+    
+    /* Popover */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --popover-foreground: 220 25% 10%;
+    
+    /* Secondary - Cool gray */
+    --secondary: 220 15% 95%;
+    --secondary-foreground: 220 25% 20%;
+    
+    /* Muted elements */
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 10% 45%;
+    
+    /* Destructive - Error red */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Session states */
+    --state-protected: 145 70% 42%;
+    --state-rescue: 45 93% 47%;
+    --state-released: 0 72% 51%;
+    
+    /* Success */
+    --success: 145 70% 42%;
+    --success-foreground: 0 0% 100%;
+    
+    /* Warning */
+    --warning: 45 93% 47%;
+    --warning-foreground: 220 25% 10%;
+    
+    /* Borders & inputs */
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 145 70% 42%;
+    
+    --radius: 0.75rem;
+    
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 25% 20%;
+    --sidebar-primary: 145 70% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 95%;
+    --sidebar-accent-foreground: 220 25% 20%;
+    --sidebar-border: 220 15% 90%;
+    --sidebar-ring: 145 70% 42%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(145 70% 42%), hsl(160 70% 38%));
+    --gradient-accent: linear-gradient(135deg, hsl(24 95% 53%), hsl(35 95% 55%));
+    --gradient-hero: linear-gradient(180deg, hsl(145 70% 42% / 0.1), transparent);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    /* Dark mode - Deep athletic theme */
+    --primary: 145 65% 50%;
+    --primary-foreground: 0 0% 100%;
+    
+    --accent: 24 95% 58%;
+    --accent-foreground: 0 0% 100%;
+    
+    --background: 220 20% 8%;
+    --foreground: 0 0% 98%;
+    
+    --card: 220 20% 12%;
+    --card-foreground: 0 0% 98%;
+    
+    --popover: 220 20% 12%;
+    --popover-foreground: 0 0% 98%;
+    
+    --secondary: 220 20% 16%;
+    --secondary-foreground: 0 0% 92%;
+    
+    --muted: 220 20% 18%;
+    --muted-foreground: 220 10% 60%;
+    
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --state-protected: 145 65% 50%;
+    --state-rescue: 45 90% 55%;
+    --state-released: 0 65% 55%;
+    
+    --success: 145 65% 50%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 45 90% 55%;
+    --warning-foreground: 220 20% 8%;
+    
+    --border: 220 15% 20%;
+    --input: 220 15% 20%;
+    --ring: 145 65% 50%;
+    
+    --sidebar-background: 220 20% 10%;
+    --sidebar-foreground: 0 0% 92%;
+    --sidebar-primary: 145 65% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 220 20% 16%;
+    --sidebar-accent-foreground: 0 0% 92%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 145 65% 50%;
   }
 }
 
@@ -99,7 +134,76 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground min-h-screen;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', system-ui, sans-serif;
+    @apply font-bold tracking-tight;
+  }
+}
+
+@layer components {
+  /* State badges */
+  .badge-protected {
+    @apply bg-success text-success-foreground;
+  }
+  
+  .badge-rescue {
+    @apply bg-warning text-warning-foreground;
+  }
+  
+  .badge-released {
+    @apply bg-destructive text-destructive-foreground;
+  }
+
+  /* Athletic button style */
+  .btn-athletic {
+    @apply font-semibold uppercase tracking-wide transition-all duration-200;
+    font-family: 'Outfit', system-ui, sans-serif;
+  }
+
+  /* Card with subtle shadow */
+  .card-elevated {
+    @apply bg-card rounded-xl shadow-lg shadow-foreground/5 border border-border/50;
+  }
+
+  /* Mobile safe area */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 1rem);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but allow scrolling */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Gradient text */
+  .text-gradient-primary {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-primary);
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply backdrop-blur-lg bg-background/80;
   }
 }
