@@ -14,6 +14,97 @@ export type Database = {
   }
   public: {
     Tables: {
+      contact_messages: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_read: boolean | null
+          message: string
+          name: string
+          subject: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          is_read?: boolean | null
+          message: string
+          name: string
+          subject: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          name?: string
+          subject?: string
+        }
+        Relationships: []
+      }
+      court_availability: {
+        Row: {
+          available_date: string
+          booked_by_group_id: string | null
+          booked_by_session_id: string | null
+          court_id: string
+          created_at: string
+          end_time: string
+          id: string
+          is_booked: boolean | null
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          available_date: string
+          booked_by_group_id?: string | null
+          booked_by_session_id?: string | null
+          court_id: string
+          created_at?: string
+          end_time: string
+          id?: string
+          is_booked?: boolean | null
+          start_time: string
+          updated_at?: string
+        }
+        Update: {
+          available_date?: string
+          booked_by_group_id?: string | null
+          booked_by_session_id?: string | null
+          court_id?: string
+          created_at?: string
+          end_time?: string
+          id?: string
+          is_booked?: boolean | null
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "court_availability_booked_by_group_id_fkey"
+            columns: ["booked_by_group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "court_availability_booked_by_session_id_fkey"
+            columns: ["booked_by_session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "court_availability_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       courts: {
         Row: {
           capacity: number
