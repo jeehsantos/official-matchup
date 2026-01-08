@@ -8,169 +8,58 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Loader2, 
   ArrowLeft, 
   MapPin, 
   Calendar, 
   Clock, 
-  DollarSign,
   Users,
   Share2,
   Crown,
   UserPlus,
-  CalendarDays
+  CalendarDays,
+  Copy,
+  Link as LinkIcon,
+  Settings
 } from "lucide-react";
-import { format, addDays } from "date-fns";
+import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 
-type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "other";
+type Group = Database["public"]["Tables"]["groups"]["Row"];
+type Session = Database["public"]["Tables"]["sessions"]["Row"];
+type GroupMember = Database["public"]["Tables"]["group_members"]["Row"];
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+type Court = Database["public"]["Tables"]["courts"]["Row"];
+type Venue = Database["public"]["Tables"]["venues"]["Row"];
 
-interface Member {
-  id: string;
-  name: string;
-  avatar?: string;
-  isAdmin: boolean;
-  joinedAt: Date;
+interface MemberWithProfile extends GroupMember {
+  profile?: Profile;
 }
 
-interface UpcomingSession {
-  id: string;
-  date: Date;
-  time: string;
-  courtName: string;
-  confirmedPlayers: number;
-  maxPlayers: number;
-  price: number;
+interface SessionWithDetails extends Session {
+  courts?: Court & { venues?: Venue };
+  playerCount?: number;
 }
-
-interface GroupData {
-  id: string;
-  name: string;
-  sport: SportType;
-  city: string;
-  description: string;
-  memberCount: number;
-  schedule: string;
-  defaultDay: string;
-  defaultTime: string;
-  defaultVenue: string;
-  weeklyPrice: number;
-  isPublic: boolean;
-  photoUrl?: string;
-  members: Member[];
-  upcomingSessions: UpcomingSession[];
-}
-
-// Demo data
-const groupsData: Record<string, GroupData> = {
-  "5": {
-    id: "5",
-    name: "Tennis Tuesdays",
-    sport: "tennis",
-    city: "Takapuna",
-    description: "A friendly group of tennis enthusiasts who meet every Tuesday evening for doubles matches. All skill levels welcome! We rotate partners each week to keep things interesting.",
-    memberCount: 24,
-    schedule: "Tuesdays at 6:00 PM",
-    defaultDay: "Tuesday",
-    defaultTime: "6:00 PM",
-    defaultVenue: "Takapuna Tennis Club",
-    weeklyPrice: 15.0,
-    isPublic: true,
-    members: [
-      { id: "m1", name: "Rachel Green", avatar: "", isAdmin: true, joinedAt: new Date("2024-01-15") },
-      { id: "m2", name: "Monica Geller", avatar: "", isAdmin: true, joinedAt: new Date("2024-01-15") },
-      { id: "m3", name: "Ross Geller", avatar: "", isAdmin: false, joinedAt: new Date("2024-02-01") },
-      { id: "m4", name: "Chandler Bing", avatar: "", isAdmin: false, joinedAt: new Date("2024-02-10") },
-      { id: "m5", name: "Joey Tribbiani", avatar: "", isAdmin: false, joinedAt: new Date("2024-03-01") },
-      { id: "m6", name: "Phoebe Buffay", avatar: "", isAdmin: false, joinedAt: new Date("2024-03-15") },
-    ],
-    upcomingSessions: [
-      { id: "s1", date: addDays(new Date(), 2), time: "6:00 PM", courtName: "Court 1 & 2", confirmedPlayers: 6, maxPlayers: 8, price: 15.0 },
-      { id: "s2", date: addDays(new Date(), 9), time: "6:00 PM", courtName: "Court 1 & 2", confirmedPlayers: 4, maxPlayers: 8, price: 15.0 },
-    ],
-  },
-  "6": {
-    id: "6",
-    name: "Volleyball Vibes",
-    sport: "volleyball",
-    city: "Auckland CBD",
-    description: "Weekend volleyball sessions for players of all levels. We play indoor volleyball with a focus on fun and fitness. Great way to meet new people and stay active!",
-    memberCount: 32,
-    schedule: "Saturdays at 10:00 AM",
-    defaultDay: "Saturday",
-    defaultTime: "10:00 AM",
-    defaultVenue: "Auckland Recreation Center",
-    weeklyPrice: 12.0,
-    isPublic: true,
-    members: [
-      { id: "m1", name: "Michael Scott", avatar: "", isAdmin: true, joinedAt: new Date("2024-01-01") },
-      { id: "m2", name: "Jim Halpert", avatar: "", isAdmin: true, joinedAt: new Date("2024-01-01") },
-      { id: "m3", name: "Pam Beesly", avatar: "", isAdmin: false, joinedAt: new Date("2024-01-15") },
-      { id: "m4", name: "Dwight Schrute", avatar: "", isAdmin: false, joinedAt: new Date("2024-02-01") },
-      { id: "m5", name: "Angela Martin", avatar: "", isAdmin: false, joinedAt: new Date("2024-02-15") },
-      { id: "m6", name: "Kevin Malone", avatar: "", isAdmin: false, joinedAt: new Date("2024-03-01") },
-      { id: "m7", name: "Oscar Martinez", avatar: "", isAdmin: false, joinedAt: new Date("2024-03-10") },
-      { id: "m8", name: "Stanley Hudson", avatar: "", isAdmin: false, joinedAt: new Date("2024-03-20") },
-    ],
-    upcomingSessions: [
-      { id: "s1", date: addDays(new Date(), 4), time: "10:00 AM", courtName: "Main Hall", confirmedPlayers: 10, maxPlayers: 12, price: 12.0 },
-      { id: "s2", date: addDays(new Date(), 11), time: "10:00 AM", courtName: "Main Hall", confirmedPlayers: 8, maxPlayers: 12, price: 12.0 },
-    ],
-  },
-  "3": {
-    id: "3",
-    name: "Hoops After Work",
-    sport: "basketball",
-    city: "Albany",
-    description: "After-work basketball sessions for professionals who want to stay active. Competitive but friendly atmosphere. We run 5v5 full court games.",
-    memberCount: 18,
-    schedule: "Thursdays at 6:30 PM",
-    defaultDay: "Thursday",
-    defaultTime: "6:30 PM",
-    defaultVenue: "Albany Basketball Courts",
-    weeklyPrice: 10.0,
-    isPublic: true,
-    members: [
-      { id: "m1", name: "LeBron James", avatar: "", isAdmin: true, joinedAt: new Date("2024-01-01") },
-      { id: "m2", name: "Stephen Curry", avatar: "", isAdmin: false, joinedAt: new Date("2024-01-15") },
-      { id: "m3", name: "Kevin Durant", avatar: "", isAdmin: false, joinedAt: new Date("2024-02-01") },
-      { id: "m4", name: "Giannis A.", avatar: "", isAdmin: false, joinedAt: new Date("2024-02-15") },
-    ],
-    upcomingSessions: [
-      { id: "s1", date: addDays(new Date(), 1), time: "6:30 PM", courtName: "Outdoor Court", confirmedPlayers: 5, maxPlayers: 10, price: 10.0 },
-    ],
-  },
-  "4": {
-    id: "4",
-    name: "Friday Night Futsal",
-    sport: "futsal",
-    city: "Auckland CBD",
-    description: "End your week with some futsal action! We play fast-paced indoor soccer every Friday night. All skill levels welcome.",
-    memberCount: 20,
-    schedule: "Fridays at 8:00 PM",
-    defaultDay: "Friday",
-    defaultTime: "8:00 PM",
-    defaultVenue: "City Futsal",
-    weeklyPrice: 15.0,
-    isPublic: true,
-    members: [
-      { id: "m1", name: "Lionel Messi", avatar: "", isAdmin: true, joinedAt: new Date("2024-01-01") },
-      { id: "m2", name: "Cristiano Ronaldo", avatar: "", isAdmin: false, joinedAt: new Date("2024-01-10") },
-      { id: "m3", name: "Neymar Jr", avatar: "", isAdmin: false, joinedAt: new Date("2024-02-01") },
-    ],
-    upcomingSessions: [
-      { id: "s1", date: addDays(new Date(), 3), time: "8:00 PM", courtName: "Indoor Arena", confirmedPlayers: 7, maxPlayers: 12, price: 15.0 },
-    ],
-  },
-};
 
 export default function GroupDetail() {
   const { id } = useParams<{ id: string }>();
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [group, setGroup] = useState<GroupData | null>(null);
+  const { toast } = useToast();
+  
+  const [group, setGroup] = useState<Group | null>(null);
+  const [members, setMembers] = useState<MemberWithProfile[]>([]);
+  const [sessions, setSessions] = useState<SessionWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isOrganizer, setIsOrganizer] = useState(false);
   const [isMember, setIsMember] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -179,14 +68,192 @@ export default function GroupDetail() {
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    if (id) {
-      // Simulate API call
-      setTimeout(() => {
-        setGroup(groupsData[id] || null);
-        setLoading(false);
-      }, 300);
+    if (id && user) {
+      fetchGroup();
     }
-  }, [id]);
+  }, [id, user]);
+
+  const fetchGroup = async () => {
+    if (!id || !user) return;
+
+    setLoading(true);
+    try {
+      // Fetch group
+      const { data: groupData, error: groupError } = await supabase
+        .from("groups")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (groupError) throw groupError;
+      setGroup(groupData);
+      setIsOrganizer(groupData.organizer_id === user.id);
+
+      // Fetch members with profiles
+      const { data: membersData } = await supabase
+        .from("group_members")
+        .select("*")
+        .eq("group_id", id);
+
+      const membersWithProfiles = await Promise.all(
+        (membersData || []).map(async (member) => {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("user_id", member.user_id)
+            .single();
+          return { ...member, profile };
+        })
+      );
+
+      setMembers(membersWithProfiles);
+      setIsMember(membersWithProfiles.some(m => m.user_id === user.id) || groupData.organizer_id === user.id);
+
+      // Fetch sessions
+      const { data: sessionsData } = await supabase
+        .from("sessions")
+        .select(`
+          *,
+          courts (
+            *,
+            venues (*)
+          )
+        `)
+        .eq("group_id", id)
+        .eq("is_cancelled", false)
+        .gte("session_date", new Date().toISOString().split("T")[0])
+        .order("session_date", { ascending: true });
+
+      const sessionsWithCounts = await Promise.all(
+        (sessionsData || []).map(async (session) => {
+          const { count } = await supabase
+            .from("session_players")
+            .select("*", { count: "exact", head: true })
+            .eq("session_id", session.id);
+          return { ...session, playerCount: count || 0 };
+        })
+      );
+
+      setSessions(sessionsWithCounts);
+
+      // Fetch existing invite link if organizer
+      if (groupData.organizer_id === user.id && !groupData.is_public) {
+        const { data: invitation } = await supabase
+          .from("group_invitations")
+          .select("invite_code")
+          .eq("group_id", id)
+          .eq("is_active", true)
+          .maybeSingle();
+
+        if (invitation) {
+          setInviteLink(`${window.location.origin}/join/${invitation.invite_code}`);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching group:", error);
+      navigate("/groups");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleGroupVisibility = async () => {
+    if (!group || !isOrganizer) return;
+
+    try {
+      const { error } = await supabase
+        .from("groups")
+        .update({ is_public: !group.is_public })
+        .eq("id", group.id);
+
+      if (error) throw error;
+      setGroup({ ...group, is_public: !group.is_public });
+      toast({
+        title: group.is_public ? "Group is now private" : "Group is now public",
+        description: group.is_public 
+          ? "Only invited members can join" 
+          : "Anyone can find and join this group",
+      });
+    } catch (error) {
+      console.error("Error updating group:", error);
+    }
+  };
+
+  const generateInviteLink = async () => {
+    if (!group || !isOrganizer) return;
+
+    setGeneratingLink(true);
+    try {
+      // Generate a random invite code
+      const inviteCode = crypto.randomUUID().split("-")[0];
+
+      const { error } = await supabase
+        .from("group_invitations")
+        .insert({
+          group_id: group.id,
+          invite_code: inviteCode,
+          created_by: user!.id,
+        });
+
+      if (error) throw error;
+
+      const link = `${window.location.origin}/join/${inviteCode}`;
+      setInviteLink(link);
+      
+      toast({
+        title: "Invite link created!",
+        description: "Share this link with players you want to invite.",
+      });
+    } catch (error) {
+      console.error("Error generating invite link:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate invite link. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const copyInviteLink = () => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink);
+      toast({
+        title: "Link copied!",
+        description: "Share it with players you want to invite.",
+      });
+    }
+  };
+
+  const joinGroup = async () => {
+    if (!group || !user) return;
+
+    try {
+      const { error } = await supabase
+        .from("group_members")
+        .insert({
+          group_id: group.id,
+          user_id: user.id,
+          is_admin: false,
+        });
+
+      if (error) throw error;
+      setIsMember(true);
+      fetchGroup();
+      
+      toast({
+        title: "Joined group!",
+        description: `You're now a member of ${group.name}.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to join",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (authLoading || loading) {
     return (
@@ -204,23 +271,23 @@ export default function GroupDetail() {
         <div className="flex flex-col items-center justify-center py-16 px-4">
           <h2 className="text-xl font-semibold mb-2">Group not found</h2>
           <p className="text-muted-foreground mb-4">This group doesn't exist or has been removed.</p>
-          <Button onClick={() => navigate("/discover")}>Back to Discover</Button>
+          <Button onClick={() => navigate("/groups")}>Back to Groups</Button>
         </div>
       </MobileLayout>
     );
   }
 
-  const admins = group.members.filter(m => m.isAdmin);
-  const regularMembers = group.members.filter(m => !m.isAdmin);
+  const admins = members.filter(m => m.is_admin);
+  const regularMembers = members.filter(m => !m.is_admin);
 
   return (
     <MobileLayout showHeader={false} showBottomNav={false}>
       <div className="min-h-screen bg-background">
         {/* Header Image */}
         <div className="relative h-48 lg:h-64 bg-gradient-to-br from-primary/30 to-primary/10">
-          {group.photoUrl && (
+          {group.photo_url && (
             <img
-              src={group.photoUrl}
+              src={group.photo_url}
               alt={group.name}
               className="w-full h-full object-cover"
             />
@@ -244,36 +311,103 @@ export default function GroupDetail() {
             <CardContent className="p-4 lg:p-6">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <SportIcon sport={group.sport} size="lg" />
+                  <SportIcon sport={group.sport_type} size="lg" />
                   <div>
                     <h1 className="font-display text-xl lg:text-2xl font-bold">{group.name}</h1>
-                    <p className="text-muted-foreground">{getSportLabel(group.sport)}</p>
+                    <p className="text-muted-foreground">{getSportLabel(group.sport_type)}</p>
                   </div>
                 </div>
-                <Badge variant={group.isPublic ? "secondary" : "outline"}>
-                  {group.isPublic ? "Public Group" : "Private Group"}
+                <Badge variant={group.is_public ? "secondary" : "outline"}>
+                  {group.is_public ? "Public Group" : "Private Group"}
                 </Badge>
               </div>
               
-              <p className="mt-4 text-muted-foreground">{group.description}</p>
+              {group.description && (
+                <p className="mt-4 text-muted-foreground">{group.description}</p>
+              )}
 
               {/* Quick Stats */}
               <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t">
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-primary">{group.memberCount}</p>
+                  <p className="text-2xl font-bold text-primary">{members.length + 1}</p>
                   <p className="text-xs text-muted-foreground">Members</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-primary">${group.weeklyPrice}</p>
+                  <p className="text-2xl font-bold text-primary">${group.weekly_court_price}</p>
                   <p className="text-xs text-muted-foreground">Per Session</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-primary">{group.upcomingSessions.length}</p>
+                  <p className="text-2xl font-bold text-primary">{sessions.length}</p>
                   <p className="text-xs text-muted-foreground">Upcoming</p>
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          {/* Organizer Controls */}
+          {isOrganizer && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
+                  <Settings className="h-4 w-4" />
+                  Group Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-2 space-y-4">
+                {/* Privacy Toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="public-toggle">Public Group</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {group.is_public 
+                        ? "Anyone can find and join" 
+                        : "Only invited members can join"}
+                    </p>
+                  </div>
+                  <Switch
+                    id="public-toggle"
+                    checked={group.is_public || false}
+                    onCheckedChange={toggleGroupVisibility}
+                  />
+                </div>
+
+                {/* Invite Link (for private groups) */}
+                {!group.is_public && (
+                  <div className="pt-2 border-t space-y-3">
+                    <div className="flex items-center gap-2">
+                      <LinkIcon className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Invite Link</span>
+                    </div>
+                    
+                    {inviteLink ? (
+                      <div className="flex gap-2">
+                        <div className="flex-1 px-3 py-2 bg-muted rounded-md text-sm truncate">
+                          {inviteLink}
+                        </div>
+                        <Button size="sm" variant="outline" onClick={copyInviteLink}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={generateInviteLink}
+                        disabled={generatingLink}
+                      >
+                        {generatingLink ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : (
+                          <LinkIcon className="h-4 w-4 mr-2" />
+                        )}
+                        Generate Invite Link
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Schedule Info */}
           <div className="grid gap-4 sm:grid-cols-2">
@@ -285,7 +419,9 @@ export default function GroupDetail() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Regular Schedule</p>
-                    <p className="font-semibold">{group.schedule}</p>
+                    <p className="font-semibold">
+                      {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][group.default_day_of_week]}s at {group.default_start_time.slice(0, 5)}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -298,9 +434,8 @@ export default function GroupDetail() {
                     <MapPin className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Default Venue</p>
-                    <p className="font-semibold">{group.defaultVenue}</p>
-                    <p className="text-sm text-muted-foreground">{group.city}</p>
+                    <p className="text-sm text-muted-foreground">Location</p>
+                    <p className="font-semibold">{group.city}</p>
                   </div>
                 </div>
               </CardContent>
@@ -321,40 +456,49 @@ export default function GroupDetail() {
             </TabsList>
 
             <TabsContent value="sessions" className="mt-4 space-y-3">
-              {group.upcomingSessions.length > 0 ? (
-                group.upcomingSessions.map((session) => (
-                  <Card key={session.id} className="hover:shadow-card-hover transition-shadow cursor-pointer">
-                    <CardContent className="p-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-semibold">{format(session.date, "EEEE, MMM d")}</span>
+              {sessions.length > 0 ? (
+                sessions.map((session) => {
+                  const court = session.courts as (Court & { venues?: Venue }) | undefined;
+                  return (
+                    <Card key={session.id} className="hover:shadow-card-hover transition-shadow cursor-pointer">
+                      <CardContent className="p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-semibold">
+                                {format(new Date(session.session_date), "EEEE, MMM d")}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {session.start_time.slice(0, 5)}
+                              </span>
+                              {court && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {court.name}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {session.time}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              {session.courtName}
-                            </span>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <p className="font-semibold">
+                                ${(session.court_price / session.min_players).toFixed(2)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {session.playerCount}/{session.max_players} players
+                              </p>
+                            </div>
+                            <Button size="sm">Join</Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <p className="font-semibold">${session.price.toFixed(2)}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {session.confirmedPlayers}/{session.maxPlayers} players
-                            </p>
-                          </div>
-                          <Button size="sm">Join</Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                      </CardContent>
+                    </Card>
+                  );
+                })
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <CalendarDays className="h-12 w-12 mx-auto mb-3 opacity-50" />
@@ -364,84 +508,116 @@ export default function GroupDetail() {
             </TabsContent>
 
             <TabsContent value="members" className="mt-4 space-y-4">
-              {/* Admins */}
+              {/* Organizer */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
                     <Crown className="h-4 w-4 text-warning" />
-                    Organizers
+                    Organizer
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-2">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {admins.map((member) => (
-                      <div
-                        key={member.id}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-warning/5 border border-warning/20"
-                      >
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={member.avatar} />
-                          <AvatarFallback className="bg-warning/20 text-warning font-semibold">
-                            {member.name.split(" ").map(n => n[0]).join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{member.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Joined {format(member.joinedAt, "MMM yyyy")}
-                          </p>
-                        </div>
-                        <Crown className="h-4 w-4 text-warning" />
-                      </div>
-                    ))}
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-warning/5 border border-warning/20">
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback className="bg-warning/20 text-warning font-semibold">
+                        {isOrganizer ? user.email?.charAt(0).toUpperCase() : "O"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">
+                        {isOrganizer ? "You" : "Organizer"}
+                      </p>
+                    </div>
+                    <Crown className="h-4 w-4 text-warning" />
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Regular Members */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
-                    <Users className="h-4 w-4" />
-                    Members ({regularMembers.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 pt-2">
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {regularMembers.map((member) => (
-                      <div
-                        key={member.id}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
-                      >
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={member.avatar} />
-                          <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                            {member.name.split(" ").map(n => n[0]).join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{member.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Joined {format(member.joinedAt, "MMM yyyy")}
-                          </p>
+              {/* Admins */}
+              {admins.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
+                      <Crown className="h-4 w-4 text-primary" />
+                      Admins ({admins.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-2">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {admins.map((member) => (
+                        <div
+                          key={member.id}
+                          className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20"
+                        >
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={member.profile?.avatar_url || undefined} />
+                            <AvatarFallback className="bg-primary/20 text-primary font-semibold">
+                              {member.profile?.full_name?.charAt(0) || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">
+                              {member.profile?.full_name || "Member"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Joined {format(new Date(member.joined_at), "MMM yyyy")}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Regular Members */}
+              {regularMembers.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
+                      <Users className="h-4 w-4" />
+                      Members ({regularMembers.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-2">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {regularMembers.map((member) => (
+                        <div
+                          key={member.id}
+                          className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
+                        >
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={member.profile?.avatar_url || undefined} />
+                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                              {member.profile?.full_name?.charAt(0) || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">
+                              {member.profile?.full_name || "Member"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Joined {format(new Date(member.joined_at), "MMM yyyy")}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
           </Tabs>
 
           {/* Join Button */}
-          {!isMember && (
+          {!isMember && group.is_public && (
             <div className="sticky bottom-4 pb-4">
               <Button 
                 className="w-full btn-athletic h-12 text-base"
-                onClick={() => setIsMember(true)}
+                onClick={joinGroup}
               >
                 <UserPlus className="h-5 w-5 mr-2" />
-                Join Group - ${group.weeklyPrice}/session
+                Join Group - ${group.weekly_court_price}/session
               </Button>
             </div>
           )}
