@@ -2,6 +2,7 @@ import { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
 import { Header } from "./Header";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { 
@@ -113,6 +114,9 @@ export function MobileLayout({
 
       {/* Mobile Bottom Nav */}
       {showBottomNav && <BottomNav />}
+
+      {/* Chat Widget */}
+      <ChatWidget />
     </div>
   );
 }

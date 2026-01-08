@@ -9,9 +9,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
-import { Loader2, Plus, Users } from "lucide-react";
+import { Loader2, Plus, Users, Calendar, MapPin, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import type { Database } from "@/integrations/supabase/types";
@@ -28,6 +34,10 @@ interface GroupSelectionModalProps {
   dayOfWeek: number;
   startTime: string;
   city: string;
+  slotDate: string;
+  slotStartTime: string;
+  slotEndTime: string;
+  courtName: string;
 }
 
 export function GroupSelectionModal({
@@ -39,20 +49,33 @@ export function GroupSelectionModal({
   dayOfWeek,
   startTime,
   city,
+  slotDate,
+  slotStartTime,
+  slotEndTime,
+  courtName,
 }: GroupSelectionModalProps) {
   const { user } = useAuth();
   const [userGroups, setUserGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
-  const [createNewGroup, setCreateNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+
+  const isNewGroup = selectedGroupId === "new";
 
   useEffect(() => {
     if (open && user) {
       fetchUserGroups();
     }
   }, [open, user]);
+
+  useEffect(() => {
+    // Reset state when modal opens
+    if (open) {
+      setSelectedGroupId("");
+      setNewGroupName("");
+    }
+  }, [open]);
 
   const fetchUserGroups = async () => {
     if (!user) return;
@@ -68,9 +91,11 @@ export function GroupSelectionModal({
       if (error) throw error;
       setUserGroups(data || []);
       
-      // If no groups, auto-select create new
-      if (!data || data.length === 0) {
-        setCreateNewGroup(true);
+      // Auto-select if only one group exists
+      if (data && data.length === 1) {
+        setSelectedGroupId(data[0].id);
+      } else if (!data || data.length === 0) {
+        setSelectedGroupId("new");
       }
     } catch (error) {
       console.error("Error fetching groups:", error);
@@ -80,7 +105,7 @@ export function GroupSelectionModal({
   };
 
   const handleConfirm = async () => {
-    if (createNewGroup) {
+    if (isNewGroup) {
       if (!newGroupName.trim()) return;
       
       setCreating(true);
@@ -121,13 +146,32 @@ export function GroupSelectionModal({
     }
   };
 
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-US", { 
+      weekday: "long",
+      month: "short", 
+      day: "numeric" 
+    });
+  };
+
+  const formatTime = (time: string) => {
+    const [hours, minutes] = time.split(":");
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
+  };
+
+  const canConfirm = isNewGroup ? newGroupName.trim().length > 0 : !!selectedGroupId;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Select a Group</DialogTitle>
+          <DialogTitle className="text-xl">Confirm Booking</DialogTitle>
           <DialogDescription>
-            Choose which group this booking is for, or create a new one.
+            Select a group for this booking or create a new one
           </DialogDescription>
         </DialogHeader>
 
@@ -136,110 +180,99 @@ export function GroupSelectionModal({
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="space-y-4">
-            {userGroups.length > 0 && (
-              <RadioGroup
-                value={createNewGroup ? "new" : selectedGroupId}
-                onValueChange={(value) => {
-                  if (value === "new") {
-                    setCreateNewGroup(true);
-                    setSelectedGroupId("");
-                  } else {
-                    setCreateNewGroup(false);
-                    setSelectedGroupId(value);
-                  }
-                }}
-              >
-                <div className="space-y-2">
-                  {userGroups.map((group) => (
-                    <div
-                      key={group.id}
-                      className={`flex items-center space-x-3 rounded-lg border p-4 cursor-pointer transition-colors ${
-                        selectedGroupId === group.id
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:bg-muted/50"
-                      }`}
-                      onClick={() => {
-                        setSelectedGroupId(group.id);
-                        setCreateNewGroup(false);
-                      }}
-                    >
-                      <RadioGroupItem value={group.id} id={group.id} />
-                      <div className="flex items-center gap-3 flex-1">
-                        <SportIcon sport={group.sport_type} />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{group.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {getSportLabel(group.sport_type)} • {group.city}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Users className="h-4 w-4" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Create new group option */}
-                  <div
-                    className={`flex items-center space-x-3 rounded-lg border p-4 cursor-pointer transition-colors ${
-                      createNewGroup
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:bg-muted/50"
-                    }`}
-                    onClick={() => {
-                      setCreateNewGroup(true);
-                      setSelectedGroupId("");
-                    }}
-                  >
-                    <RadioGroupItem value="new" id="new-group" />
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Plus className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Create New Group</p>
-                        <p className="text-sm text-muted-foreground">
-                          Start a new group for this booking
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+          <div className="space-y-5">
+            {/* Booking Summary Card */}
+            <div className="rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <SportIcon sport={sportType} className="h-10 w-10" />
+                <div>
+                  <h3 className="font-semibold text-lg">{courtName}</h3>
+                  <p className="text-sm text-muted-foreground">{getSportLabel(sportType)}</p>
                 </div>
-              </RadioGroup>
-            )}
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  <span>{formatDate(slotDate)}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  <span>{formatTime(slotStartTime)} - {formatTime(slotEndTime)}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <MapPin className="h-4 w-4" />
+                  <span>{city}</span>
+                </div>
+                <div className="flex items-center gap-2 font-semibold text-primary">
+                  <span className="text-lg">${courtPrice}</span>
+                </div>
+              </div>
+            </div>
 
-            {(createNewGroup || userGroups.length === 0) && (
-              <div className="space-y-3 pt-2">
-                <Label htmlFor="group-name">Group Name</Label>
+            {/* Group Selection */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Select Group</Label>
+              <Select
+                value={selectedGroupId}
+                onValueChange={setSelectedGroupId}
+              >
+                <SelectTrigger className="w-full h-12">
+                  <SelectValue placeholder="Choose a group..." />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border border-border shadow-lg">
+                  {userGroups.map((group) => (
+                    <SelectItem key={group.id} value={group.id} className="py-3">
+                      <div className="flex items-center gap-2">
+                        <SportIcon sport={group.sport_type} className="h-4 w-4" />
+                        <span>{group.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="new" className="py-3">
+                    <div className="flex items-center gap-2 text-primary">
+                      <Plus className="h-4 w-4" />
+                      <span className="font-medium">Create New Group</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* New Group Name Input */}
+            {isNewGroup && (
+              <div className="space-y-3 animate-in slide-in-from-top-2 duration-200">
+                <Label htmlFor="group-name" className="text-sm font-medium">
+                  New Group Name
+                </Label>
                 <Input
                   id="group-name"
                   placeholder="e.g., Wednesday Legends"
                   value={newGroupName}
                   onChange={(e) => setNewGroupName(e.target.value)}
+                  className="h-12"
+                  autoFocus
                 />
-                <p className="text-xs text-muted-foreground">
-                  You'll be the organizer of this group. You can invite players and manage sessions.
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5" />
+                  You'll be the organizer. Invite players after booking.
                 </p>
               </div>
             )}
 
-            <div className="flex gap-3 pt-4">
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"
-                className="flex-1"
+                className="flex-1 h-12"
                 onClick={() => onOpenChange(false)}
               >
                 Cancel
               </Button>
               <Button
-                className="flex-1"
+                className="flex-1 h-12 font-semibold"
                 onClick={handleConfirm}
-                disabled={
-                  creating ||
-                  (createNewGroup && !newGroupName.trim()) ||
-                  (!createNewGroup && !selectedGroupId)
-                }
+                disabled={creating || !canConfirm}
               >
                 {creating ? (
                   <>
@@ -247,7 +280,10 @@ export function GroupSelectionModal({
                     Creating...
                   </>
                 ) : (
-                  "Confirm Booking"
+                  <>
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Confirm Booking
+                  </>
                 )}
               </Button>
             </div>
