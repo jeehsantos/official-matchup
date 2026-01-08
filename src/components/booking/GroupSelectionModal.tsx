@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
 import { Loader2, Plus, Users, Calendar, MapPin, Clock } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import type { Database } from "@/integrations/supabase/types";
@@ -126,17 +127,19 @@ export function GroupSelectionModal({
           .single();
 
         if (error) throw error;
-        
         // Add organizer as group member
-        await supabase.from("group_members").insert({
+        const { error: memberError } = await supabase.from("group_members").insert({
           group_id: data.id,
           user_id: user!.id,
           is_admin: true,
         });
-        
+
+        if (memberError) throw memberError;
+
         onConfirm(data.id, true);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error creating group:", error);
+        toast.error(error?.message ?? "Failed to create group. Please try again.");
       } finally {
         setCreating(false);
       }
