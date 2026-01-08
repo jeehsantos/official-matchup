@@ -18,8 +18,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { format, isSameDay } from "date-fns";
+import { format, isSameDay, getDay } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
+import { GroupSelectionModal } from "@/components/booking/GroupSelectionModal";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
 type Venue = Database["public"]["Tables"]["venues"]["Row"];
@@ -41,6 +42,7 @@ export default function CourtDetail() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedSlot, setSelectedSlot] = useState<Availability | null>(null);
   const [booking, setBooking] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -88,7 +90,7 @@ export default function CourtDetail() {
     }
   };
 
-  const handleBookSlot = async () => {
+  const handleBookSlot = () => {
     if (!user) {
       toast({
         title: "Please sign in",
@@ -101,34 +103,85 @@ export default function CourtDetail() {
 
     if (!selectedSlot || !court) return;
 
-    setBooking(true);
-    try {
-      // Mark the slot as booked and record who booked it
-      const { error } = await supabase
-        .from("court_availability")
-        .update(
-          {
-            is_booked: true,
-            booked_by_user_id: user.id,
-            booked_by_group_id: null,
-            booked_by_session_id: null,
-            payment_status: "pending",
-          } as any
-        )
-        .eq("id", selectedSlot.id)
-        .eq("is_booked", false); // Ensure we only book if still available
+    // Open group selection modal
+    setShowGroupModal(true);
+  };
 
-      if (error) throw error;
+  const handleGroupConfirm = async (groupId: string, isNewGroup: boolean) => {
+    if (!selectedSlot || !court || !user) return;
+
+    setShowGroupModal(false);
+    setBooking(true);
+
+    try {
+      // Create a session for this booking
+      const slotDate = new Date(selectedSlot.available_date);
+      const paymentDeadline = new Date(slotDate);
+      paymentDeadline.setHours(paymentDeadline.getHours() - 24);
+
+      const { data: session, error: sessionError } = await supabase
+        .from("sessions")
+        .insert({
+          group_id: groupId,
+          court_id: court.id,
+          session_date: selectedSlot.available_date,
+          start_time: selectedSlot.start_time,
+          duration_minutes: 60, // Default 1 hour
+          court_price: court.hourly_rate,
+          min_players: 6,
+          max_players: court.capacity,
+          payment_deadline: paymentDeadline.toISOString(),
+          state: "protected",
+        })
+        .select()
+        .single();
+
+      if (sessionError) throw sessionError;
+
+      // Mark the slot as booked
+      const { error: bookingError } = await supabase
+        .from("court_availability")
+        .update({
+          is_booked: true,
+          booked_by_user_id: user.id,
+          booked_by_group_id: groupId,
+          booked_by_session_id: session.id,
+          payment_status: "pending",
+        } as any)
+        .eq("id", selectedSlot.id)
+        .eq("is_booked", false);
+
+      if (bookingError) throw bookingError;
+
+      // Get court manager ID to create chat conversation
+      if (court.venues) {
+        const { data: venue } = await supabase
+          .from("venues")
+          .select("owner_id")
+          .eq("id", court.venue_id)
+          .single();
+
+        if (venue) {
+          // Create chat conversation with court manager
+          await supabase
+            .from("chat_conversations")
+            .upsert({
+              organizer_id: user.id,
+              court_manager_id: venue.owner_id,
+              booking_id: selectedSlot.id,
+            }, { onConflict: "organizer_id,court_manager_id" });
+        }
+      }
 
       toast({
-        title: "Booking confirmed!",
+        title: isNewGroup ? "Group created & court booked!" : "Court booked!",
         description: `You've booked ${court.name} on ${format(
           new Date(selectedSlot.available_date),
           "MMMM d"
-        )} at ${selectedSlot.start_time}.`,
+        )} at ${selectedSlot.start_time}. Check your games for details.`,
       });
 
-      // Optimistically update UI, then refresh availability from DB
+      // Update UI
       setAvailability((prev) => prev.filter((s) => s.id !== selectedSlot.id));
       setSelectedSlot(null);
       fetchAvailability();
@@ -331,6 +384,20 @@ export default function CourtDetail() {
               </Button>
             </div>
           </div>
+        )}
+
+        {/* Group Selection Modal */}
+        {court && selectedSlot && (
+          <GroupSelectionModal
+            open={showGroupModal}
+            onOpenChange={setShowGroupModal}
+            onConfirm={handleGroupConfirm}
+            sportType={court.sport_type}
+            courtPrice={court.hourly_rate}
+            dayOfWeek={getDay(new Date(selectedSlot.available_date))}
+            startTime={selectedSlot.start_time}
+            city={court.venues?.city || ""}
+          />
         )}
       </div>
     </MobileLayout>
