@@ -28,7 +28,7 @@ export default function Profile() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/auth", { replace: true });
+    navigate("/", { replace: true });
   };
 
   if (isLoading) {

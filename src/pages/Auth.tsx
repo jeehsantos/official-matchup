@@ -52,8 +52,8 @@ export default function Auth() {
   });
 
   useEffect(() => {
+    // Only redirect if we have a user AND role loaded (not during sign out)
     if (!isLoading && user && userRole) {
-      // Redirect based on role
       if (userRole === "court_manager") {
         navigate("/manager", { replace: true });
       } else {
@@ -116,7 +116,9 @@ export default function Auth() {
     }
   };
 
-  if (isLoading) {
+  // Only show loading spinner if there's a user session being processed
+  // Don't show spinner when user is null (logged out or not logged in)
+  if (isLoading && user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
