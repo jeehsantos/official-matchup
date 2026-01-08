@@ -7,6 +7,7 @@ import { AuthProvider } from "@/lib/auth-context";
 import Index from "./pages/Index";
 import Home from "./pages/Home";
 import Auth from "./pages/Auth";
+import JoinGroup from "./pages/JoinGroup";
 import Groups from "./pages/Groups";
 import Discover from "./pages/Discover";
 import Games from "./pages/Games";
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/contact" element={<Contact />} />
             <Route path="/groups" element={<Groups />} />
             <Route path="/groups/:id" element={<GroupDetail />} />
+            <Route path="/join/:code" element={<JoinGroup />} />
             <Route path="/discover" element={<Discover />} />
             <Route path="/games" element={<Games />} />
             <Route path="/games/:id" element={<GameDetail />} />

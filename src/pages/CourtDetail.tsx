@@ -397,6 +397,10 @@ export default function CourtDetail() {
             dayOfWeek={getDay(new Date(selectedSlot.available_date))}
             startTime={selectedSlot.start_time}
             city={court.venues?.city || ""}
+            slotDate={selectedSlot.available_date}
+            slotStartTime={selectedSlot.start_time}
+            slotEndTime={selectedSlot.end_time}
+            courtName={court.name}
           />
         )}
       </div>
