@@ -106,10 +106,15 @@ export default function CourtDetail() {
       // Mark the slot as booked and record who booked it
       const { error } = await supabase
         .from("court_availability")
-        .update({ 
-          is_booked: true,
-          booked_by_session_id: null, // Using null since we're doing direct booking
-        })
+        .update(
+          {
+            is_booked: true,
+            booked_by_user_id: user.id,
+            booked_by_group_id: null,
+            booked_by_session_id: null,
+            payment_status: "pending",
+          } as any
+        )
         .eq("id", selectedSlot.id)
         .eq("is_booked", false); // Ensure we only book if still available
 
@@ -117,16 +122,22 @@ export default function CourtDetail() {
 
       toast({
         title: "Booking confirmed!",
-        description: `You've booked ${court.name} on ${format(new Date(selectedSlot.available_date), "MMMM d")} at ${selectedSlot.start_time}.`,
+        description: `You've booked ${court.name} on ${format(
+          new Date(selectedSlot.available_date),
+          "MMMM d"
+        )} at ${selectedSlot.start_time}.`,
       });
 
-      // Refresh availability
-      fetchAvailability();
+      // Optimistically update UI, then refresh availability from DB
+      setAvailability((prev) => prev.filter((s) => s.id !== selectedSlot.id));
       setSelectedSlot(null);
-    } catch (error) {
+      fetchAvailability();
+    } catch (error: any) {
       toast({
         title: "Booking failed",
-        description: "There was an error processing your booking. Please try again.",
+        description:
+          error?.message ||
+          "There was an error processing your booking. Please try again.",
         variant: "destructive",
       });
     } finally {

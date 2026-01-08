@@ -372,7 +372,14 @@ export default function ManagerAvailability() {
                               {slot.start_time.slice(0, 5)} - {slot.end_time.slice(0, 5)}
                             </span>
                             {slot.is_booked ? (
-                              <Badge className="bg-primary">Booked</Badge>
+                              <div className="flex items-center gap-2">
+                                <Badge>
+                                  {(slot as any).payment_status === "completed" ? "Paid" : "Booked"}
+                                </Badge>
+                                {(slot as any).payment_status !== "completed" && (
+                                  <Badge variant="secondary">Pending payment</Badge>
+                                )}
+                              </div>
                             ) : (
                               <Badge variant="outline" className="text-green-600 border-green-600">
                                 Available

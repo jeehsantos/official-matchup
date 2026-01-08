@@ -2,17 +2,28 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ManagerLayout } from "@/components/layout/ManagerLayout";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  Building2, 
-  Calendar, 
-  DollarSign, 
+import {
+  Building2,
+  Calendar,
+  DollarSign,
   TrendingUp,
   Plus,
-  ArrowRight
+  ArrowRight,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { format } from "date-fns";
+
+type RecentBooking = {
+  id: string;
+  available_date: string;
+  start_time: string;
+  end_time: string;
+  payment_status?: string;
+  courts?: { name: string } | null;
+};
 
 export default function ManagerDashboard() {
   const { user } = useAuth();
@@ -21,35 +32,73 @@ export default function ManagerDashboard() {
     upcomingBookings: 0,
     revenue: 0,
   });
+  const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
       fetchStats();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const fetchStats = async () => {
     try {
-      // Fetch courts count through venues owned by user
-      const { data: venues } = await supabase
+      // Fetch venues owned by user
+      const { data: venues, error: venuesError } = await supabase
         .from("venues")
         .select("id")
         .eq("owner_id", user?.id);
 
-      let courtsCount = 0;
-      if (venues && venues.length > 0) {
-        const venueIds = venues.map(v => v.id);
-        const { count } = await supabase
-          .from("courts")
+      if (venuesError) throw venuesError;
+
+      const venueIds = (venues || []).map((v) => v.id);
+
+      // Fetch courts under those venues
+      const { data: courtsData, error: courtsError } = await supabase
+        .from("courts")
+        .select("id")
+        .in("venue_id", venueIds)
+        .eq("is_active", true);
+
+      if (courtsError) throw courtsError;
+
+      const courtIds = (courtsData || []).map((c) => c.id);
+      const courtsCount = courtIds.length;
+
+      let upcomingBookings = 0;
+      let recent: RecentBooking[] = [];
+
+      if (courtIds.length > 0) {
+        const today = format(new Date(), "yyyy-MM-dd");
+
+        const { count: upcomingCount, error: countError } = await supabase
+          .from("court_availability")
           .select("*", { count: "exact", head: true })
-          .in("venue_id", venueIds);
-        courtsCount = count || 0;
+          .in("court_id", courtIds)
+          .eq("is_booked", true)
+          .gte("available_date", today);
+
+        if (countError) throw countError;
+        upcomingBookings = upcomingCount || 0;
+
+        const { data: recentData, error: recentError } = await supabase
+          .from("court_availability")
+          .select("id, available_date, start_time, end_time, payment_status, courts(name)")
+          .in("court_id", courtIds)
+          .eq("is_booked", true)
+          .order("available_date", { ascending: true })
+          .order("start_time", { ascending: true })
+          .limit(5);
+
+        if (recentError) throw recentError;
+        recent = (recentData as any) || [];
       }
 
+      setRecentBookings(recent);
       setStats({
         courts: courtsCount,
-        upcomingBookings: 0,
+        upcomingBookings,
         revenue: 0,
       });
     } catch (error) {
@@ -61,7 +110,12 @@ export default function ManagerDashboard() {
 
   const statCards = [
     { label: "My Courts", value: stats.courts, icon: Building2, color: "text-blue-500" },
-    { label: "Upcoming Bookings", value: stats.upcomingBookings, icon: TrendingUp, color: "text-orange-500" },
+    {
+      label: "Upcoming Bookings",
+      value: stats.upcomingBookings,
+      icon: TrendingUp,
+      color: "text-orange-500",
+    },
     { label: "This Month", value: `$${stats.revenue}`, icon: DollarSign, color: "text-primary" },
   ];
 
@@ -90,7 +144,7 @@ export default function ManagerDashboard() {
                 <div className="flex items-center justify-between mb-2">
                   <stat.icon className={`h-5 w-5 ${stat.color}`} />
                 </div>
-                <div className="text-2xl font-bold">{stat.value}</div>
+                <div className="text-2xl font-bold">{loading ? "—" : stat.value}</div>
                 <div className="text-sm text-muted-foreground">{stat.label}</div>
               </CardContent>
             </Card>
@@ -154,12 +208,37 @@ export default function ManagerDashboard() {
             <CardTitle className="text-lg">Recent Bookings</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No bookings yet. Publish availability to start receiving bookings.</p>
-            </div>
+            {recentBookings.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No bookings yet. Publish availability to start receiving bookings.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentBookings.map((b) => (
+                  <div key={b.id} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{b.courts?.name || "Court"}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {format(new Date(b.available_date), "MMM d")} • {b.start_time.slice(0, 5)} -
+                        {" "}
+                        {b.end_time.slice(0, 5)}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge>{b.payment_status === "completed" ? "Paid" : "Booked"}</Badge>
+                      {b.payment_status !== "completed" && (
+                        <Badge variant="secondary">Pending payment</Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
     </ManagerLayout>
   );
 }
+

@@ -49,11 +49,13 @@ export type Database = {
           available_date: string
           booked_by_group_id: string | null
           booked_by_session_id: string | null
+          booked_by_user_id: string | null
           court_id: string
           created_at: string
           end_time: string
           id: string
           is_booked: boolean | null
+          payment_status: Database["public"]["Enums"]["payment_status"]
           start_time: string
           updated_at: string
         }
@@ -61,11 +63,13 @@ export type Database = {
           available_date: string
           booked_by_group_id?: string | null
           booked_by_session_id?: string | null
+          booked_by_user_id?: string | null
           court_id: string
           created_at?: string
           end_time: string
           id?: string
           is_booked?: boolean | null
+          payment_status?: Database["public"]["Enums"]["payment_status"]
           start_time: string
           updated_at?: string
         }
@@ -73,11 +77,13 @@ export type Database = {
           available_date?: string
           booked_by_group_id?: string | null
           booked_by_session_id?: string | null
+          booked_by_user_id?: string | null
           court_id?: string
           created_at?: string
           end_time?: string
           id?: string
           is_booked?: boolean | null
+          payment_status?: Database["public"]["Enums"]["payment_status"]
           start_time?: string
           updated_at?: string
         }
