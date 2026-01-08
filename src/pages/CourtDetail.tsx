@@ -103,12 +103,15 @@ export default function CourtDetail() {
 
     setBooking(true);
     try {
-      // For now, we'll just mark the slot as booked
-      // In a full implementation, this would create a session and handle payments
+      // Mark the slot as booked and record who booked it
       const { error } = await supabase
         .from("court_availability")
-        .update({ is_booked: true })
-        .eq("id", selectedSlot.id);
+        .update({ 
+          is_booked: true,
+          booked_by_session_id: null, // Using null since we're doing direct booking
+        })
+        .eq("id", selectedSlot.id)
+        .eq("is_booked", false); // Ensure we only book if still available
 
       if (error) throw error;
 

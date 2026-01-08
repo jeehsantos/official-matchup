@@ -26,7 +26,7 @@ const sportTypes = Constants.public.Enums.sport_type;
 
 const courtSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
-  sport_type: z.enum(sportTypes as [string, ...string[]]),
+  sport_type: z.enum([...sportTypes] as [string, ...string[]]),
   capacity: z.number().min(1).max(100),
   hourly_rate: z.number().min(0),
   is_indoor: z.boolean(),

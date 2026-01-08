@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { SportIcon } from "@/components/ui/sport-icon";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -111,6 +112,7 @@ export default function ManagerAvailability() {
     if (!selectedCourt) return;
     
     try {
+      // Fetch ALL availability (both booked and available) so managers can see bookings
       const { data, error } = await supabase
         .from("court_availability")
         .select("*")
@@ -357,7 +359,12 @@ export default function ManagerAvailability() {
                       {slotsForSelectedDate.map((slot) => (
                         <div 
                           key={slot.id} 
-                          className="flex items-center justify-between p-3 rounded-lg border border-border"
+                          className={cn(
+                            "flex items-center justify-between p-3 rounded-lg border",
+                            slot.is_booked 
+                              ? "border-primary/30 bg-primary/5" 
+                              : "border-border"
+                          )}
                         >
                           <div className="flex items-center gap-3">
                             <Clock className="h-4 w-4 text-muted-foreground" />
@@ -365,7 +372,7 @@ export default function ManagerAvailability() {
                               {slot.start_time.slice(0, 5)} - {slot.end_time.slice(0, 5)}
                             </span>
                             {slot.is_booked ? (
-                              <Badge variant="secondary">Booked</Badge>
+                              <Badge className="bg-primary">Booked</Badge>
                             ) : (
                               <Badge variant="outline" className="text-green-600 border-green-600">
                                 Available

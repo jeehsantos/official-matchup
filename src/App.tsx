@@ -20,6 +20,10 @@ import Contact from "./pages/Contact";
 import Courts from "./pages/Courts";
 import CourtDetail from "./pages/CourtDetail";
 import ManagerDashboard from "./pages/manager/ManagerDashboard";
+import ManagerVenues from "./pages/manager/ManagerVenues";
+import ManagerVenueForm from "./pages/manager/ManagerVenueForm";
+import ManagerCourts from "./pages/manager/ManagerCourts";
+import ManagerCourtForm from "./pages/manager/ManagerCourtForm";
 import ManagerCourtsNew from "./pages/manager/ManagerCourtsNew";
 import ManagerCourtFormNew from "./pages/manager/ManagerCourtFormNew";
 import ManagerAvailability from "./pages/manager/ManagerAvailability";
@@ -50,6 +54,12 @@ const App = () => (
             <Route path="/courts/:id" element={<CourtDetail />} />
             {/* Manager Routes */}
             <Route path="/manager" element={<ManagerDashboard />} />
+            <Route path="/manager/venues" element={<ManagerVenues />} />
+            <Route path="/manager/venues/new" element={<ManagerVenueForm />} />
+            <Route path="/manager/venues/:venueId/edit" element={<ManagerVenueForm />} />
+            <Route path="/manager/venues/:venueId/courts" element={<ManagerCourts />} />
+            <Route path="/manager/venues/:venueId/courts/new" element={<ManagerCourtForm />} />
+            <Route path="/manager/venues/:venueId/courts/:courtId/edit" element={<ManagerCourtForm />} />
             <Route path="/manager/courts" element={<ManagerCourtsNew />} />
             <Route path="/manager/courts/new" element={<ManagerCourtFormNew />} />
             <Route path="/manager/courts/:id/edit" element={<ManagerCourtFormNew />} />
