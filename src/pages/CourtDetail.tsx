@@ -282,10 +282,9 @@ export default function CourtDetail() {
 
   const datesWithAvailability = availability.map(slot => new Date(slot.available_date));
 
-  // Get all photos (photo_urls or fallback to photo_url)
+  // Get court photo
   const getCourtPhotos = (): string[] => {
     if (!court) return [];
-    if (court.photo_urls && court.photo_urls.length > 0) return court.photo_urls;
     if (court.photo_url) return [court.photo_url];
     return [];
   };

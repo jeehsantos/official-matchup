@@ -23,9 +23,8 @@ export function CourtCard({ court, onHover, isHighlighted }: CourtCardProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   const [imageIndex, setImageIndex] = useState(0);
   
-  // Support multiple images from photo_urls or fallback to photo_url
+  // Get court image
   const getImages = (): string[] => {
-    if (court.photo_urls && court.photo_urls.length > 0) return court.photo_urls;
     if (court.photo_url) return [court.photo_url];
     return [];
   };

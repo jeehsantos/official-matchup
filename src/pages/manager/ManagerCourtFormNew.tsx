@@ -21,7 +21,7 @@ import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { CourtPhotosUpload } from "@/components/manager/CourtPhotosUpload";
+import { CourtPhotoUpload } from "@/components/manager/CourtPhotoUpload";
 import { PaymentSettingsCard } from "@/components/manager/PaymentSettingsCard";
 import { nzCities, getSuburbsForCity } from "@/data/nzLocations";
 
@@ -44,7 +44,6 @@ const courtSchema = z.object({
   is_indoor: z.boolean(),
   is_active: z.boolean(),
   photo_url: z.string().optional().nullable(),
-  photo_urls: z.array(z.string()).default([]),
   description: z.string().optional(),
   // Location details
   address: z.string().min(5, "Address must be at least 5 characters"),
@@ -88,7 +87,7 @@ export default function ManagerCourtFormNew() {
       country: "New Zealand",
       payment_timing: "at_booking",
       payment_hours_before: 24,
-      photo_urls: [],
+      photo_url: "",
     },
   });
 
@@ -138,7 +137,6 @@ export default function ManagerCourtFormNew() {
         is_indoor: data.is_indoor ?? true,
         is_active: data.is_active ?? true,
         photo_url: data.photo_url || "",
-        photo_urls: data.photo_urls || (data.photo_url ? [data.photo_url] : []),
         description: "",
         address: data.venue?.address || "",
         city: data.venue?.city || "",
@@ -182,8 +180,7 @@ export default function ManagerCourtFormNew() {
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
             is_active: data.is_active,
-            photo_url: data.photo_urls[0] || null,
-            photo_urls: data.photo_urls,
+            photo_url: data.photo_url || null,
             payment_timing: data.payment_timing as any,
             payment_hours_before: data.payment_hours_before,
           })
@@ -219,8 +216,7 @@ export default function ManagerCourtFormNew() {
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
             is_active: data.is_active,
-            photo_url: data.photo_urls[0] || null,
-            photo_urls: data.photo_urls,
+            photo_url: data.photo_url || null,
             payment_timing: data.payment_timing as any,
             payment_hours_before: data.payment_hours_before,
           }]);
@@ -320,10 +316,10 @@ export default function ManagerCourtFormNew() {
               <CardTitle>Court Photos</CardTitle>
             </CardHeader>
             <CardContent>
-              <CourtPhotosUpload
-                currentPhotoUrls={watch("photo_urls") || []}
-                onPhotosChanged={(urls) => setValue("photo_urls", urls)}
-                maxPhotos={4}
+              <CourtPhotoUpload
+                currentPhotoUrl={watch("photo_url")}
+                onPhotoUploaded={(url) => setValue("photo_url", url)}
+                onPhotoRemoved={() => setValue("photo_url", "")}
               />
             </CardContent>
           </Card>

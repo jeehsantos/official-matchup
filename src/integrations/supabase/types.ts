@@ -662,6 +662,94 @@ export type Database = {
         }
         Relationships: []
       }
+      venue_date_overrides: {
+        Row: {
+          created_at: string
+          custom_end_time: string | null
+          custom_start_time: string | null
+          end_date: string | null
+          id: string
+          is_closed: boolean
+          note: string | null
+          start_date: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          custom_end_time?: string | null
+          custom_start_time?: string | null
+          end_date?: string | null
+          id?: string
+          is_closed?: boolean
+          note?: string | null
+          start_date: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          custom_end_time?: string | null
+          custom_start_time?: string | null
+          end_date?: string | null
+          id?: string
+          is_closed?: boolean
+          note?: string | null
+          start_date?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_date_overrides_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_weekly_rules: {
+        Row: {
+          created_at: string
+          day_of_week: number
+          end_time: string
+          id: string
+          is_closed: boolean
+          start_time: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: number
+          end_time: string
+          id?: string
+          is_closed?: boolean
+          start_time: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          is_closed?: boolean
+          start_time?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_weekly_rules_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venues: {
         Row: {
           address: string
@@ -675,10 +763,12 @@ export type Database = {
           is_active: boolean | null
           latitude: number | null
           longitude: number | null
+          max_booking_minutes: number
           name: string
           owner_id: string
           phone: string | null
           photo_url: string | null
+          slot_interval_minutes: number
           stripe_account_id: string | null
           suburb: string | null
           updated_at: string
@@ -695,10 +785,12 @@ export type Database = {
           is_active?: boolean | null
           latitude?: number | null
           longitude?: number | null
+          max_booking_minutes?: number
           name: string
           owner_id: string
           phone?: string | null
           photo_url?: string | null
+          slot_interval_minutes?: number
           stripe_account_id?: string | null
           suburb?: string | null
           updated_at?: string
@@ -715,10 +807,12 @@ export type Database = {
           is_active?: boolean | null
           latitude?: number | null
           longitude?: number | null
+          max_booking_minutes?: number
           name?: string
           owner_id?: string
           phone?: string | null
           photo_url?: string | null
+          slot_interval_minutes?: number
           stripe_account_id?: string | null
           suburb?: string | null
           updated_at?: string
