@@ -269,9 +269,10 @@ export default function Courts() {
 
   // Mobile/Tablet Layout
   if (isMobile) {
+    // For mobile courts view, we use MobileLayout with header hidden for full-screen map
     return (
-      <Layout>
-        <div className="fixed inset-0 top-14 bottom-16 overflow-hidden">
+      <MobileLayout showHeader={false} showBottomNav={true}>
+        <div className="fixed inset-0 top-0 bottom-0 overflow-hidden">
           {/* Full-screen map - lowest z-index */}
           <div className="absolute inset-0 z-0">
             <CourtsMap
@@ -315,7 +316,7 @@ export default function Courts() {
             onHighlight={setHighlightedCourtId}
           />
         </div>
-      </Layout>
+      </MobileLayout>
     );
   }
 
