@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+@import "leaflet/dist/leaflet.css";
 
 @tailwind base;
 @tailwind components;
@@ -206,4 +207,46 @@
   .glass {
     @apply backdrop-blur-lg bg-background/80;
   }
+}
+
+/* Leaflet custom price markers */
+.custom-price-marker {
+  background: transparent;
+  border: none;
+}
+
+.price-marker {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font-weight: 600;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  border: 1px solid hsl(var(--border));
+}
+
+.price-marker:hover,
+.price-marker.highlighted {
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  transform: scale(1.1);
+  z-index: 1000 !important;
+}
+
+/* Leaflet popup customization */
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.leaflet-container {
+  font-family: 'Inter', system-ui, sans-serif;
 }

@@ -244,8 +244,30 @@ export const nzLocations = {
   ],
 };
 
+// City coordinates for map centering
+export const cityCoordinates: Record<string, { lat: number; lng: number }> = {
+  Auckland: { lat: -36.8485, lng: 174.7633 },
+  Wellington: { lat: -41.2865, lng: 174.7762 },
+  Christchurch: { lat: -43.5321, lng: 172.6362 },
+  Hamilton: { lat: -37.7870, lng: 175.2793 },
+  Tauranga: { lat: -37.6878, lng: 176.1651 },
+  Dunedin: { lat: -45.8788, lng: 170.5028 },
+  Napier: { lat: -39.4928, lng: 176.9120 },
+  "Palmerston North": { lat: -40.3523, lng: 175.6082 },
+  "New Plymouth": { lat: -39.0556, lng: 174.0752 },
+  Rotorua: { lat: -38.1368, lng: 176.2497 },
+  Queenstown: { lat: -45.0312, lng: 168.6626 },
+};
+
+// Default NZ center
+export const nzCenter = { lat: -41.2, lng: 174.7 };
+
 export const nzCities = Object.keys(nzLocations);
 
 export const getSuburbsForCity = (city: string): string[] => {
   return nzLocations[city as keyof typeof nzLocations] || [];
+};
+
+export const getCityCoordinates = (city: string): { lat: number; lng: number } => {
+  return cityCoordinates[city] || nzCenter;
 };
