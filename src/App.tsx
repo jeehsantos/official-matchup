@@ -30,6 +30,7 @@ import ManagerCourtForm from "./pages/manager/ManagerCourtForm";
 import ManagerCourtsNew from "./pages/manager/ManagerCourtsNew";
 import ManagerCourtFormNew from "./pages/manager/ManagerCourtFormNew";
 import ManagerAvailability from "./pages/manager/ManagerAvailability";
+import ManagerSettings from "./pages/manager/ManagerSettings";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +71,7 @@ const App = () => (
             <Route path="/manager/courts/new" element={<ManagerCourtFormNew />} />
             <Route path="/manager/courts/:id/edit" element={<ManagerCourtFormNew />} />
             <Route path="/manager/availability" element={<ManagerAvailability />} />
+            <Route path="/manager/settings" element={<ManagerSettings />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

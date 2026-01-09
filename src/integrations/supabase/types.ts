@@ -676,6 +676,7 @@ export type Database = {
           owner_id: string
           phone: string | null
           photo_url: string | null
+          stripe_account_id: string | null
           suburb: string | null
           updated_at: string
         }
@@ -695,6 +696,7 @@ export type Database = {
           owner_id: string
           phone?: string | null
           photo_url?: string | null
+          stripe_account_id?: string | null
           suburb?: string | null
           updated_at?: string
         }
@@ -714,6 +716,7 @@ export type Database = {
           owner_id?: string
           phone?: string | null
           photo_url?: string | null
+          stripe_account_id?: string | null
           suburb?: string | null
           updated_at?: string
         }
