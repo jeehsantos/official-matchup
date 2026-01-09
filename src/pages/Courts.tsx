@@ -1,19 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { SportIcon } from "@/components/ui/sport-icon";
 import { CourtCardAirbnb } from "@/components/courts/CourtCardAirbnb";
 import { CourtsMap } from "@/components/courts/CourtsMap";
 import { CourtsPagination } from "@/components/courts/CourtsPagination";
 import { 
   Search, 
   MapPin, 
-  SlidersHorizontal,
-  Building2,
   Map,
-  List
+  List,
+  Building2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -129,62 +126,93 @@ export default function Courts() {
   // Use different layout based on auth
   const Layout = user ? MobileLayout : PublicLayout;
 
+  // Sport filter data with emojis
+  const sportData = {
+    all: { emoji: "🎯", label: "All" },
+    futsal: { emoji: "⚽", label: "Futsal" },
+    basketball: { emoji: "🏀", label: "Basketball" },
+    tennis: { emoji: "🎾", label: "Tennis" },
+    volleyball: { emoji: "🏐", label: "Volleyball" },
+    badminton: { emoji: "🏸", label: "Badminton" },
+    turf_hockey: { emoji: "🏑", label: "Hockey" },
+  };
+
   // Filter bar component
   const FilterBar = () => (
-    <div className="space-y-4">
-      {/* Search */}
+    <div className="space-y-6">
+      {/* Search Bar - Airbnb style pill */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search courts, venues, cities..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10 bg-card"
-        />
+        <div className="flex items-center gap-3 bg-card border border-border rounded-full px-4 py-3 shadow-sm hover:shadow-md transition-shadow">
+          <Search className="h-5 w-5 text-muted-foreground shrink-0" />
+          <input
+            type="text"
+            placeholder="Search courts, venues, or cities..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery("")}
+              className="h-5 w-5 rounded-full bg-muted flex items-center justify-center hover:bg-muted-foreground/20 transition-colors"
+            >
+              <span className="text-xs text-muted-foreground">✕</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Sport Filters */}
-      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-        {sportFilters.map((sport) => (
-          <Button
-            key={sport}
-            variant={selectedSport === sport ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSelectedSport(sport)}
-            className="shrink-0 capitalize"
-          >
-            {sport === "all" ? "All Sports" : (
-              <span className="flex items-center gap-1.5">
-                <SportIcon sport={sport as any} className="h-4 w-4" />
-                {sport.replace("_", " ")}
+      {/* Sport Category Tabs - Icon-focused Airbnb style */}
+      <div className="flex gap-1 overflow-x-auto pb-3 scrollbar-hide -mx-4 px-4 lg:-mx-6 lg:px-6">
+        {sportFilters.map((sport) => {
+          const isActive = selectedSport === sport;
+          const data = sportData[sport as keyof typeof sportData];
+          
+          return (
+            <button
+              key={sport}
+              onClick={() => setSelectedSport(sport)}
+              className={`flex flex-col items-center gap-2 px-4 py-3 min-w-[72px] shrink-0 border-b-2 transition-all ${
+                isActive 
+                  ? "border-foreground text-foreground" 
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
+              }`}
+            >
+              <span className="text-2xl">{data?.emoji || "🎯"}</span>
+              <span className="text-xs font-medium whitespace-nowrap">
+                {data?.label || sport.replace("_", " ")}
               </span>
-            )}
-          </Button>
-        ))}
+            </button>
+          );
+        })}
       </div>
 
-      {/* City Filter */}
+      {/* City Filter - Clean pill chips */}
       {cities.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          <Button
-            variant={selectedCity === "all" ? "secondary" : "ghost"}
-            size="sm"
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 lg:-mx-6 lg:px-6">
+          <button
             onClick={() => setSelectedCity("all")}
-            className="shrink-0"
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium shrink-0 transition-all ${
+              selectedCity === "all"
+                ? "bg-foreground text-background"
+                : "bg-card border border-border text-foreground hover:border-foreground"
+            }`}
           >
-            <MapPin className="h-4 w-4 mr-1" />
+            <MapPin className="h-3.5 w-3.5" />
             All Cities
-          </Button>
+          </button>
           {cities.map((city) => (
-            <Button
+            <button
               key={city}
-              variant={selectedCity === city ? "secondary" : "ghost"}
-              size="sm"
               onClick={() => setSelectedCity(city)}
-              className="shrink-0"
+              className={`px-4 py-2 rounded-full text-sm font-medium shrink-0 transition-all ${
+                selectedCity === city
+                  ? "bg-foreground text-background"
+                  : "bg-card border border-border text-foreground hover:border-foreground"
+              }`}
             >
               {city}
-            </Button>
+            </button>
           ))}
         </div>
       )}
@@ -261,10 +289,6 @@ export default function Courts() {
                   {filteredCourts.length} court{filteredCourts.length !== 1 ? "s" : ""} available
                 </p>
               </div>
-              <Button variant="outline" size="sm" className="hidden sm:flex">
-                <SlidersHorizontal className="h-4 w-4 mr-2" />
-                Filters
-              </Button>
             </div>
 
             <FilterBar />
