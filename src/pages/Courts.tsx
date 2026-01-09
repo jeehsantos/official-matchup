@@ -1,19 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
-import { Button } from "@/components/ui/button";
 import { CourtCardAirbnb } from "@/components/courts/CourtCardAirbnb";
 import { CourtsMap } from "@/components/courts/CourtsMap";
 import { CourtsPagination } from "@/components/courts/CourtsPagination";
-import { 
-  Search, 
-  MapPin, 
-  Map,
-  List,
-  Building2
-} from "lucide-react";
+import { MobileCourtSheet } from "@/components/courts/MobileCourtSheet";
+import { Search, MapPin, SlidersHorizontal, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { Database } from "@/integrations/supabase/types";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
@@ -28,6 +23,7 @@ const ITEMS_PER_PAGE = 9;
 
 export default function Courts() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [courts, setCourts] = useState<CourtWithVenue[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,7 +33,6 @@ export default function Courts() {
   const [currentPage, setCurrentPage] = useState(1);
   const [highlightedCourtId, setHighlightedCourtId] = useState<string | null>(null);
   const [showPagination, setShowPagination] = useState(false);
-  const [mobileView, setMobileView] = useState<"list" | "map">("list");
   
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -84,7 +79,7 @@ export default function Courts() {
     return matchesSearch && matchesSport && matchesCity;
   });
 
-  // Pagination
+  // Pagination (desktop only)
   const totalPages = Math.ceil(filteredCourts.length / ITEMS_PER_PAGE);
   const paginatedCourts = filteredCourts.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -112,7 +107,6 @@ export default function Courts() {
     if (!container) return;
 
     container.addEventListener("scroll", handleScroll);
-    // Check initial state
     handleScroll();
 
     return () => container.removeEventListener("scroll", handleScroll);
@@ -123,7 +117,6 @@ export default function Courts() {
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Use different layout based on auth
   const Layout = user ? MobileLayout : PublicLayout;
 
   // Sport filter data with emojis
@@ -137,7 +130,7 @@ export default function Courts() {
     turf_hockey: { emoji: "🏑", label: "Hockey" },
   };
 
-  // Filter bar component
+  // Desktop Filter bar component
   const FilterBar = () => (
     <div className="space-y-6">
       {/* Search Bar - Airbnb style pill */}
@@ -163,7 +156,7 @@ export default function Courts() {
       </div>
 
       {/* Sport Category Tabs - Icon-focused Airbnb style */}
-      <div className="flex gap-1 overflow-x-auto pb-3 scrollbar-hide -mx-4 px-4 lg:-mx-6 lg:px-6">
+      <div className="flex gap-1 overflow-x-auto pb-3 scrollbar-hide -mx-6 px-6">
         {sportFilters.map((sport) => {
           const isActive = selectedSport === sport;
           const data = sportData[sport as keyof typeof sportData];
@@ -189,7 +182,7 @@ export default function Courts() {
 
       {/* City Filter - Clean pill chips */}
       {cities.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 lg:-mx-6 lg:px-6">
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
           <button
             onClick={() => setSelectedCity("all")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium shrink-0 transition-all ${
@@ -216,30 +209,6 @@ export default function Courts() {
           ))}
         </div>
       )}
-    </div>
-  );
-
-  // Mobile view toggle
-  const MobileViewToggle = () => (
-    <div className="lg:hidden flex gap-2 pb-4">
-      <Button
-        variant={mobileView === "list" ? "default" : "outline"}
-        size="sm"
-        onClick={() => setMobileView("list")}
-        className="flex-1"
-      >
-        <List className="h-4 w-4 mr-2" />
-        List
-      </Button>
-      <Button
-        variant={mobileView === "map" ? "default" : "outline"}
-        size="sm"
-        onClick={() => setMobileView("map")}
-        className="flex-1"
-      >
-        <Map className="h-4 w-4 mr-2" />
-        Map
-      </Button>
     </div>
   );
 
@@ -270,15 +239,73 @@ export default function Courts() {
     </div>
   );
 
+  // Mobile/Tablet: Floating search header
+  const MobileSearchHeader = () => (
+    <div className="absolute top-4 left-4 right-4 z-[1000]">
+      <div className="flex items-center gap-2 bg-background rounded-full px-4 py-3 shadow-lg border border-border">
+        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+        <input
+          type="text"
+          placeholder="Search courts..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground min-w-0"
+        />
+        {searchQuery ? (
+          <button 
+            onClick={() => setSearchQuery("")}
+            className="h-6 w-6 rounded-full bg-muted flex items-center justify-center"
+          >
+            <span className="text-xs">✕</span>
+          </button>
+        ) : (
+          <button className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+            <SlidersHorizontal className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  // Mobile/Tablet Layout
+  if (isMobile) {
+    return (
+      <Layout>
+        <div className="relative h-[calc(100vh-3.5rem-4rem)]">
+          {/* Floating search header */}
+          <MobileSearchHeader />
+
+          {/* Full-screen map */}
+          <div className="h-full w-full">
+            <CourtsMap
+              courts={filteredCourts}
+              highlightedCourtId={highlightedCourtId}
+              onMarkerHover={setHighlightedCourtId}
+            />
+          </div>
+
+          {/* Draggable bottom sheet with cards */}
+          <MobileCourtSheet
+            courts={filteredCourts}
+            loading={loading}
+            selectedSport={selectedSport}
+            onSportChange={setSelectedSport}
+            highlightedCourtId={highlightedCourtId}
+            onHighlight={setHighlightedCourtId}
+          />
+        </div>
+      </Layout>
+    );
+  }
+
+  // Desktop Layout
   return (
     <Layout>
       <div className="flex flex-col lg:flex-row h-[calc(100vh-3.5rem)]">
         {/* Left Panel - Court List */}
         <div 
           ref={scrollContainerRef}
-          className={`w-full lg:w-[55%] xl:w-[60%] overflow-y-auto ${
-            mobileView === "map" ? "hidden lg:block" : ""
-          }`}
+          className="w-full lg:w-[55%] xl:w-[60%] overflow-y-auto"
         >
           <div className="p-4 lg:p-6 space-y-4">
             {/* Header */}
@@ -292,7 +319,6 @@ export default function Courts() {
             </div>
 
             <FilterBar />
-            <MobileViewToggle />
 
             {/* Courts Grid */}
             {loading ? (
@@ -327,12 +353,8 @@ export default function Courts() {
         </div>
 
         {/* Right Panel - Map */}
-        <div 
-          className={`w-full lg:w-[45%] xl:w-[40%] h-[50vh] lg:h-auto lg:sticky lg:top-0 p-4 lg:p-6 lg:pt-[170px] ${
-            mobileView === "list" ? "hidden lg:block" : ""
-          }`}
-        >
-          <div className="h-full lg:h-[calc(100vh-170px-48px)] rounded-2xl overflow-hidden shadow-sm border border-border bg-muted">
+        <div className="hidden lg:block w-[45%] xl:w-[40%] h-auto sticky top-0 p-6 pt-[170px]">
+          <div className="h-[calc(100vh-170px-48px)] rounded-2xl overflow-hidden shadow-sm border border-border bg-muted">
             <CourtsMap
               courts={filteredCourts}
               highlightedCourtId={highlightedCourtId}
