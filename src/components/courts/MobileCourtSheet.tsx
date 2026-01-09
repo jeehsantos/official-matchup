@@ -35,12 +35,14 @@ export function MobileCourtSheet({
       setActiveSnapPoint={setSnap}
     >
       <DrawerPrimitive.Portal>
+        <DrawerPrimitive.Overlay className="fixed inset-0 bg-transparent" style={{ zIndex: 9998 }} />
         <DrawerPrimitive.Content 
-          className="fixed bottom-0 left-0 right-0 flex flex-col rounded-t-[20px] bg-background border-t border-border shadow-2xl focus:outline-none"
+          className="fixed left-0 right-0 flex flex-col rounded-t-[20px] bg-background border-t border-border shadow-2xl focus:outline-none"
           style={{ 
             zIndex: 9999,
-            height: typeof snap === 'number' ? `calc(${snap * 100}vh - 4rem)` : '40vh',
-            maxHeight: 'calc(100vh - 7.5rem)',
+            bottom: '4rem',
+            height: typeof snap === 'number' ? `calc(${snap * 100}vh - 8rem)` : '35vh',
+            maxHeight: 'calc(100vh - 8rem)',
           }}
         >
           {/* Drag handle area - larger touch target */}
