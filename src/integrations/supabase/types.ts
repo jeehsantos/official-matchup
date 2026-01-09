@@ -140,6 +140,7 @@ export type Database = {
           is_booked: boolean | null
           payment_status: Database["public"]["Enums"]["payment_status"]
           start_time: string
+          template_id: string | null
           updated_at: string
         }
         Insert: {
@@ -154,6 +155,7 @@ export type Database = {
           is_booked?: boolean | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           start_time: string
+          template_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -168,6 +170,7 @@ export type Database = {
           is_booked?: boolean | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           start_time?: string
+          template_id?: string | null
           updated_at?: string
         }
         Relationships: [

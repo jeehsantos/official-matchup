@@ -34,6 +34,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { format, isSameDay } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
+import { BulkAvailabilityGenerator } from "@/components/manager/BulkAvailabilityGenerator";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
 type Venue = Database["public"]["Tables"]["venues"]["Row"];
@@ -199,11 +200,18 @@ export default function ManagerAvailability() {
     <ManagerLayout>
       <div className="p-4 md:p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="font-display text-2xl font-bold">Availability</h1>
             <p className="text-muted-foreground">Publish available time slots for booking</p>
           </div>
+          {selectedCourt && (
+            <BulkAvailabilityGenerator
+              courtId={selectedCourt}
+              existingAvailability={availability}
+              onGenerated={fetchAvailability}
+            />
+          )}
         </div>
 
         {courts.length === 0 ? (
