@@ -19,24 +19,30 @@ export type Database = {
           booking_id: string | null
           court_manager_id: string
           created_at: string
+          expires_at: string | null
           id: string
           organizer_id: string
+          session_id: string | null
           updated_at: string
         }
         Insert: {
           booking_id?: string | null
           court_manager_id: string
           created_at?: string
+          expires_at?: string | null
           id?: string
           organizer_id: string
+          session_id?: string | null
           updated_at?: string
         }
         Update: {
           booking_id?: string | null
           court_manager_id?: string
           created_at?: string
+          expires_at?: string | null
           id?: string
           organizer_id?: string
+          session_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -45,6 +51,13 @@ export type Database = {
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "court_availability"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_conversations_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "sessions"
             referencedColumns: ["id"]
           },
         ]
