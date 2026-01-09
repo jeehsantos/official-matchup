@@ -724,6 +724,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_view_group: {
+        Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
       cancel_session_and_release_court: {
         Args: { session_id: string }
         Returns: boolean
