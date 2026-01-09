@@ -385,8 +385,9 @@ export default function GameDetail() {
   }
 
   const { session, group, court, players, waitingList, courtManagerId } = gameData;
-  const sessionDate = new Date(session.session_date);
-  const isGamePast = isPast(sessionDate);
+  // Combine session date and start time for accurate past check
+  const sessionDateTime = new Date(`${session.session_date}T${session.start_time}`);
+  const isGamePast = isPast(sessionDateTime);
   const paidCount = players.filter(p => p.isPaid).length;
   const pricePerPlayer = session.court_price / session.min_players;
   const isOrganizer = group.organizer_id === user.id;
@@ -487,7 +488,7 @@ export default function GameDetail() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Date</p>
-                    <p className="font-semibold">{format(sessionDate, "EEEE, MMMM d, yyyy")}</p>
+                    <p className="font-semibold">{format(sessionDateTime, "EEEE, MMMM d, yyyy")}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
