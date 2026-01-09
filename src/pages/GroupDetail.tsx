@@ -10,6 +10,8 @@ import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { EditGroupSchedule } from "@/components/group/EditGroupSchedule";
+import { EditGroupLocation } from "@/components/group/EditGroupLocation";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Loader2, 
@@ -452,30 +454,49 @@ export default function GroupDetail() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
               <CardContent className="p-4 lg:p-6 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Calendar className="h-5 w-5 text-primary" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Calendar className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Regular Schedule</p>
+                      <p className="font-semibold">
+                        {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][group.default_day_of_week]}s at {group.default_start_time.slice(0, 5)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Regular Schedule</p>
-                    <p className="font-semibold">
-                      {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][group.default_day_of_week]}s at {group.default_start_time.slice(0, 5)}
-                    </p>
-                  </div>
+                  {isOrganizer && (
+                    <EditGroupSchedule
+                      groupId={group.id}
+                      currentDay={group.default_day_of_week}
+                      currentTime={group.default_start_time}
+                      onUpdate={fetchGroup}
+                    />
+                  )}
                 </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardContent className="p-4 lg:p-6 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <MapPin className="h-5 w-5 text-primary" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <MapPin className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Location</p>
+                      <p className="font-semibold">{group.city}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Location</p>
-                    <p className="font-semibold">{group.city}</p>
-                  </div>
+                  {isOrganizer && (
+                    <EditGroupLocation
+                      groupId={group.id}
+                      currentCity={group.city}
+                      onUpdate={fetchGroup}
+                    />
+                  )}
                 </div>
               </CardContent>
             </Card>

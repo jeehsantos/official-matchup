@@ -10,6 +10,7 @@ import { SessionBadge } from "@/components/ui/session-badge";
 import { PlayerCount } from "@/components/ui/player-count";
 import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
 import { SessionChat } from "@/components/chat/SessionChat";
+import { EditPlayerLimits } from "@/components/session/EditPlayerLimits";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
@@ -524,47 +525,70 @@ export default function GameDetail() {
           {/* Price & Payment Status */}
           <Card>
             <CardContent className="p-4 lg:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <DollarSign className="h-5 w-5 text-primary" />
+              {session.payment_type === "single" ? (
+                // Organizer pays full amount
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+                      <CheckCircle2 className="h-5 w-5 text-success" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Payment</p>
+                      <p className="font-semibold text-success">Covered by Organizer</p>
+                      <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Price per player</p>
-                    <p className="text-2xl font-bold">${pricePerPlayer.toFixed(2)}</p>
-                  </div>
+                  {isOrganizer && !isGamePast && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg">
+                      <DollarSign className="h-5 w-5 text-muted-foreground" />
+                      <span className="font-semibold">${session.court_price.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
-                {!isGamePast && (
-                  <>
-                    {isPlayerInGame && (
-                      currentPlayerPayment?.isPaid ? (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-success/10 text-success rounded-lg">
-                          <CheckCircle2 className="h-5 w-5" />
-                          <span className="font-semibold">Paid & Confirmed</span>
-                        </div>
-                      ) : (
-                        <Button 
-                          className="btn-athletic"
-                          onClick={handleMakePayment}
-                          disabled={actionLoading}
-                        >
-                          {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Make Payment - ${pricePerPlayer.toFixed(2)}
+              ) : (
+                // Split payment
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <DollarSign className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Price per player</p>
+                      <p className="text-2xl font-bold">${pricePerPlayer.toFixed(2)}</p>
+                    </div>
+                  </div>
+                  {!isGamePast && (
+                    <>
+                      {isPlayerInGame && (
+                        currentPlayerPayment?.isPaid ? (
+                          <div className="flex items-center gap-2 px-4 py-2 bg-success/10 text-success rounded-lg">
+                            <CheckCircle2 className="h-5 w-5" />
+                            <span className="font-semibold">Paid & Confirmed</span>
+                          </div>
+                        ) : (
+                          <Button 
+                            className="btn-athletic"
+                            onClick={handleMakePayment}
+                            disabled={actionLoading}
+                          >
+                            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            Make Payment - ${pricePerPlayer.toFixed(2)}
+                          </Button>
+                        )
+                      )}
+                      {isInWaitingList && (
+                        <Button disabled className="opacity-50">
+                          Waiting List
                         </Button>
-                      )
-                    )}
-                    {isInWaitingList && (
-                      <Button disabled className="opacity-50">
-                        Waiting List
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Player Count */}
+          {/* Player Count with Organizer Edit */}
           <Card>
             <CardContent className="p-4 lg:p-6">
               <div className="flex items-center justify-between mb-4">
@@ -572,15 +596,30 @@ export default function GameDetail() {
                   <Users className="h-5 w-5 text-muted-foreground" />
                   <span className="font-semibold">Players</span>
                 </div>
-                <Badge variant="outline">
-                  {paidCount}/{players.length} paid
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {session.payment_type === "split" && (
+                    <Badge variant="outline">
+                      {paidCount}/{players.length} paid
+                    </Badge>
+                  )}
+                </div>
               </div>
               <PlayerCount
                 current={players.length}
                 min={session.min_players}
                 max={session.max_players}
               />
+              
+              {/* Organizer can edit player limits */}
+              {isOrganizer && !isGamePast && (
+                <EditPlayerLimits 
+                  sessionId={session.id}
+                  currentMin={session.min_players}
+                  currentMax={session.max_players}
+                  courtPrice={session.court_price}
+                  onUpdate={fetchGameData}
+                />
+              )}
             </CardContent>
           </Card>
 
@@ -693,7 +732,7 @@ export default function GameDetail() {
           )}
 
           {/* Session Chat - Only for organizer or court manager */}
-          {(isOrganizer || isCourtManager) && (
+          {(isOrganizer || isCourtManager) && courtManagerId && (
             <SessionChat
               sessionId={session.id}
               sessionDate={session.session_date}
@@ -753,51 +792,40 @@ export default function GameDetail() {
             </Card>
           )}
 
-          {/* Action Buttons */}
-          {!isGamePast && (isPlayerInGame || isInWaitingList) && (
-            <div className="flex flex-col gap-3 pb-4">
-              <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={() => navigate(`/groups/${group.id}`)}
-              >
-                <MessageCircle className="h-4 w-4 mr-2" />
-                Group Chat
-              </Button>
-              
-              {!isOrganizer && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="destructive" 
-                      className="w-full"
-                      disabled={actionLoading}
+          {/* Leave Game Button - Only for non-organizer players */}
+          {!isGamePast && (isPlayerInGame || isInWaitingList) && !isOrganizer && (
+            <div className="pb-4">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="destructive" 
+                    className="w-full"
+                    disabled={actionLoading}
+                  >
+                    <UserMinus className="h-4 w-4 mr-2" />
+                    Leave Game
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Leave this game?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {isInWaitingList 
+                        ? "You will be removed from the waiting list."
+                        : "Your spot will be given to the next person on the waiting list."}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Stay</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleLeaveSession}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                      <UserMinus className="h-4 w-4 mr-2" />
                       Leave Game
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Leave this game?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {isInWaitingList 
-                          ? "You will be removed from the waiting list."
-                          : "Your spot will be given to the next person on the waiting list."}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Stay</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleLeaveSession}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        Leave Game
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           )}
         </div>
