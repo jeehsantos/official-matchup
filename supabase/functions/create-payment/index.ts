@@ -26,7 +26,8 @@ serve(async (req) => {
     const { 
       sessionId, 
       paymentType, // 'at_booking' or 'before_session'
-      returnUrl 
+      returnUrl,
+      origin: requestOrigin
     } = await req.json();
 
     if (!sessionId) {
@@ -92,9 +93,9 @@ serve(async (req) => {
     }
 
     // Create checkout session with application fee
-    const origin = req.headers.get("origin") || "http://localhost:5173";
+    const origin = requestOrigin || req.headers.get("origin") || "https://trlsnfxhsoqapnhjauph.lovableproject.com";
     const successUrl = `${origin}/payment-success?session_id=${sessionId}&type=${paymentType}`;
-    const cancelUrl = returnUrl || `${origin}/games/${sessionId}`;
+    const cancelUrl = returnUrl ? `${origin}${returnUrl}` : `${origin}/games/${sessionId}`;
 
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: customerId,
