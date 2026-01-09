@@ -304,15 +304,17 @@ export default function Courts() {
 
         {/* Right Panel - Map */}
         <div 
-          className={`w-full lg:w-[45%] xl:w-[40%] h-[50vh] lg:h-full lg:sticky lg:top-0 ${
+          className={`w-full lg:w-[45%] xl:w-[40%] h-[50vh] lg:h-full lg:sticky lg:top-0 p-4 lg:p-6 ${
             mobileView === "list" ? "hidden lg:block" : ""
           }`}
         >
-          <CourtsMap
-            courts={filteredCourts}
-            highlightedCourtId={highlightedCourtId}
-            onMarkerHover={setHighlightedCourtId}
-          />
+          <div className="h-full rounded-2xl overflow-hidden shadow-sm border border-border bg-muted">
+            <CourtsMap
+              courts={filteredCourts}
+              highlightedCourtId={highlightedCourtId}
+              onMarkerHover={setHighlightedCourtId}
+            />
+          </div>
         </div>
       </div>
     </Layout>
