@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 
 interface ManagerLayoutProps {
   children: ReactNode;
@@ -156,6 +157,9 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
       <main className="lg:ml-64 pt-14 lg:pt-0 min-h-screen">
         {children}
       </main>
+
+      {/* Chat Widget */}
+      <ChatWidget />
     </div>
   );
 }

@@ -10,123 +10,35 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Search, AlertTriangle, Users } from "lucide-react";
-import { addDays } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
 
 type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "other";
 
-// Demo data - Rescue Games (games that need more players)
-const rescueGames = [
-  {
-    id: "3",
-    groupName: "Hoops After Work",
-    sport: "basketball" as SportType,
-    courtName: "Outdoor Court",
-    venueName: "Albany Basketball",
-    date: addDays(new Date(), 1),
-    time: "6:30 PM",
-    price: 10.0,
-    currentPlayers: 5,
-    minPlayers: 8,
-    maxPlayers: 10,
-    state: "rescue" as const,
-  },
-  {
-    id: "4",
-    groupName: "Friday Night Futsal",
-    sport: "futsal" as SportType,
-    courtName: "Indoor Arena",
-    venueName: "City Futsal",
-    date: addDays(new Date(), 3),
-    time: "8:00 PM",
-    price: 15.0,
-    currentPlayers: 7,
-    minPlayers: 10,
-    maxPlayers: 12,
-    state: "rescue" as const,
-  },
-  {
-    id: "7",
-    groupName: "Tennis Mix-In",
-    sport: "tennis" as SportType,
-    courtName: "Court 3",
-    venueName: "Remuera Tennis Club",
-    date: addDays(new Date(), 2),
-    time: "5:00 PM",
-    price: 0,
-    currentPlayers: 2,
-    minPlayers: 4,
-    maxPlayers: 4,
-    state: "rescue" as const,
-  },
-  {
-    id: "8",
-    groupName: "Volleyball Open",
-    sport: "volleyball" as SportType,
-    courtName: "Beach Court",
-    venueName: "Mission Bay",
-    date: addDays(new Date(), 4),
-    time: "4:00 PM",
-    price: 0,
-    currentPlayers: 4,
-    minPlayers: 6,
-    maxPlayers: 12,
-    state: "rescue" as const,
-  },
-];
+interface RescueGame {
+  id: string;
+  groupName: string;
+  sport: SportType;
+  courtName: string;
+  venueName: string;
+  date: Date;
+  time: string;
+  price: number;
+  currentPlayers: number;
+  minPlayers: number;
+  maxPlayers: number;
+  state: "rescue";
+}
 
-// Demo data - Public Groups looking for members
-const publicGroups = [
-  {
-    id: "5",
-    name: "Tennis Tuesdays",
-    sport: "tennis" as SportType,
-    city: "Takapuna",
-    memberCount: 24,
-    schedule: "Tuesdays at 6:00 PM",
-    isPublic: true,
-    weeklyPrice: 15.0,
-  },
-  {
-    id: "6",
-    name: "Volleyball Vibes",
-    sport: "volleyball" as SportType,
-    city: "Auckland CBD",
-    memberCount: 32,
-    schedule: "Saturdays at 10:00 AM",
-    isPublic: true,
-    weeklyPrice: 12.0,
-  },
-  {
-    id: "9",
-    name: "Basketball Legends",
-    sport: "basketball" as SportType,
-    city: "Albany",
-    memberCount: 18,
-    schedule: "Wednesdays at 7:00 PM",
-    isPublic: true,
-    weeklyPrice: 10.0,
-  },
-  {
-    id: "10",
-    name: "Futsal Fanatics",
-    sport: "futsal" as SportType,
-    city: "Newmarket",
-    memberCount: 28,
-    schedule: "Sundays at 6:00 PM",
-    isPublic: true,
-    weeklyPrice: 0,
-  },
-  {
-    id: "11",
-    name: "Badminton Club",
-    sport: "badminton" as SportType,
-    city: "Parnell",
-    memberCount: 16,
-    schedule: "Thursdays at 7:30 PM",
-    isPublic: true,
-    weeklyPrice: 8.0,
-  },
-];
+interface PublicGroup {
+  id: string;
+  name: string;
+  sport: SportType;
+  city: string;
+  memberCount: number;
+  schedule: string;
+  isPublic: boolean;
+  weeklyPrice: number;
+}
 
 const sports = [
   { value: "all", label: "All Sports", emoji: "🎯" },
@@ -137,6 +49,8 @@ const sports = [
   { value: "badminton", label: "Badminton", emoji: "🏸" },
 ];
 
+const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 export default function Discover() {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -146,12 +60,125 @@ export default function Discover() {
   );
   const [selectedSport, setSelectedSport] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [rescueGames, setRescueGames] = useState<RescueGame[]>([]);
+  const [publicGroups, setPublicGroups] = useState<PublicGroup[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
     if (!isLoading && !user) {
       navigate("/auth", { replace: true });
     }
   }, [user, isLoading, navigate]);
+
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
+
+  const fetchData = async () => {
+    setLoadingData(true);
+    try {
+      // Fetch rescue sessions (sessions in rescue mode that are open)
+      const today = new Date().toISOString().split('T')[0];
+      const { data: rescueSessions } = await supabase
+        .from("sessions")
+        .select(`
+          id,
+          session_date,
+          start_time,
+          court_price,
+          min_players,
+          max_players,
+          state,
+          is_rescue_open,
+          is_cancelled,
+          groups (
+            id,
+            name,
+            sport_type,
+            city
+          ),
+          courts (
+            name,
+            venues (
+              name
+            )
+          )
+        `)
+        .eq("state", "rescue")
+        .eq("is_rescue_open", true)
+        .eq("is_cancelled", false)
+        .gte("session_date", today)
+        .order("session_date", { ascending: true });
+
+      // Get player counts for each session
+      const rescueGamesData: RescueGame[] = await Promise.all(
+        (rescueSessions || []).map(async (session) => {
+          const { count } = await supabase
+            .from("session_players")
+            .select("*", { count: "exact", head: true })
+            .eq("session_id", session.id);
+
+          const group = session.groups as any;
+          const court = session.courts as any;
+          
+          return {
+            id: session.id,
+            groupName: group?.name || "Unknown Group",
+            sport: (group?.sport_type || "other") as SportType,
+            courtName: court?.name || "Court",
+            venueName: court?.venues?.name || "Venue",
+            date: new Date(session.session_date),
+            time: session.start_time.slice(0, 5),
+            price: session.court_price / session.min_players,
+            currentPlayers: count || 0,
+            minPlayers: session.min_players,
+            maxPlayers: session.max_players,
+            state: "rescue" as const,
+          };
+        })
+      );
+
+      setRescueGames(rescueGamesData);
+
+      // Fetch public groups
+      const { data: groups } = await supabase
+        .from("groups")
+        .select("*")
+        .eq("is_public", true)
+        .eq("is_active", true);
+
+      const publicGroupsData: PublicGroup[] = await Promise.all(
+        (groups || []).map(async (group) => {
+          const { count } = await supabase
+            .from("group_members")
+            .select("*", { count: "exact", head: true })
+            .eq("group_id", group.id);
+
+          const dayName = dayNames[group.default_day_of_week];
+          const time = group.default_start_time.slice(0, 5);
+
+          return {
+            id: group.id,
+            name: group.name,
+            sport: group.sport_type as SportType,
+            city: group.city,
+            memberCount: count || 0,
+            schedule: `${dayName}s at ${time}`,
+            isPublic: true,
+            weeklyPrice: group.weekly_court_price / group.min_players,
+          };
+        })
+      );
+
+      setPublicGroups(publicGroupsData);
+    } catch (error) {
+      console.error("Error fetching discover data:", error);
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
   // Filter rescue games based on sport and search
   const filteredRescueGames = useMemo(() => {
@@ -163,7 +190,7 @@ export default function Discover() {
         game.sport.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesSport && matchesSearch;
     });
-  }, [selectedSport, searchQuery]);
+  }, [rescueGames, selectedSport, searchQuery]);
 
   // Filter public groups based on sport and search
   const filteredGroups = useMemo(() => {
@@ -175,7 +202,7 @@ export default function Discover() {
         group.sport.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesSport && matchesSearch;
     });
-  }, [selectedSport, searchQuery]);
+  }, [publicGroups, selectedSport, searchQuery]);
 
   if (isLoading) {
     return (
@@ -260,7 +287,11 @@ export default function Discover() {
           </TabsList>
 
           <TabsContent value="rescue" className="mt-4">
-            {filteredRescueGames.length > 0 ? (
+            {loadingData ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : filteredRescueGames.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredRescueGames.map((game) => (
                   <GameCard key={game.id} {...game} />
@@ -291,7 +322,11 @@ export default function Discover() {
           </TabsContent>
 
           <TabsContent value="groups" className="mt-4">
-            {filteredGroups.length > 0 ? (
+            {loadingData ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : filteredGroups.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredGroups.map((group) => (
                   <GroupCard key={group.id} {...group} />

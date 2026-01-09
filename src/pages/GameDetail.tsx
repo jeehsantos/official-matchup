@@ -328,33 +328,16 @@ export default function GameDetail() {
 
     setActionLoading(true);
     try {
-      // First, release the court availability if there's a booking
-      if (gameData.session.court_id) {
-        await supabase
-          .from("court_availability")
-          .update({ 
-            is_booked: false, 
-            booked_by_session_id: null,
-            booked_by_group_id: null,
-            booked_by_user_id: null,
-            payment_status: "pending"
-          })
-          .eq("booked_by_session_id", id);
-      }
-
-      // Delete all session players
-      await supabase
-        .from("session_players")
-        .delete()
-        .eq("session_id", id);
-
-      // Mark session as cancelled
-      const { error } = await supabase
-        .from("sessions")
-        .update({ is_cancelled: true })
-        .eq("id", id);
+      // Use database function to cancel session and release court availability
+      const { data, error } = await supabase.rpc('cancel_session_and_release_court', {
+        session_id: id
+      });
 
       if (error) throw error;
+      
+      if (!data) {
+        throw new Error("You don't have permission to cancel this session");
+      }
 
       toast({
         title: "Session cancelled",
@@ -365,7 +348,7 @@ export default function GameDetail() {
       console.error("Error cancelling session:", error);
       toast({
         title: "Error",
-        description: "Failed to cancel the session.",
+        description: error instanceof Error ? error.message : "Failed to cancel the session.",
         variant: "destructive",
       });
     } finally {

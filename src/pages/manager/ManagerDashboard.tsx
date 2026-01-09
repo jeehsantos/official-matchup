@@ -4,6 +4,7 @@ import { ManagerLayout } from "@/components/layout/ManagerLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Building2,
   Calendar,
@@ -11,6 +12,8 @@ import {
   TrendingUp,
   Plus,
   ArrowRight,
+  XCircle,
+  MessageCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -23,6 +26,10 @@ type RecentBooking = {
   end_time: string;
   payment_status?: string;
   courts?: { name: string } | null;
+  organizer_name?: string;
+  booked_by_user_id?: string;
+  booked_by_session_id?: string;
+  is_cancelled?: boolean;
 };
 
 export default function ManagerDashboard() {
@@ -33,7 +40,9 @@ export default function ManagerDashboard() {
     revenue: 0,
   });
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
+  const [cancelledBookings, setCancelledBookings] = useState<RecentBooking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("active");
 
   useEffect(() => {
     if (user) {
@@ -68,34 +77,82 @@ export default function ManagerDashboard() {
 
       let upcomingBookings = 0;
       let recent: RecentBooking[] = [];
+      let cancelled: RecentBooking[] = [];
 
       if (courtIds.length > 0) {
         const today = format(new Date(), "yyyy-MM-dd");
 
-        const { count: upcomingCount, error: countError } = await supabase
+        // Fetch all bookings with session info to check cancellation status
+        const { data: allBookings, error: allError } = await supabase
           .from("court_availability")
-          .select("*", { count: "exact", head: true })
-          .in("court_id", courtIds)
-          .eq("is_booked", true)
-          .gte("available_date", today);
-
-        if (countError) throw countError;
-        upcomingBookings = upcomingCount || 0;
-
-        const { data: recentData, error: recentError } = await supabase
-          .from("court_availability")
-          .select("id, available_date, start_time, end_time, payment_status, courts(name)")
+          .select(`
+            id, 
+            available_date, 
+            start_time, 
+            end_time, 
+            payment_status, 
+            booked_by_user_id,
+            booked_by_session_id,
+            courts(name)
+          `)
           .in("court_id", courtIds)
           .eq("is_booked", true)
           .order("available_date", { ascending: true })
-          .order("start_time", { ascending: true })
-          .limit(5);
+          .order("start_time", { ascending: true });
 
-        if (recentError) throw recentError;
-        recent = (recentData as any) || [];
+        if (allError) throw allError;
+
+        // Get session cancellation status and organizer names
+        const bookingsWithDetails = await Promise.all(
+          (allBookings || []).map(async (booking) => {
+            let isCancelled = false;
+            let organizerName = "Unknown";
+
+            // Check if session is cancelled
+            if (booking.booked_by_session_id) {
+              const { data: session } = await supabase
+                .from("sessions")
+                .select("is_cancelled")
+                .eq("id", booking.booked_by_session_id)
+                .maybeSingle();
+              
+              isCancelled = session?.is_cancelled || false;
+            }
+
+            // Get organizer name
+            if (booking.booked_by_user_id) {
+              const { data: profile } = await supabase
+                .from("profiles")
+                .select("full_name")
+                .eq("user_id", booking.booked_by_user_id)
+                .maybeSingle();
+              
+              organizerName = profile?.full_name || "Unknown";
+            }
+
+            return {
+              ...booking,
+              is_cancelled: isCancelled,
+              organizer_name: organizerName,
+            } as RecentBooking;
+          })
+        );
+
+        // Separate active and cancelled bookings
+        const activeBookings = bookingsWithDetails.filter(b => !b.is_cancelled);
+        cancelled = bookingsWithDetails.filter(b => b.is_cancelled);
+
+        // Count upcoming active bookings
+        upcomingBookings = activeBookings.filter(
+          b => b.available_date >= today
+        ).length;
+
+        // Get recent active bookings (limit 5)
+        recent = activeBookings.slice(0, 5);
       }
 
       setRecentBookings(recent);
+      setCancelledBookings(cancelled);
       setStats({
         courts: courtsCount,
         upcomingBookings,
@@ -118,6 +175,37 @@ export default function ManagerDashboard() {
     },
     { label: "This Month", value: `$${stats.revenue}`, icon: DollarSign, color: "text-primary" },
   ];
+
+  const BookingItem = ({ booking, showCancelled = false }: { booking: RecentBooking; showCancelled?: boolean }) => (
+    <div className="flex items-center justify-between gap-3 py-2">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium truncate">{booking.courts?.name || "Court"}</span>
+          {showCancelled && (
+            <Badge variant="destructive" className="text-xs">Cancelled</Badge>
+          )}
+        </div>
+        <div className="text-sm text-muted-foreground">
+          {format(new Date(booking.available_date), "MMM d")} • {booking.start_time.slice(0, 5)} - {booking.end_time.slice(0, 5)}
+        </div>
+        <div className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5">
+          <span>Booked by:</span>
+          <span className="font-medium text-foreground">{booking.organizer_name}</span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        {!showCancelled && (
+          <>
+            <Badge>{booking.payment_status === "completed" ? "Paid" : "Booked"}</Badge>
+            {booking.payment_status !== "completed" && (
+              <Badge variant="secondary">Pending</Badge>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <ManagerLayout>
@@ -202,43 +290,79 @@ export default function ManagerDashboard() {
           </Card>
         </div>
 
-        {/* Recent Bookings */}
+        {/* Bookings with Tabs */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Recent Bookings</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2">
+              Bookings
+              {cancelledBookings.length > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  {cancelledBookings.length} cancelled
+                </Badge>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {recentBookings.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>No bookings yet. Publish availability to start receiving bookings.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {recentBookings.map((b) => (
-                  <div key={b.id} className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{b.courts?.name || "Court"}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {format(new Date(b.available_date), "MMM d")} • {b.start_time.slice(0, 5)} -
-                        {" "}
-                        {b.end_time.slice(0, 5)}
-                      </div>
-                    </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="mb-4">
+                <TabsTrigger value="active" className="gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Active ({recentBookings.length})
+                </TabsTrigger>
+                <TabsTrigger value="cancelled" className="gap-2">
+                  <XCircle className="h-4 w-4" />
+                  Cancelled ({cancelledBookings.length})
+                </TabsTrigger>
+              </TabsList>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge>{b.payment_status === "completed" ? "Paid" : "Booked"}</Badge>
-                      {b.payment_status !== "completed" && (
-                        <Badge variant="secondary">Pending payment</Badge>
-                      )}
-                    </div>
+              <TabsContent value="active">
+                {recentBookings.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>No active bookings. Publish availability to start receiving bookings.</p>
                   </div>
-                ))}
+                ) : (
+                  <div className="divide-y">
+                    {recentBookings.map((b) => (
+                      <BookingItem key={b.id} booking={b} />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="cancelled">
+                {cancelledBookings.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>No cancelled bookings.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {cancelledBookings.map((b) => (
+                      <BookingItem key={b.id} booking={b} showCancelled />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        {/* Messages Info */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <MessageCircle className="h-5 w-5 text-primary" />
               </div>
-            )}
+              <div className="flex-1">
+                <p className="font-medium">Chat with Organizers</p>
+                <p className="text-sm text-muted-foreground">
+                  Use the chat widget in the bottom right to communicate with organizers who have booked your courts.
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
     </ManagerLayout>
   );
 }
-
