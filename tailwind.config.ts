@@ -85,11 +85,15 @@ export default {
         sm: "calc(var(--radius) - 4px)",
         xl: "calc(var(--radius) + 4px)",
         "2xl": "calc(var(--radius) + 8px)",
+        "3xl": "calc(var(--radius) + 16px)",
       },
       boxShadow: {
         "athletic": "0 4px 20px -4px hsl(var(--primary) / 0.25)",
         "card": "0 2px 12px -2px hsl(var(--foreground) / 0.08)",
         "card-hover": "0 8px 24px -4px hsl(var(--foreground) / 0.12)",
+        "premium": "0 4px 24px -4px hsl(var(--foreground) / 0.1), 0 2px 8px -2px hsl(var(--foreground) / 0.06)",
+        "glow-primary": "0 0 32px hsl(var(--primary) / 0.25)",
+        "glow-accent": "0 0 32px hsl(var(--accent) / 0.35)",
       },
       keyframes: {
         "accordion-down": {
