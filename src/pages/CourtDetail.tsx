@@ -192,7 +192,9 @@ export default function CourtDetail() {
                 organizer_id: user.id,
                 court_manager_id: venue.owner_id,
                 booking_id: selectedSlot.id,
-              } as any); // Type assertion since session_id/expires_at are new columns
+                session_id: session.id,
+                expires_at: expiresAt.toISOString(),
+              } as any); // Type assertion since session_id/expires_at are new columns not yet in generated types
           } catch (chatError) {
             // Chat creation failed, but booking should still succeed
             console.error("Error creating chat conversation:", chatError);
