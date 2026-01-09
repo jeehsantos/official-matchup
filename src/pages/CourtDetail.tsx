@@ -262,7 +262,7 @@ export default function CourtDetail() {
 
   return (
     <Layout>
-      <div className="pb-24">
+      <div className="pb-32">
         {/* Back Button */}
         <div className="p-4">
           <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -392,7 +392,7 @@ export default function CourtDetail() {
 
         {/* Booking Footer */}
         {selectedSlot && (
-          <div className="fixed bottom-16 left-0 right-0 p-4 glass border-t border-border lg:bottom-0">
+          <div className="fixed left-0 right-0 p-4 glass border-t border-border lg:bottom-0" style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}>
             <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
               <div>
                 <div className="font-semibold">${court.hourly_rate}</div>

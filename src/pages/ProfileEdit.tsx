@@ -196,7 +196,7 @@ export default function ProfileEdit() {
           </div>
         </div>
 
-        <div className="p-4 space-y-6 max-w-2xl mx-auto lg:p-6">
+        <div className="p-4 space-y-6 max-w-2xl mx-auto lg:p-6 pb-24">
           {/* Personal Info */}
           <Card>
             <CardHeader>

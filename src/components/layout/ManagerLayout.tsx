@@ -27,6 +27,13 @@ const navItems = [
   { icon: User, label: "Profile", path: "/profile" },
 ];
 
+const mobileNavItems = [
+  { icon: LayoutDashboard, label: "Dashboard", path: "/manager" },
+  { icon: Building2, label: "Courts", path: "/manager/courts" },
+  { icon: Calendar, label: "Schedule", path: "/manager/availability" },
+  { icon: User, label: "Profile", path: "/profile" },
+];
+
 export function ManagerLayout({ children }: ManagerLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -153,9 +160,34 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-64 pt-14 lg:pt-0 min-h-screen">
+      <main className="lg:ml-64 pt-14 lg:pt-0 min-h-screen pb-20 lg:pb-0">
         {children}
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-background border-t lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
+          {mobileNavItems.map(({ icon: Icon, label, path }) => {
+            const isActive = location.pathname === path || 
+              (path !== "/manager" && location.pathname.startsWith(path));
+            return (
+              <Link
+                key={path}
+                to={path}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors",
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Icon className={cn("h-5 w-5", isActive && "stroke-[2.5]")} />
+                <span className="text-[10px] font-medium">{label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

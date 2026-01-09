@@ -346,7 +346,7 @@ export default function GroupDetail() {
           </div>
         </div>
 
-        <div className="p-4 space-y-4 max-w-4xl mx-auto lg:p-6 lg:space-y-6 -mt-16 relative">
+        <div className="p-4 space-y-4 max-w-4xl mx-auto lg:p-6 lg:space-y-6 -mt-16 relative pb-24">
           {/* Group Header Card */}
           <Card>
             <CardContent className="p-4 lg:p-6">

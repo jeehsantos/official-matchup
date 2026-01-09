@@ -105,7 +105,10 @@ export function MobileLayout({
       )}
 
       {/* Main content with responsive padding for sidebar on desktop */}
-      <main className="flex-1 overflow-y-auto pb-20 lg:pb-6 lg:pl-64">
+      <main className={cn(
+        "flex-1 overflow-y-auto lg:pb-6 lg:pl-64",
+        showBottomNav ? "pb-24" : "pb-safe"
+      )} style={showBottomNav ? { paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
         <div className="max-w-7xl mx-auto">
           {children}
         </div>

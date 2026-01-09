@@ -497,7 +497,7 @@ export default function GameDetail() {
           </div>
         </div>
 
-        <div className="p-4 space-y-4 max-w-4xl mx-auto lg:p-6 lg:space-y-6">
+        <div className="p-4 space-y-4 max-w-4xl mx-auto lg:p-6 lg:space-y-6 pb-24">
           {/* Game Header Card */}
           <Card>
             <CardContent className="p-4 lg:p-6">

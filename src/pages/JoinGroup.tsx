@@ -156,7 +156,7 @@ export default function JoinGroup() {
 
   return (
     <MobileLayout>
-      <div className="px-4 py-6 max-w-md mx-auto">
+      <div className="px-4 py-6 max-w-md mx-auto pb-24">
         {error ? (
           <Card className="border-destructive/50">
             <CardContent className="p-6 text-center">
