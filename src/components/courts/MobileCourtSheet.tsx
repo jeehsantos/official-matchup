@@ -23,37 +23,41 @@ export function MobileCourtSheet({
   highlightedCourtId,
   onHighlight,
 }: MobileCourtSheetProps) {
-  const [snap, setSnap] = useState<number | string | null>(0.55);
+  const [snap, setSnap] = useState<number | string | null>(0.4);
 
   return (
     <DrawerPrimitive.Root 
       open={true} 
       modal={false}
       dismissible={false}
-      snapPoints={[0.25, 0.55, 0.92]}
+      snapPoints={[0.15, 0.4, 0.93]}
       activeSnapPoint={snap}
       setActiveSnapPoint={setSnap}
     >
       <DrawerPrimitive.Portal>
         <DrawerPrimitive.Content 
-          className="fixed bottom-0 left-0 right-0 z-50 flex flex-col rounded-t-[20px] bg-background border-t border-border focus:outline-none"
+          className="fixed bottom-0 left-0 right-0 flex flex-col rounded-t-[20px] bg-background border-t border-border shadow-2xl focus:outline-none"
           style={{ 
-            height: typeof snap === 'number' ? `${snap * 100}vh` : '55vh',
-            maxHeight: '92vh'
+            zIndex: 9999,
+            height: typeof snap === 'number' ? `calc(${snap * 100}vh - 4rem)` : '40vh',
+            maxHeight: 'calc(100vh - 7.5rem)',
           }}
         >
           {/* Drag handle area - larger touch target */}
-          <div className="flex flex-col items-center pt-2 pb-4 cursor-grab active:cursor-grabbing">
-            <div className="h-1.5 w-12 rounded-full bg-muted-foreground/40 mb-3" />
+          <div 
+            className="flex flex-col items-center pt-4 pb-3 cursor-grab active:cursor-grabbing"
+            style={{ touchAction: 'none' }}
+          >
+            <div className="h-1.5 w-10 rounded-full bg-muted-foreground/50 mb-3" />
             <p className="text-base font-semibold text-foreground">
-              {courts.length >= 100 ? `Over ${Math.floor(courts.length / 10) * 10}` : courts.length} court{courts.length !== 1 ? "s" : ""}
+              {courts.length >= 100 ? `Over ${Math.floor(courts.length / 100) * 100}` : courts.length} court{courts.length !== 1 ? "s" : ""}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Drag up to explore</p>
+            <p className="text-xs text-muted-foreground mt-1">Drag up to explore</p>
           </div>
 
           {/* Scrollable cards list */}
           <div className="flex-1 overflow-y-auto overscroll-contain">
-            <div className="p-4 space-y-4 pb-24">
+            <div className="p-4 space-y-4 pb-20">
               {loading ? (
                 // Loading skeleton
                 Array.from({ length: 3 }).map((_, i) => (
