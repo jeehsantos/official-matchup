@@ -44,6 +44,7 @@ interface MemberWithProfile extends GroupMember {
 interface SessionWithDetails extends Session {
   courts?: Court & { venues?: Venue };
   playerCount?: number;
+  userJoined?: boolean;
 }
 
 export default function GroupDetail() {
@@ -130,7 +131,16 @@ export default function GroupDetail() {
             .from("session_players")
             .select("*", { count: "exact", head: true })
             .eq("session_id", session.id);
-          return { ...session, playerCount: count || 0 };
+          
+          // Check if current user is in this session
+          const { data: playerData } = await supabase
+            .from("session_players")
+            .select("id")
+            .eq("session_id", session.id)
+            .eq("user_id", user.id)
+            .maybeSingle();
+          
+          return { ...session, playerCount: count || 0, userJoined: !!playerData };
         })
       );
 
@@ -249,6 +259,35 @@ export default function GroupDetail() {
     } catch (error: any) {
       toast({
         title: "Failed to join",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const promoteMember = async (memberId: string, userId: string) => {
+    if (!group || !isOrganizer) return;
+
+    try {
+      const { error } = await supabase
+        .from("group_members")
+        .update({ is_admin: true })
+        .eq("id", memberId);
+
+      if (error) throw error;
+      
+      // Update local state
+      setMembers(members.map(m => 
+        m.id === memberId ? { ...m, is_admin: true } : m
+      ));
+      
+      toast({
+        title: "Member promoted!",
+        description: "They are now a co-organizer of this group.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to promote member",
         description: error?.message || "Please try again.",
         variant: "destructive",
       });
@@ -459,8 +498,13 @@ export default function GroupDetail() {
               {sessions.length > 0 ? (
                 sessions.map((session) => {
                   const court = session.courts as (Court & { venues?: Venue }) | undefined;
+                  const isUserInSession = session.userJoined || isOrganizer;
                   return (
-                    <Card key={session.id} className="hover:shadow-card-hover transition-shadow cursor-pointer">
+                    <Card 
+                      key={session.id} 
+                      className="hover:shadow-card-hover transition-shadow cursor-pointer"
+                      onClick={() => navigate(`/games/${session.id}`)}
+                    >
                       <CardContent className="p-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div className="space-y-1">
@@ -492,7 +536,16 @@ export default function GroupDetail() {
                                 {session.playerCount}/{session.max_players} players
                               </p>
                             </div>
-                            <Button size="sm">Join</Button>
+                            <Button 
+                              size="sm" 
+                              variant={isUserInSession ? "outline" : "default"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/games/${session.id}`);
+                              }}
+                            >
+                              {isUserInSession ? "View" : "Join"}
+                            </Button>
                           </div>
                         </div>
                       </CardContent>
@@ -533,13 +586,13 @@ export default function GroupDetail() {
                 </CardContent>
               </Card>
 
-              {/* Admins */}
+              {/* Co-Organizers */}
               {admins.length > 0 && (
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
                       <Crown className="h-4 w-4 text-primary" />
-                      Admins ({admins.length})
+                      Co-Organizers ({admins.length})
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 pt-2">
@@ -600,6 +653,16 @@ export default function GroupDetail() {
                               Joined {format(new Date(member.joined_at), "MMM yyyy")}
                             </p>
                           </div>
+                          {isOrganizer && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 px-2"
+                              onClick={() => promoteMember(member.id, member.user_id)}
+                            >
+                              <Crown className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
