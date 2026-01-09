@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import {
   Building2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
 import type { Database } from "@/integrations/supabase/types";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
@@ -26,6 +28,7 @@ interface CourtWithVenue extends Court {
 const sportFilters = ["all", "futsal", "basketball", "tennis", "volleyball", "badminton", "hockey"] as const;
 
 export default function Courts() {
+  const { user } = useAuth();
   const [courts, setCourts] = useState<CourtWithVenue[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -77,8 +80,11 @@ export default function Courts() {
     return matchesSearch && matchesSport && matchesCity;
   });
 
+  // Use public layout for unauthenticated users, mobile layout for authenticated
+  const Layout = user ? MobileLayout : PublicLayout;
+
   return (
-    <MobileLayout>
+    <Layout>
       <div className="p-4 space-y-6">
         {/* Header */}
         <div>
@@ -227,6 +233,6 @@ export default function Courts() {
           </div>
         )}
       </div>
-    </MobileLayout>
+    </Layout>
   );
 }
