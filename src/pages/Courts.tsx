@@ -274,7 +274,7 @@ export default function Courts() {
       <MobileLayout showHeader={false} showBottomNav={true}>
         <div className="fixed inset-0 top-0 bottom-16 overflow-hidden">
           {/* Full-screen map - lowest z-index */}
-          <div className="absolute inset-0 z-0">
+          <div className="absolute inset-0 top-20 z-0">
             <CourtsMap
               courts={filteredCourts}
               highlightedCourtId={highlightedCourtId}
