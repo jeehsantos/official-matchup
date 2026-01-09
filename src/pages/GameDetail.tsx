@@ -330,13 +330,14 @@ export default function GameDetail() {
     setActionLoading(true);
     try {
       // Call edge function to create Stripe checkout session
-      const { data, error } = await supabase.functions.invoke("create-payment", {
-        body: {
-          sessionId: id,
-          paymentType: "before_session",
-          returnUrl: `/games/${id}`,
-        },
-      });
+        const { data, error } = await supabase.functions.invoke("create-payment", {
+          body: {
+            sessionId: id,
+            paymentType: "before_session",
+            returnUrl: `/games/${id}`,
+            origin: window.location.origin,
+          },
+        });
 
       if (error) throw error;
 

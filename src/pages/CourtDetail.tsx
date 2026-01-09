@@ -215,6 +215,7 @@ export default function CourtDetail() {
               sessionId: session.id,
               paymentType: "at_booking",
               returnUrl: `/courts/${court.id}`,
+              origin: window.location.origin,
             },
           });
 
