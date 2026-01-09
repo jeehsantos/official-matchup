@@ -271,12 +271,9 @@ export default function Courts() {
   if (isMobile) {
     return (
       <Layout>
-        <div className="relative h-[calc(100vh-3.5rem-4rem)]">
-          {/* Floating search header */}
-          <MobileSearchHeader />
-
-          {/* Full-screen map */}
-          <div className="h-full w-full">
+        <div className="fixed inset-0 top-14 bottom-16 overflow-hidden">
+          {/* Full-screen map - lowest z-index */}
+          <div className="absolute inset-0 z-0">
             <CourtsMap
               courts={filteredCourts}
               highlightedCourtId={highlightedCourtId}
@@ -284,7 +281,33 @@ export default function Courts() {
             />
           </div>
 
-          {/* Draggable bottom sheet with cards */}
+          {/* Floating search header - above map */}
+          <div className="absolute top-4 left-4 right-4 z-[500]">
+            <div className="flex items-center gap-2 bg-background rounded-full px-4 py-3 shadow-lg border border-border">
+              <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+              <input
+                type="text"
+                placeholder="Search courts..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground min-w-0"
+              />
+              {searchQuery ? (
+                <button 
+                  onClick={() => setSearchQuery("")}
+                  className="h-6 w-6 rounded-full bg-muted flex items-center justify-center"
+                >
+                  <span className="text-xs">✕</span>
+                </button>
+              ) : (
+                <button className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                  <SlidersHorizontal className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Draggable bottom sheet with cards - highest z-index via portal */}
           <MobileCourtSheet
             courts={filteredCourts}
             loading={loading}
