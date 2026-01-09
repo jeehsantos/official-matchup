@@ -6,14 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { nzCities } from "@/data/nzLocations";
 import { useToast } from "@/hooks/use-toast";
 import {
   Loader2,
   ArrowLeft,
-  Camera,
   Save,
 } from "lucide-react";
 
@@ -33,7 +39,6 @@ interface ProfileData {
   full_name: string;
   phone: string;
   city: string;
-  avatar_url: string;
   preferred_sports: SportType[];
 }
 
@@ -43,11 +48,11 @@ export default function ProfileEdit() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [profileExists, setProfileExists] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     full_name: "",
     phone: "",
     city: "",
-    avatar_url: "",
     preferred_sports: [],
   });
 
@@ -77,13 +82,15 @@ export default function ProfileEdit() {
       if (error) throw error;
 
       if (data) {
+        setProfileExists(true);
         setProfileData({
           full_name: data.full_name || "",
           phone: data.phone || "",
           city: data.city || "",
-          avatar_url: data.avatar_url || "",
           preferred_sports: (data.preferred_sports as SportType[]) || [],
         });
+      } else {
+        setProfileExists(false);
       }
     } catch (error) {
       console.error("Error fetching profile:", error);
@@ -97,17 +104,36 @@ export default function ProfileEdit() {
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: profileData.full_name,
-          phone: profileData.phone,
-          city: profileData.city,
-          preferred_sports: profileData.preferred_sports,
-        })
-        .eq("user_id", user.id);
+      if (profileExists) {
+        // Update existing profile
+        const { error } = await supabase
+          .from("profiles")
+          .update({
+            full_name: profileData.full_name,
+            phone: profileData.phone,
+            city: profileData.city,
+            preferred_sports: profileData.preferred_sports,
+          })
+          .eq("user_id", user.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        // Insert new profile - but this should be handled by the trigger
+        // Let's try upsert approach
+        const { error } = await supabase
+          .from("profiles")
+          .upsert({
+            user_id: user.id,
+            full_name: profileData.full_name,
+            phone: profileData.phone,
+            city: profileData.city,
+            preferred_sports: profileData.preferred_sports,
+          }, {
+            onConflict: 'user_id'
+          });
+
+        if (error) throw error;
+      }
 
       toast({
         title: "Profile updated",
@@ -133,18 +159,6 @@ export default function ProfileEdit() {
         ? prev.preferred_sports.filter((s) => s !== sport)
         : [...prev.preferred_sports, sport],
     }));
-  };
-
-  const getInitials = () => {
-    if (profileData.full_name) {
-      return profileData.full_name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2);
-    }
-    return user?.email?.charAt(0).toUpperCase() || "U";
   };
 
   if (authLoading || loading) {
@@ -183,26 +197,6 @@ export default function ProfileEdit() {
         </div>
 
         <div className="p-4 space-y-6 max-w-2xl mx-auto lg:p-6">
-          {/* Avatar Section */}
-          <Card>
-            <CardContent className="p-6 flex flex-col items-center">
-              <div className="relative">
-                <Avatar className="h-24 w-24">
-                  <AvatarImage src={profileData.avatar_url} />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-display font-bold">
-                    {getInitials()}
-                  </AvatarFallback>
-                </Avatar>
-                <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
-                  <Camera className="h-4 w-4" />
-                </button>
-              </div>
-              <p className="text-sm text-muted-foreground mt-3">
-                Tap to change photo
-              </p>
-            </CardContent>
-          </Card>
-
           {/* Personal Info */}
           <Card>
             <CardHeader>
@@ -252,14 +246,23 @@ export default function ProfileEdit() {
 
               <div className="space-y-2">
                 <Label htmlFor="city">City</Label>
-                <Input
-                  id="city"
-                  placeholder="Enter your city"
+                <Select
                   value={profileData.city}
-                  onChange={(e) =>
-                    setProfileData((prev) => ({ ...prev, city: e.target.value }))
+                  onValueChange={(value) =>
+                    setProfileData((prev) => ({ ...prev, city: value }))
                   }
-                />
+                >
+                  <SelectTrigger id="city" className="w-full">
+                    <SelectValue placeholder="Select your city" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background border shadow-lg z-50">
+                    {nzCities.map((city) => (
+                      <SelectItem key={city} value={city}>
+                        {city}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>
