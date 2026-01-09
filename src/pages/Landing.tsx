@@ -61,7 +61,7 @@ export default function Landing() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-display font-bold text-sm">N</span>
             </div>
-            <span className="font-display font-bold text-lg">NextPlay</span>
+            <span className="font-display font-bold text-lg">MatchUP</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">
             <Link to="/about" className="text-muted-foreground hover:text-foreground transition-colors">About</Link>
@@ -93,7 +93,7 @@ export default function Landing() {
             End No-Shows.
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            NextPlay solves the chaos of group sports bookings. Upfront payments, automatic slot filling, 
+            MatchUP solves the chaos of group sports bookings. Upfront payments, automatic slot filling, 
             and fair access to courts across New Zealand.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -140,7 +140,7 @@ export default function Landing() {
             </div>
             <div className="bg-card rounded-2xl p-8 border border-border">
               <h3 className="font-display text-2xl font-bold mb-4 text-primary">
-                The NextPlay Solution
+                The MatchUP Solution
               </h3>
               <ul className="space-y-3">
                 <li className="flex items-start gap-3">
@@ -169,7 +169,7 @@ export default function Landing() {
       <section className="py-20 px-4">
         <div className="container mx-auto max-w-6xl">
           <h2 className="font-display text-3xl font-bold text-center mb-12">
-            Why Choose NextPlay?
+            Why Choose MatchUP?
           </h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((feature) => (
@@ -289,7 +289,7 @@ export default function Landing() {
                 <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                   <span className="text-primary-foreground font-display font-bold text-sm">N</span>
                 </div>
-                <span className="font-display font-bold text-lg">NextPlay</span>
+                <span className="font-display font-bold text-lg">MatchUP</span>
               </div>
               <p className="text-muted-foreground text-sm">
                 The smarter way to book courts and guarantee games across New Zealand.
@@ -319,7 +319,7 @@ export default function Landing() {
             </div>
           </div>
           <div className="pt-8 border-t border-border text-center text-sm text-muted-foreground">
-            © {new Date().getFullYear()} NextPlay. All rights reserved.
+            © {new Date().getFullYear()} MatchUP. All rights reserved.
           </div>
         </div>
       </footer>

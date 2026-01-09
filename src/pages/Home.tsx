@@ -340,7 +340,7 @@ export default function Home() {
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                 <span className="text-primary-foreground font-display font-bold text-sm">N</span>
               </div>
-              <span className="font-display font-bold text-xl text-primary">nextplay</span>
+              <span className="font-display font-bold text-xl text-primary">MatchUP</span>
             </div>
 
             {/* Search bar - Airbnb style */}

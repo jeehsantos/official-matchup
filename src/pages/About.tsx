@@ -35,7 +35,7 @@ export default function About() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-display font-bold text-sm">N</span>
             </div>
-            <span className="font-display font-bold text-lg">NextPlay</span>
+            <span className="font-display font-bold text-lg">MatchUP</span>
           </Link>
           <div className="flex items-center gap-3">
             <Link to="/auth">
@@ -62,7 +62,7 @@ export default function About() {
       <section className="pt-8 pb-16 px-4">
         <div className="container mx-auto max-w-4xl">
           <h1 className="font-display text-4xl md:text-5xl font-bold mb-6">
-            About NextPlay
+            About MatchUP
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl">
             We're on a mission to solve the chaos of group sports bookings across New Zealand.
@@ -87,7 +87,7 @@ export default function About() {
               could go to players who actually want to play?
             </p>
             <p>
-              That's why we built NextPlay. A platform where commitment is guaranteed, 
+              That's why we built MatchUP. A platform where commitment is guaranteed, 
               cancellations are handled gracefully, and everyone gets a fair shot at playing 
               the sports they love.
             </p>
@@ -145,7 +145,7 @@ export default function About() {
         <div className="container mx-auto max-w-4xl text-center">
           <h2 className="font-display text-2xl font-bold mb-4">Proudly New Zealand</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            NextPlay is built for the New Zealand sports community. We understand the local 
+            MatchUP is built for the New Zealand sports community. We understand the local 
             landscape - from indoor futsal facilities in Auckland to tennis clubs in Wellington. 
             We're here to make playing sports easier for every Kiwi.
           </p>
@@ -183,14 +183,14 @@ export default function About() {
             <div className="w-6 h-6 rounded bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-display font-bold text-xs">N</span>
             </div>
-            <span className="font-display font-semibold">NextPlay</span>
+            <span className="font-display font-semibold">MatchUP</span>
           </div>
           <div className="flex gap-6 text-sm text-muted-foreground">
             <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
             <Link to="/contact" className="hover:text-foreground transition-colors">Contact</Link>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} NextPlay
+            © {new Date().getFullYear()} MatchUP
           </p>
         </div>
       </footer>

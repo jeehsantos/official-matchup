@@ -51,7 +51,7 @@ const faqs = [
     answer: "Released slots from cancelled bookings appear in the public marketplace. Any registered player can book these slots, giving everyone fair access to court time."
   },
   {
-    question: "What fees does NextPlay charge?",
+    question: "What fees does MatchUP charge?",
     answer: "We charge a small platform fee per player per session to cover payment processing and platform maintenance. Court managers receive the full court booking amount minus payment processing fees."
   },
   {
@@ -114,7 +114,7 @@ export default function Contact() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-display font-bold text-sm">N</span>
             </div>
-            <span className="font-display font-bold text-lg">NextPlay</span>
+            <span className="font-display font-bold text-lg">MatchUP</span>
           </Link>
           <div className="flex items-center gap-3">
             <Link to="/auth">
@@ -254,10 +254,10 @@ export default function Contact() {
                   For general inquiries and support
                 </p>
                 <a 
-                  href="mailto:support@nextplay.co.nz" 
+                  href="mailto:support@MatchUP.co.nz" 
                   className="text-primary hover:underline"
                 >
-                  support@nextplay.co.nz
+                  support@MatchUP.co.nz
                 </a>
               </div>
               
@@ -267,10 +267,10 @@ export default function Contact() {
                   For partnerships and court manager onboarding
                 </p>
                 <a 
-                  href="mailto:business@nextplay.co.nz" 
+                  href="mailto:business@MatchUP.co.nz" 
                   className="text-primary hover:underline"
                 >
-                  business@nextplay.co.nz
+                  business@MatchUP.co.nz
                 </a>
               </div>
             </div>
@@ -307,14 +307,14 @@ export default function Contact() {
             <div className="w-6 h-6 rounded bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-display font-bold text-xs">N</span>
             </div>
-            <span className="font-display font-semibold">NextPlay</span>
+            <span className="font-display font-semibold">MatchUP</span>
           </div>
           <div className="flex gap-6 text-sm text-muted-foreground">
             <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
             <Link to="/about" className="hover:text-foreground transition-colors">About</Link>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} NextPlay
+            © {new Date().getFullYear()} MatchUP
           </p>
         </div>
       </footer>

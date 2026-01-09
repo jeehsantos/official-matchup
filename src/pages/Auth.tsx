@@ -105,7 +105,7 @@ export default function Auth() {
     } else {
       toast({
         title: "Account created!",
-        description: "Welcome to NextPlay. Let's get you started.",
+        description: "Welcome to MatchUP. Let's get you started.",
       });
       
       // Redirect based on selected role
@@ -135,7 +135,7 @@ export default function Auth() {
           <span className="text-primary-foreground font-display font-bold text-xl">N</span>
         </div>
         <div>
-          <h1 className="font-display font-bold text-2xl">NextPlay</h1>
+          <h1 className="font-display font-bold text-2xl">MatchUP</h1>
           <p className="text-sm text-muted-foreground">No pay = No play</p>
         </div>
       </div>

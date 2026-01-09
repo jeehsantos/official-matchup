@@ -82,7 +82,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-display font-bold text-sm">N</span>
             </div>
-            <span className="font-display font-bold">NextPlay</span>
+            <span className="font-display font-bold">MatchUP</span>
           </Link>
           <Button 
             variant="ghost" 
@@ -115,7 +115,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
                 <span className="text-primary-foreground font-display font-bold text-sm">N</span>
               </div>
               <div>
-                <span className="font-display font-bold">NextPlay</span>
+                <span className="font-display font-bold">MatchUP</span>
                 <span className="text-xs text-muted-foreground block">Court Manager</span>
               </div>
             </Link>

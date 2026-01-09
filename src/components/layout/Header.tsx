@@ -33,7 +33,7 @@ export function Header({ title, showBack = false, rightAction }: HeaderProps) {
                 </span>
               </div>
               <span className="font-display font-bold text-lg text-foreground">
-                NextPlay
+                MatchUP
               </span>
             </div>
           )}
