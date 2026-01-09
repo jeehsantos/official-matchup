@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
@@ -13,7 +14,8 @@ import {
   DollarSign,
   CheckCircle2,
   Loader2,
-  CalendarDays
+  CalendarDays,
+  LogIn
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -138,6 +140,21 @@ export default function CourtDetail() {
 
       if (sessionError) throw sessionError;
 
+      // Add the organizer as a session player automatically
+      const { error: playerError } = await supabase
+        .from("session_players")
+        .insert({
+          session_id: session.id,
+          user_id: user.id,
+          is_confirmed: true,
+          confirmed_at: new Date().toISOString(),
+        });
+
+      if (playerError) {
+        console.error("Error adding organizer as player:", playerError);
+        // Don't throw - the booking should still succeed even if this fails
+      }
+
       // Mark the slot as booked
       const { error: bookingError } = await supabase
         .from("court_availability")
@@ -206,31 +223,33 @@ export default function CourtDetail() {
 
   const datesWithAvailability = availability.map(slot => new Date(slot.available_date));
 
+  // Use public layout for unauthenticated users
+  const Layout = user ? MobileLayout : PublicLayout;
   if (loading) {
     return (
-      <MobileLayout>
+      <Layout>
         <div className="flex items-center justify-center min-h-[50vh]">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      </MobileLayout>
+      </Layout>
     );
   }
 
   if (!court) {
     return (
-      <MobileLayout>
+      <Layout>
         <div className="p-4 text-center">
           <p>Court not found.</p>
           <Link to="/courts">
             <Button variant="link">Back to Courts</Button>
           </Link>
         </div>
-      </MobileLayout>
+      </Layout>
     );
   }
 
   return (
-    <MobileLayout>
+    <Layout>
       <div className="pb-24">
         {/* Back Button */}
         <div className="p-4">
@@ -361,7 +380,7 @@ export default function CourtDetail() {
 
         {/* Booking Footer */}
         {selectedSlot && (
-          <div className="fixed bottom-16 left-0 right-0 p-4 glass border-t border-border">
+          <div className="fixed bottom-16 left-0 right-0 p-4 glass border-t border-border lg:bottom-0">
             <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
               <div>
                 <div className="font-semibold">${court.hourly_rate}</div>
@@ -369,19 +388,28 @@ export default function CourtDetail() {
                   {format(new Date(selectedSlot.available_date), "MMM d")} • {selectedSlot.start_time.slice(0, 5)}
                 </div>
               </div>
-              <Button onClick={handleBookSlot} disabled={booking} className="gap-2">
-                {booking ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Booking...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    Book Now
-                  </>
-                )}
-              </Button>
+              {user ? (
+                <Button onClick={handleBookSlot} disabled={booking} className="gap-2">
+                  {booking ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Booking...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Book Now
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Link to="/auth">
+                  <Button className="gap-2">
+                    <LogIn className="h-4 w-4" />
+                    Login to Book
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         )}
@@ -404,6 +432,6 @@ export default function CourtDetail() {
           />
         )}
       </div>
-    </MobileLayout>
+    </Layout>
   );
 }

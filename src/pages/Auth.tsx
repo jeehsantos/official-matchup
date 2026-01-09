@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Users, Building2 } from "lucide-react";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email"),
@@ -127,8 +128,8 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
-      {/* Logo */}
+    <PublicLayout showBack>
+      <div className="min-h-screen flex flex-col items-center justify-center p-4">
       <div className="flex items-center gap-3 mb-8">
         <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
           <span className="text-primary-foreground font-display font-bold text-xl">N</span>
@@ -348,6 +349,7 @@ export default function Auth() {
           </Tabs>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </PublicLayout>
   );
 }
