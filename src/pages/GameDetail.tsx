@@ -275,6 +275,55 @@ export default function GameDetail() {
     }
   };
 
+  const handleJoinRescueSession = async () => {
+    if (!gameData || !id || !user) return;
+
+    setActionLoading(true);
+    try {
+      // Check if already joined
+      const { data: existingPlayer } = await supabase
+        .from("session_players")
+        .select("id")
+        .eq("session_id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (existingPlayer) {
+        toast({
+          title: "Already joined",
+          description: "You're already in this session.",
+        });
+        return;
+      }
+
+      // Add player to session
+      const { error } = await supabase
+        .from("session_players")
+        .insert({
+          session_id: id,
+          user_id: user.id,
+          is_from_rescue: true,
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Joined successfully!",
+        description: "You've been added to this rescue session.",
+      });
+      fetchGameData();
+    } catch (error) {
+      console.error("Error joining rescue session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to join the session.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleMakePayment = async () => {
     if (!gameData || !id || !user) return;
 
@@ -397,6 +446,7 @@ export default function GameDetail() {
   const currentPlayerPayment = players.find(p => p.user_id === user.id);
   const isRescueActive = session.state === "rescue" && session.is_rescue_open;
   const isCourtManager = courtManagerId === user.id;
+  const canJoinRescue = isRescueActive && !isPlayerInGame && !isInWaitingList && !isOrganizer && !isGamePast && players.length < session.max_players;
 
   return (
     <MobileLayout showHeader={false} showBottomNav={false}>
@@ -473,6 +523,35 @@ export default function GameDetail() {
                       Activate Rescue
                     </Button>
                   )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Join Rescue Session - For external players */}
+          {canJoinRescue && (
+            <Card className="border-success/50 bg-success/5">
+              <CardContent className="p-4 lg:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+                      <LifeBuoy className="h-5 w-5 text-success" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">Join This Rescue Game!</p>
+                      <p className="text-sm text-muted-foreground">
+                        This game needs players. Join now for ${pricePerPlayer.toFixed(2)} per player.
+                      </p>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={handleJoinRescueSession}
+                    disabled={actionLoading}
+                    className="bg-success hover:bg-success/90 text-success-foreground"
+                  >
+                    {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Join Game
+                  </Button>
                 </div>
               </CardContent>
             </Card>
