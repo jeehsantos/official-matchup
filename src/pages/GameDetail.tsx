@@ -329,49 +329,28 @@ export default function GameDetail() {
 
     setActionLoading(true);
     try {
-      const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
-      
-      // Check if payment record exists
-      const { data: existingPayment } = await supabase
-        .from("payments")
-        .select("id")
-        .eq("session_id", id)
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // Call edge function to create Stripe checkout session
+      const { data, error } = await supabase.functions.invoke("create-payment", {
+        body: {
+          sessionId: id,
+          paymentType: "before_session",
+          returnUrl: `/games/${id}`,
+        },
+      });
 
-      if (existingPayment) {
-        // Update existing payment - but RLS doesn't allow UPDATE, so we'll just show success
-        // In a real app, this would integrate with Stripe
-        toast({
-          title: "Payment recorded",
-          description: "Your payment has been confirmed.",
-        });
+      if (error) throw error;
+
+      if (data?.url) {
+        // Redirect to Stripe checkout
+        window.location.href = data.url;
       } else {
-        // Create new payment record
-        const { error } = await supabase
-          .from("payments")
-          .insert({
-            session_id: id,
-            user_id: user.id,
-            amount: pricePerPlayer,
-            status: "completed",
-            paid_at: new Date().toISOString(),
-          });
-
-        if (error) throw error;
-
-        toast({
-          title: "Payment successful",
-          description: "Your payment has been confirmed.",
-        });
+        throw new Error("No payment URL returned");
       }
-      
-      fetchGameData();
     } catch (error) {
-      console.error("Error making payment:", error);
+      console.error("Error initiating payment:", error);
       toast({
-        title: "Error",
-        description: "Failed to process payment.",
+        title: "Payment Error",
+        description: "Failed to initiate payment. Please try again.",
         variant: "destructive",
       });
     } finally {

@@ -194,21 +194,53 @@ export default function CourtDetail() {
                 booking_id: selectedSlot.id,
                 session_id: session.id,
                 expires_at: expiresAt.toISOString(),
-              } as any); // Type assertion since session_id/expires_at are new columns not yet in generated types
+              } as any);
           } catch (chatError) {
-            // Chat creation failed, but booking should still succeed
             console.error("Error creating chat conversation:", chatError);
           }
         }
       }
 
-      toast({
-        title: isNewGroup ? "Group created & court booked!" : "Court booked!",
-        description: `You've booked ${court.name} on ${format(
-          new Date(selectedSlot.available_date),
-          "MMMM d"
-        )} at ${selectedSlot.start_time}. Check your games for details.`,
-      });
+      // Check if court requires payment at booking
+      if (court.payment_timing === "at_booking") {
+        // Redirect to Stripe payment
+        toast({
+          title: isNewGroup ? "Group created!" : "Booking created!",
+          description: "Redirecting to payment...",
+        });
+
+        try {
+          const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-payment", {
+            body: {
+              sessionId: session.id,
+              paymentType: "at_booking",
+              returnUrl: `/courts/${court.id}`,
+            },
+          });
+
+          if (paymentError) throw paymentError;
+
+          if (paymentData?.url) {
+            window.location.href = paymentData.url;
+            return;
+          }
+        } catch (paymentErr) {
+          console.error("Error initiating payment:", paymentErr);
+          toast({
+            title: "Payment redirect failed",
+            description: "Your booking is saved. Please make payment from the game details page.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({
+          title: isNewGroup ? "Group created & court booked!" : "Court booked!",
+          description: `You've booked ${court.name} on ${format(
+            new Date(selectedSlot.available_date),
+            "MMMM d"
+          )} at ${selectedSlot.start_time}. Check your games for details.`,
+        });
+      }
 
       // Update UI
       setAvailability((prev) => prev.filter((s) => s.id !== selectedSlot.id));

@@ -21,6 +21,7 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Courts from "./pages/Courts";
 import CourtDetail from "./pages/CourtDetail";
+import PaymentSuccess from "./pages/PaymentSuccess";
 import ManagerDashboard from "./pages/manager/ManagerDashboard";
 import ManagerVenues from "./pages/manager/ManagerVenues";
 import ManagerVenueForm from "./pages/manager/ManagerVenueForm";
@@ -56,6 +57,7 @@ const App = () => (
             <Route path="/profile/edit" element={<ProfileEdit />} />
             <Route path="/courts" element={<Courts />} />
             <Route path="/courts/:id" element={<CourtDetail />} />
+            <Route path="/payment-success" element={<PaymentSuccess />} />
             {/* Manager Routes */}
             <Route path="/manager" element={<ManagerDashboard />} />
             <Route path="/manager/venues" element={<ManagerVenues />} />

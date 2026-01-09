@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 import { 
   LayoutDashboard, 
   Building2, 
@@ -188,6 +189,8 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
           })}
         </div>
       </nav>
+      {/* Chat Widget for manager */}
+      <ChatWidget />
     </div>
   );
 }

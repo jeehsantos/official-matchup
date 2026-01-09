@@ -78,9 +78,11 @@ export default function ManagerDashboard() {
       let upcomingBookings = 0;
       let recent: RecentBooking[] = [];
       let cancelled: RecentBooking[] = [];
+      let monthlyRevenue = 0;
 
       if (courtIds.length > 0) {
         const today = format(new Date(), "yyyy-MM-dd");
+        const startOfMonth = format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd");
 
         // Fetch all bookings with session info to check cancellation status
         const { data: allBookings, error: allError } = await supabase
@@ -149,6 +151,29 @@ export default function ManagerDashboard() {
 
         // Get recent active bookings (limit 5)
         recent = activeBookings.slice(0, 5);
+
+        // Calculate monthly revenue from completed payments
+        // Get all sessions for manager's courts
+        const sessionIds = allBookings
+          ?.filter(b => b.booked_by_session_id && b.payment_status === "completed")
+          .map(b => b.booked_by_session_id) || [];
+
+        if (sessionIds.length > 0) {
+          const { data: payments } = await supabase
+            .from("payments")
+            .select("amount, platform_fee, paid_at")
+            .in("session_id", sessionIds)
+            .eq("status", "completed")
+            .gte("paid_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
+
+          if (payments) {
+            // Calculate revenue (amount minus platform fee)
+            monthlyRevenue = payments.reduce((sum, p) => {
+              const netAmount = Number(p.amount) - Number(p.platform_fee || 0);
+              return sum + netAmount;
+            }, 0);
+          }
+        }
       }
 
       setRecentBookings(recent);
@@ -156,7 +181,7 @@ export default function ManagerDashboard() {
       setStats({
         courts: courtsCount,
         upcomingBookings,
-        revenue: 0,
+        revenue: monthlyRevenue,
       });
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -173,7 +198,7 @@ export default function ManagerDashboard() {
       icon: TrendingUp,
       color: "text-orange-500",
     },
-    { label: "This Month", value: `$${stats.revenue}`, icon: DollarSign, color: "text-primary" },
+    { label: "This Month", value: `$${stats.revenue.toFixed(2)}`, icon: DollarSign, color: "text-primary" },
   ];
 
   const BookingItem = ({ booking, showCancelled = false }: { booking: RecentBooking; showCancelled?: boolean }) => (
