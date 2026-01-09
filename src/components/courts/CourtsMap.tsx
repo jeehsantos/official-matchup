@@ -22,11 +22,11 @@ const createPriceIcon = (price: number, isHighlighted: boolean) => {
     className: "custom-price-marker",
     html: `
       <div class="price-marker ${isHighlighted ? "highlighted" : ""}">
-        $${price}
+        $${price} NZD
       </div>
     `,
-    iconSize: [60, 28],
-    iconAnchor: [30, 14],
+    iconSize: [80, 28],
+    iconAnchor: [40, 14],
   });
 };
 
@@ -104,7 +104,7 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover }: CourtsM
         <a href="/courts/${court.id}" class="block p-1">
           <div class="font-semibold">${court.name}</div>
           ${court.venues ? `<div class="text-sm text-gray-500">${court.venues.name}</div>` : ""}
-          <div class="text-sm font-medium mt-1">$${court.hourly_rate}/hr</div>
+          <div class="text-sm font-medium mt-1">$${court.hourly_rate} NZD/hr</div>
         </a>
       `;
       marker.bindPopup(popupContent);
