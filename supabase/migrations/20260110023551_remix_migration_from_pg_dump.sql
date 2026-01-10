@@ -116,6 +116,19 @@ CREATE TYPE public.session_state AS ENUM (
 
 
 --
+-- Name: session_type; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.session_type AS ENUM (
+    'casual',
+    'competitive',
+    'training',
+    'private',
+    'tournament'
+);
+
+
+--
 -- Name: sport_type; Type: TYPE; Schema: public; Owner: -
 --
 
@@ -528,7 +541,8 @@ CREATE TABLE public.sessions (
     is_cancelled boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    payment_type public.booking_payment_type DEFAULT 'single'::public.booking_payment_type
+    payment_type public.booking_payment_type DEFAULT 'single'::public.booking_payment_type,
+    session_type public.session_type DEFAULT 'casual'::public.session_type
 );
 
 
