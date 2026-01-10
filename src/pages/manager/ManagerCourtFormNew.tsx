@@ -45,6 +45,7 @@ const courtSchema = z.object({
   is_active: z.boolean(),
   photo_urls: z.array(z.string()).default([]),
   description: z.string().optional(),
+  rules: z.string().optional(),
   // Location details
   address: z.string().min(5, "Address must be at least 5 characters"),
   city: z.string().min(2, "City is required"),
@@ -138,6 +139,7 @@ export default function ManagerCourtFormNew() {
         is_active: data.is_active ?? true,
         photo_urls: (data as any).photo_urls || (data.photo_url ? [data.photo_url] : []),
         description: "",
+        rules: (data as any).rules || "",
         address: data.venue?.address || "",
         city: data.venue?.city || "",
         suburb: data.venue?.suburb || "",
@@ -184,6 +186,7 @@ export default function ManagerCourtFormNew() {
             photo_url: data.photo_urls[0] || null, // Keep backward compatibility
             payment_timing: data.payment_timing as any,
             payment_hours_before: data.payment_hours_before,
+            rules: data.rules || null,
           } as any)
           .eq("id", id);
 
@@ -221,6 +224,7 @@ export default function ManagerCourtFormNew() {
             photo_url: data.photo_urls[0] || null, // Keep backward compatibility
             payment_timing: data.payment_timing as any,
             payment_hours_before: data.payment_hours_before,
+            rules: data.rules || null,
           } as any]);
 
         if (courtError) throw courtError;
@@ -375,6 +379,20 @@ export default function ManagerCourtFormNew() {
                   rows={3}
                   className="mt-1"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="rules">Court Rules & Guidelines</Label>
+                <Textarea
+                  id="rules"
+                  {...register("rules")}
+                  placeholder="Enter any rules, restrictions, or guidelines for players booking this court (e.g., no metal studs, no food/drinks on court, arrive 10 min early)..."
+                  rows={4}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  These rules will be shown to players before they confirm their booking
+                </p>
               </div>
 
               <div>

@@ -4,6 +4,8 @@ import { ManagerLayout } from "@/components/layout/ManagerLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,7 +15,11 @@ import {
   CheckCircle2, 
   AlertCircle, 
   ExternalLink,
-  Building2
+  Building2,
+  User,
+  Phone,
+  Mail,
+  Save
 } from "lucide-react";
 import {
   Select,
@@ -37,6 +43,12 @@ interface ConnectStatus {
   account_id?: string;
 }
 
+interface ProfileData {
+  full_name: string;
+  phone: string;
+  city: string;
+}
+
 export default function ManagerSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -47,10 +59,19 @@ export default function ManagerSettings() {
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  
+  // Profile state
+  const [profileData, setProfileData] = useState<ProfileData>({
+    full_name: "",
+    phone: "",
+    city: "",
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchVenues();
+      fetchProfile();
     }
   }, [user]);
 
@@ -79,6 +100,28 @@ export default function ManagerSettings() {
       });
     }
   }, [searchParams]);
+
+  const fetchProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("full_name, phone, city")
+        .eq("user_id", user!.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        setProfileData({
+          full_name: data.full_name || "",
+          phone: data.phone || "",
+          city: data.city || "",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+    }
+  };
 
   const fetchVenues = async () => {
     try {
@@ -174,6 +217,34 @@ export default function ManagerSettings() {
     }
   };
 
+  const handleSaveProfile = async () => {
+    if (!user) return;
+
+    setSavingProfile(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: profileData.full_name || null,
+          phone: profileData.phone || null,
+          city: profileData.city || null,
+        })
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      toast({ title: "Profile updated successfully" });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   if (loading) {
     return (
       <ManagerLayout>
@@ -189,8 +260,90 @@ export default function ManagerSettings() {
       <div className="p-4 md:p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">Manage your payment settings and account</p>
+          <p className="text-muted-foreground">Manage your profile and payment settings</p>
         </div>
+
+        {/* Profile Settings Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Profile Information
+            </CardTitle>
+            <CardDescription>
+              Your contact information will be displayed to players when they book your courts
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="full_name">Full Name</Label>
+                <Input
+                  id="full_name"
+                  value={profileData.full_name}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, full_name: e.target.value }))}
+                  placeholder="Your full name"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="city">City</Label>
+                <Input
+                  id="city"
+                  value={profileData.city}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, city: e.target.value }))}
+                  placeholder="Your city"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone" className="flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                Phone Number
+              </Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={profileData.phone}
+                onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder="+64 21 123 4567"
+              />
+              <p className="text-xs text-muted-foreground">
+                This will be displayed to players so they can contact you about court bookings
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                Email Address
+              </Label>
+              <Input
+                value={user?.email || ""}
+                disabled
+                className="bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">
+                Email is managed through your account settings
+              </p>
+            </div>
+
+            <Button onClick={handleSaveProfile} disabled={savingProfile}>
+              {savingProfile ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Profile
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
 
         {venues.length === 0 ? (
           <Card>

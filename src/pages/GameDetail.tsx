@@ -499,9 +499,9 @@ export default function GameDetail() {
 
   const { session, group, court, players, waitingList, courtManagerId, courtManagerProfile } = gameData;
   
-  // Helper function to get Google Maps URL
+  // Helper function to get Google Maps URL - using simpler format for better browser compatibility
   const getGoogleMapsUrl = (address: string): string => {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+    return `https://maps.google.com/maps?q=${encodeURIComponent(address)}`;
   };
   
   // Combine session date and start time for accurate past check
