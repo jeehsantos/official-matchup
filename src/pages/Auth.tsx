@@ -63,7 +63,12 @@ export default function Auth() {
   useEffect(() => {
     // Only redirect if we have a user AND role loaded (not during sign out)
     if (!isLoading && user && userRole) {
-      if (userRole === "court_manager") {
+      // Check for stored redirect path from before auth
+      const redirectPath = localStorage.getItem('redirectAfterAuth');
+      if (redirectPath) {
+        localStorage.removeItem('redirectAfterAuth');
+        navigate(redirectPath, { replace: true });
+      } else if (userRole === "court_manager") {
         navigate("/manager", { replace: true });
       } else {
         navigate("/games", { replace: true });
@@ -85,8 +90,12 @@ export default function Auth() {
           : error.message,
       });
     } else if (role) {
-      // Redirect based on role after successful login
-      if (role === "court_manager") {
+      // Check for stored redirect path from before auth
+      const redirectPath = localStorage.getItem('redirectAfterAuth');
+      if (redirectPath) {
+        localStorage.removeItem('redirectAfterAuth');
+        navigate(redirectPath, { replace: true });
+      } else if (role === "court_manager") {
         navigate("/manager", { replace: true });
       } else {
         navigate("/games", { replace: true });
@@ -116,8 +125,12 @@ export default function Auth() {
         description: "Welcome to MatchUP. Let's get you started.",
       });
       
-      // Redirect based on selected role
-      if (data.role === "court_manager") {
+      // Check for stored redirect path from before auth
+      const redirectPath = localStorage.getItem('redirectAfterAuth');
+      if (redirectPath) {
+        localStorage.removeItem('redirectAfterAuth');
+        navigate(redirectPath, { replace: true });
+      } else if (data.role === "court_manager") {
         navigate("/manager", { replace: true });
       } else {
         navigate("/games", { replace: true });

@@ -230,6 +230,8 @@ export default function CourtDetail() {
 
   const handleBookSlot = async () => {
     if (!user) {
+      // Store current path for redirect after auth
+      localStorage.setItem('redirectAfterAuth', window.location.pathname);
       toast({
         title: "Please sign in",
         description: "You need to be signed in to book a court.",
@@ -549,11 +551,46 @@ export default function CourtDetail() {
               {photos.length > 0 ? (
                 <div className="relative aspect-video bg-muted">
                   <img 
-                    src={photos[0]} 
+                    src={photos[currentImageIndex]} 
                     alt={court.name}
                     className="w-full h-full object-cover"
                     onClick={() => setShowGallery(true)}
                   />
+                  
+                  {/* Navigation arrows for mobile */}
+                  {photos.length > 1 && (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); prevImage(); }}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 flex items-center justify-center text-white active:bg-black/70"
+                        aria-label="Previous photo"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); nextImage(); }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 flex items-center justify-center text-white active:bg-black/70"
+                        aria-label="Next photo"
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                      
+                      {/* Dot indicators */}
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                        {photos.map((_, index) => (
+                          <button
+                            key={index}
+                            onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(index); }}
+                            className={`w-2 h-2 rounded-full transition-all ${
+                              index === currentImageIndex ? 'bg-white scale-110' : 'bg-white/50'
+                            }`}
+                            aria-label={`Go to photo ${index + 1}`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  
                   {photos.length > 1 && (
                     <button 
                       onClick={() => setShowGallery(true)}
@@ -618,7 +655,21 @@ export default function CourtDetail() {
                   selected={selectedDate}
                   onSelect={setSelectedDate}
                   disabled={(date) => date < new Date()}
-                  className="mx-auto"
+                  className="w-full"
+                  classNames={{
+                    months: "flex flex-col w-full",
+                    month: "space-y-4 w-full",
+                    table: "w-full border-collapse",
+                    head_row: "flex justify-between",
+                    head_cell: "flex-1 text-center text-muted-foreground rounded-md font-normal text-sm",
+                    row: "flex w-full mt-2 justify-between",
+                    cell: "flex-1 text-center text-sm p-0 relative max-w-[3rem] lg:max-w-[3.5rem]",
+                    day: "h-10 w-full lg:h-11 p-0 font-normal hover:bg-accent rounded-md transition-colors",
+                    day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+                    day_today: "bg-accent text-accent-foreground",
+                    day_disabled: "text-muted-foreground opacity-50",
+                    day_outside: "text-muted-foreground opacity-50",
+                  }}
                 />
               </div>
             </div>
@@ -849,7 +900,12 @@ export default function CourtDetail() {
 
         {/* Booking Footer */}
         {selectedSlots.length > 0 && selectedDate && (
-          <div className="fixed left-0 right-0 p-4 glass border-t border-border lg:bottom-0" style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}>
+          <div 
+            className="fixed left-0 right-0 p-4 glass border-t border-border z-40" 
+            style={{ 
+              bottom: user ? 'calc(4rem + env(safe-area-inset-bottom, 0px))' : 'env(safe-area-inset-bottom, 0px)'
+            }}
+          >
             <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
               <div>
                 <div className="font-semibold">${totalPrice.toFixed(2)}</div>
@@ -872,12 +928,16 @@ export default function CourtDetail() {
                   )}
                 </Button>
               ) : (
-                <Link to="/auth">
-                  <Button className="gap-2">
-                    <LogIn className="h-4 w-4" />
-                    Login to Book
-                  </Button>
-                </Link>
+                <Button 
+                  className="gap-2"
+                  onClick={() => {
+                    localStorage.setItem('redirectAfterAuth', window.location.pathname);
+                    navigate("/auth");
+                  }}
+                >
+                  <LogIn className="h-4 w-4" />
+                  Login to Book
+                </Button>
               )}
             </div>
           </div>
