@@ -15,7 +15,14 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { checkProfileComplete } from "@/lib/profile-utils";
-import { getSessionTypeInfo } from "@/components/session/SessionTypeSelector";
+import { getSessionTypeInfo } from "@/components/session/SessionTypeDropdown";
+import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,6 +86,8 @@ export default function GameDetail() {
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showProfileAlert, setShowProfileAlert] = useState(false);
+  const [profileMissingFields, setProfileMissingFields] = useState<string[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -292,12 +301,9 @@ export default function GameDetail() {
       const { isComplete, missingFields } = checkProfileComplete(profile);
 
       if (!isComplete) {
-        toast({
-          title: "Complete your profile first",
-          description: `Please add: ${missingFields.join(", ")}`,
-          variant: "destructive",
-        });
-        navigate("/profile");
+        setProfileMissingFields(missingFields);
+        setShowProfileAlert(true);
+        setActionLoading(false);
         return;
       }
 
@@ -519,7 +525,7 @@ export default function GameDetail() {
                     {/* Session Type Badge */}
                     {session.session_type && (
                       <Badge variant="outline" className="mt-2">
-                        {getSessionTypeInfo(session.session_type as any).icon} {getSessionTypeInfo(session.session_type as any).label}
+                        {getSessionTypeInfo(session.session_type as any).emoji} {getSessionTypeInfo(session.session_type as any).label}
                       </Badge>
                     )}
                   </div>
@@ -989,6 +995,19 @@ export default function GameDetail() {
             </div>
           )}
         </div>
+
+        {/* Profile Completion Alert Modal */}
+        <Dialog open={showProfileAlert} onOpenChange={setShowProfileAlert}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="sr-only">Complete Your Profile</DialogTitle>
+            </DialogHeader>
+            <ProfileCompletionAlert
+              missingFields={profileMissingFields}
+              onClose={() => setShowProfileAlert(false)}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
     </MobileLayout>
   );

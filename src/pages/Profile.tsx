@@ -32,6 +32,7 @@ import {
   Sun,
   Save,
   Activity,
+  Key,
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -68,6 +69,7 @@ export default function Profile() {
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     full_name: "",
@@ -173,6 +175,33 @@ export default function Profile() {
   const handleSignOut = async () => {
     await signOut();
     navigate("/", { replace: true });
+  };
+
+  const handleResetPassword = async () => {
+    if (!user?.email) return;
+    
+    setResetPasswordLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Password reset email sent",
+        description: "Check your inbox for the reset link.",
+      });
+    } catch (error) {
+      console.error("Error sending reset email:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send reset email. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setResetPasswordLoading(false);
+    }
   };
 
   const toggleSection = (sectionId: string) => {
@@ -421,6 +450,24 @@ export default function Profile() {
                   </div>
                   <Switch defaultChecked />
                 </div>
+                <div className="pt-2 border-t border-border">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={handleResetPassword}
+                    disabled={resetPasswordLoading}
+                  >
+                    {resetPasswordLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Key className="h-4 w-4 mr-2" />
+                    )}
+                    Reset Password
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    We'll send a password reset link to your email
+                  </p>
+                </div>
               </CollapsibleContent>
             </Collapsible>
 
@@ -486,11 +533,12 @@ export default function Profile() {
           </CardContent>
         </Card>
 
-        {/* Fixed bottom actions */}
+        {/* Fixed bottom actions - Improved mobile layout */}
         <div className="fixed bottom-16 left-0 right-0 p-4 bg-background border-t border-border lg:relative lg:bottom-auto lg:border-none lg:p-0">
-          <div className="flex gap-3 max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto space-y-3">
+            {/* Save button - full width */}
             <Button 
-              className="flex-1" 
+              className="w-full h-12" 
               onClick={handleSave}
               disabled={saving || !hasChanges}
             >
@@ -502,11 +550,12 @@ export default function Profile() {
               Save Changes
             </Button>
             
-            {/* Only show on mobile */}
+            {/* Sign out on mobile - separate row, less prominent */}
             {isMobile && (
               <Button 
-                variant="outline" 
-                className="text-destructive hover:text-destructive"
+                variant="ghost" 
+                size="sm"
+                className="w-full text-muted-foreground hover:text-destructive"
                 onClick={handleSignOut}
               >
                 <LogOut className="h-4 w-4 mr-2" />

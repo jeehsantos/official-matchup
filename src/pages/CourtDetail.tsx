@@ -28,8 +28,15 @@ import { useToast } from "@/hooks/use-toast";
 import { format, getDay } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import { GroupSelectionModal } from "@/components/booking/GroupSelectionModal";
+import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
 import { checkProfileComplete } from "@/lib/profile-utils";
-import type { SessionType } from "@/components/session/SessionTypeSelector";
+import type { SessionType } from "@/components/session/SessionTypeDropdown";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
 type Venue = Database["public"]["Tables"]["venues"]["Row"];
@@ -68,6 +75,8 @@ export default function CourtDetail() {
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [booking, setBooking] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showProfileAlert, setShowProfileAlert] = useState(false);
+  const [profileMissingFields, setProfileMissingFields] = useState<string[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
   
@@ -341,12 +350,8 @@ export default function CourtDetail() {
     const { isComplete, missingFields } = checkProfileComplete(profile);
 
     if (!isComplete) {
-      toast({
-        title: "Complete your profile first",
-        description: `Please add: ${missingFields.join(", ")}`,
-        variant: "destructive",
-      });
-      navigate("/profile");
+      setProfileMissingFields(missingFields);
+      setShowProfileAlert(true);
       return;
     }
 
@@ -1068,6 +1073,19 @@ export default function CourtDetail() {
             courtName={court.name}
           />
         )}
+
+        {/* Profile Completion Alert Modal */}
+        <Dialog open={showProfileAlert} onOpenChange={setShowProfileAlert}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="sr-only">Complete Your Profile</DialogTitle>
+            </DialogHeader>
+            <ProfileCompletionAlert
+              missingFields={profileMissingFields}
+              onClose={() => setShowProfileAlert(false)}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
