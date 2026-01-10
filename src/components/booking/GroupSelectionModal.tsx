@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { PaymentTypeSelector } from "@/components/booking/PaymentTypeSelector";
-import { SessionTypeSelector, type SessionType } from "@/components/session/SessionTypeSelector";
+import { SessionTypeDropdown, type SessionType } from "@/components/session/SessionTypeDropdown";
 import type { Database } from "@/integrations/supabase/types";
 
 type Group = Database["public"]["Tables"]["groups"]["Row"];
@@ -271,7 +271,7 @@ export function GroupSelectionModal({
             )}
 
             {/* Session Type Selection */}
-            <SessionTypeSelector
+            <SessionTypeDropdown
               value={sessionType}
               onChange={setSessionType}
             />

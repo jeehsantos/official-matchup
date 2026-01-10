@@ -6,6 +6,13 @@ import { CourtsMap } from "@/components/courts/CourtsMap";
 import { CourtsPagination } from "@/components/courts/CourtsPagination";
 import { MobileCourtSheet } from "@/components/courts/MobileCourtSheet";
 import { Search, MapPin, SlidersHorizontal, Building2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -20,6 +27,17 @@ interface CourtWithVenue extends Court {
 
 const groundTypeFilters = ["all", "grass", "turf", "sand", "hard", "clay", "other"] as const;
 const ITEMS_PER_PAGE = 9;
+
+// Ground type filter data with emojis
+const groundTypeData: Record<string, { emoji: string; label: string }> = {
+  all: { emoji: "🎯", label: "All Surfaces" },
+  grass: { emoji: "🌱", label: "Grass" },
+  turf: { emoji: "🟩", label: "Turf" },
+  sand: { emoji: "🏖️", label: "Sand" },
+  hard: { emoji: "🟫", label: "Hard Court" },
+  clay: { emoji: "🟠", label: "Clay" },
+  other: { emoji: "⚪", label: "Other" },
+};
 
 export default function Courts() {
   const { user } = useAuth();
@@ -124,20 +142,9 @@ export default function Courts() {
 
   const Layout = user ? MobileLayout : PublicLayout;
 
-  // Ground type filter data with emojis
-  const groundTypeData = {
-    all: { emoji: "🎯", label: "All Surfaces" },
-    grass: { emoji: "🌱", label: "Grass" },
-    turf: { emoji: "🟩", label: "Turf" },
-    sand: { emoji: "🏖️", label: "Sand" },
-    hard: { emoji: "🟫", label: "Hard Court" },
-    clay: { emoji: "🟠", label: "Clay" },
-    other: { emoji: "⚪", label: "Other" },
-  };
-
-  // Desktop Filter bar component
+  // Desktop Filter bar component with dropdowns
   const FilterBar = () => (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Search Bar */}
       <div className="relative">
         <div className="flex items-center gap-3 bg-card border border-border rounded-full px-4 py-3 shadow-sm hover:shadow-md transition-shadow">
@@ -160,77 +167,92 @@ export default function Courts() {
         </div>
       </div>
 
-      {/* Ground Type Category Tabs */}
-      <div className="flex gap-1 overflow-x-auto pb-3 scrollbar-hide -mx-6 px-6">
-        {groundTypeFilters.map((groundType) => {
-          const isActive = selectedGroundType === groundType;
-          const data = groundTypeData[groundType as keyof typeof groundTypeData];
-          
-          return (
-            <button
-              key={groundType}
-              onClick={() => setSelectedGroundType(groundType)}
-              className={`flex flex-col items-center gap-2 px-4 py-3 min-w-[72px] shrink-0 border-b-2 transition-all ${
-                isActive 
-                  ? "border-foreground text-foreground" 
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
-              }`}
-            >
-              <span className="text-2xl">{data?.emoji || "🎯"}</span>
-              <span className="text-xs font-medium whitespace-nowrap">
-                {data?.label || groundType}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Filter Dropdowns Row */}
+      <div className="flex flex-wrap gap-3">
+        {/* Ground Type Dropdown */}
+        <Select value={selectedGroundType} onValueChange={setSelectedGroundType}>
+          <SelectTrigger className="w-[160px] h-10">
+            <SelectValue>
+              <div className="flex items-center gap-2">
+                <span>{groundTypeData[selectedGroundType]?.emoji || "🎯"}</span>
+                <span>{groundTypeData[selectedGroundType]?.label || "All Surfaces"}</span>
+              </div>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent className="bg-popover border border-border shadow-lg z-50">
+            {groundTypeFilters.map((groundType) => {
+              const data = groundTypeData[groundType];
+              return (
+                <SelectItem key={groundType} value={groundType}>
+                  <div className="flex items-center gap-2">
+                    <span>{data?.emoji || "🎯"}</span>
+                    <span>{data?.label || groundType}</span>
+                  </div>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
 
-      {/* Indoor/Outdoor Toggle */}
-      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-        {(["all", "indoor", "outdoor"] as const).map((type) => (
-          <button
-            key={type}
-            onClick={() => setSelectedVenueType(type)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium shrink-0 transition-all ${
-              selectedVenueType === type
-                ? "bg-foreground text-background"
-                : "bg-card border border-border text-foreground hover:border-foreground"
-            }`}
-          >
-            {type === "all" ? "All" : type === "indoor" ? "🏢 Indoor" : "🌳 Outdoor"}
-          </button>
-        ))}
-      </div>
+        {/* Indoor/Outdoor Dropdown */}
+        <Select value={selectedVenueType} onValueChange={(val) => setSelectedVenueType(val as "all" | "indoor" | "outdoor")}>
+          <SelectTrigger className="w-[140px] h-10">
+            <SelectValue>
+              <div className="flex items-center gap-2">
+                <span>{selectedVenueType === "all" ? "🏟️" : selectedVenueType === "indoor" ? "🏢" : "🌳"}</span>
+                <span>{selectedVenueType === "all" ? "All Types" : selectedVenueType === "indoor" ? "Indoor" : "Outdoor"}</span>
+              </div>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent className="bg-popover border border-border shadow-lg z-50">
+            <SelectItem value="all">
+              <div className="flex items-center gap-2">
+                <span>🏟️</span>
+                <span>All Types</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="indoor">
+              <div className="flex items-center gap-2">
+                <span>🏢</span>
+                <span>Indoor</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="outdoor">
+              <div className="flex items-center gap-2">
+                <span>🌳</span>
+                <span>Outdoor</span>
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
 
-      {/* City Filter - Clean pill chips */}
-      {cities.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-          <button
-            onClick={() => setSelectedCity("all")}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium shrink-0 transition-all ${
-              selectedCity === "all"
-                ? "bg-foreground text-background"
-                : "bg-card border border-border text-foreground hover:border-foreground"
-            }`}
-          >
-            <MapPin className="h-3.5 w-3.5" />
-            All Cities
-          </button>
-          {cities.map((city) => (
-            <button
-              key={city}
-              onClick={() => setSelectedCity(city)}
-              className={`px-4 py-2 rounded-full text-sm font-medium shrink-0 transition-all ${
-                selectedCity === city
-                  ? "bg-foreground text-background"
-                  : "bg-card border border-border text-foreground hover:border-foreground"
-              }`}
-            >
-              {city}
-            </button>
-          ))}
-        </div>
-      )}
+        {/* City Dropdown */}
+        {cities.length > 0 && (
+          <Select value={selectedCity} onValueChange={setSelectedCity}>
+            <SelectTrigger className="w-[160px] h-10">
+              <SelectValue>
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  <span>{selectedCity === "all" ? "All Cities" : selectedCity}</span>
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="bg-popover border border-border shadow-lg z-50">
+              <SelectItem value="all">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  <span>All Cities</span>
+                </div>
+              </SelectItem>
+              {cities.map((city) => (
+                <SelectItem key={city} value={city}>
+                  {city}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
     </div>
   );
 
