@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
@@ -18,21 +18,45 @@ import {
   LogIn,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  AlertCircle
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { format, isSameDay, getDay } from "date-fns";
+import { format, getDay, addDays } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import { GroupSelectionModal } from "@/components/booking/GroupSelectionModal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
 type Venue = Database["public"]["Tables"]["venues"]["Row"];
-type Availability = Database["public"]["Tables"]["court_availability"]["Row"];
 
 interface CourtWithVenue extends Court {
   venues: Venue | null;
+}
+
+interface AvailableSlot {
+  start_time: string;
+  available_durations: number[];
+}
+
+interface AvailabilityResponse {
+  available: boolean;
+  reason?: string;
+  window?: {
+    start_time: string;
+    end_time: string;
+  };
+  slot_interval_minutes?: number;
+  max_booking_minutes?: number;
+  slots: AvailableSlot[];
 }
 
 export default function CourtDetail() {
@@ -42,21 +66,41 @@ export default function CourtDetail() {
   const { toast } = useToast();
   
   const [court, setCourt] = useState<CourtWithVenue | null>(null);
-  const [availability, setAvailability] = useState<Availability[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [selectedSlot, setSelectedSlot] = useState<Availability | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [booking, setBooking] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
+  
+  // New availability state
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityData, setAvailabilityData] = useState<AvailabilityResponse | null>(null);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
       fetchCourt();
-      fetchAvailability();
     }
   }, [id]);
+
+  // Fetch availability when date or court changes
+  useEffect(() => {
+    if (court?.venues && selectedDate) {
+      fetchAvailability(court.venues.id, court.id, selectedDate);
+    }
+  }, [court, selectedDate]);
+
+  // Reset duration when slot changes
+  useEffect(() => {
+    if (selectedSlot && selectedSlot.available_durations.length > 0) {
+      setSelectedDuration(selectedSlot.available_durations[0]);
+    } else {
+      setSelectedDuration(null);
+    }
+  }, [selectedSlot]);
 
   const fetchCourt = async () => {
     try {
@@ -79,25 +123,33 @@ export default function CourtDetail() {
     }
   };
 
-  const fetchAvailability = async () => {
+  const fetchAvailability = useCallback(async (venueId: string, courtId: string, date: Date) => {
+    setAvailabilityLoading(true);
+    setAvailabilityError(null);
+    setSelectedSlot(null);
+    setSelectedDuration(null);
+
     try {
-      const { data, error } = await supabase
-        .from("court_availability")
-        .select("*")
-        .eq("court_id", id)
-        .eq("is_booked", false)
-        .gte("available_date", format(new Date(), "yyyy-MM-dd"))
-        .order("available_date", { ascending: true })
-        .order("start_time", { ascending: true });
+      const { data, error } = await supabase.functions.invoke("get-availability", {
+        body: {
+          venueId,
+          courtId,
+          date: format(date, "yyyy-MM-dd"),
+        },
+      });
 
       if (error) throw error;
-      setAvailability(data || []);
-    } catch (error) {
+      setAvailabilityData(data as AvailabilityResponse);
+    } catch (error: any) {
       console.error("Error fetching availability:", error);
+      setAvailabilityError(error.message || "Failed to load availability");
+      setAvailabilityData(null);
+    } finally {
+      setAvailabilityLoading(false);
     }
-  };
+  }, []);
 
-  const handleBookSlot = () => {
+  const handleBookSlot = async () => {
     if (!user) {
       toast({
         title: "Please sign in",
@@ -108,33 +160,77 @@ export default function CourtDetail() {
       return;
     }
 
-    if (!selectedSlot || !court) return;
+    if (!selectedSlot || !court || !selectedDuration || !selectedDate) return;
 
-    // Open group selection modal
-    setShowGroupModal(true);
+    // Validate booking with backend before proceeding
+    try {
+      const { data: validationResult, error: validationError } = await supabase.functions.invoke("validate-booking", {
+        body: {
+          venueId: court.venue_id,
+          courtId: court.id,
+          date: format(selectedDate, "yyyy-MM-dd"),
+          startTime: selectedSlot.start_time,
+          durationMinutes: selectedDuration,
+        },
+      });
+
+      if (validationError) throw validationError;
+
+      if (!validationResult.valid) {
+        toast({
+          title: "Booking unavailable",
+          description: validationResult.error || "This slot is no longer available.",
+          variant: "destructive",
+        });
+        // Refresh availability
+        if (court.venues) {
+          fetchAvailability(court.venues.id, court.id, selectedDate);
+        }
+        return;
+      }
+
+      // Validation passed, open group selection modal
+      setShowGroupModal(true);
+    } catch (error: any) {
+      toast({
+        title: "Validation failed",
+        description: error.message || "Could not validate booking. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleGroupConfirm = async (groupId: string, isNewGroup: boolean, paymentType: "single" | "split") => {
-    if (!selectedSlot || !court || !user) return;
+    if (!selectedSlot || !court || !user || !selectedDuration || !selectedDate) return;
 
     setShowGroupModal(false);
     setBooking(true);
 
     try {
-      // Create a session for this booking
-      const slotDate = new Date(selectedSlot.available_date);
+      // Calculate end time
+      const startMinutes = parseInt(selectedSlot.start_time.split(":")[0]) * 60 + parseInt(selectedSlot.start_time.split(":")[1]);
+      const endMinutes = startMinutes + selectedDuration;
+      const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, "0")}:${(endMinutes % 60).toString().padStart(2, "0")}`;
+      
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const slotDate = new Date(dateStr);
       const paymentDeadline = new Date(slotDate);
       paymentDeadline.setHours(paymentDeadline.getHours() - 24);
 
+      // Calculate price based on duration
+      const hours = selectedDuration / 60;
+      const totalPrice = court.hourly_rate * hours;
+
+      // Create a session for this booking
       const { data: session, error: sessionError } = await supabase
         .from("sessions")
         .insert({
           group_id: groupId,
           court_id: court.id,
-          session_date: selectedSlot.available_date,
+          session_date: dateStr,
           start_time: selectedSlot.start_time,
-          duration_minutes: 60, // Default 1 hour
-          court_price: court.hourly_rate,
+          duration_minutes: selectedDuration,
+          court_price: totalPrice,
           min_players: 6,
           max_players: court.capacity,
           payment_deadline: paymentDeadline.toISOString(),
@@ -158,25 +254,28 @@ export default function CourtDetail() {
 
       if (playerError) {
         console.error("Error adding organizer as player:", playerError);
-        // Don't throw - the booking should still succeed even if this fails
       }
 
-      // Mark the slot as booked
-      const { error: bookingError } = await supabase
+      // Create a court_availability record for this booking (for tracking)
+      const { data: bookingRecord, error: bookingError } = await supabase
         .from("court_availability")
-        .update({
+        .insert({
+          court_id: court.id,
+          available_date: dateStr,
+          start_time: selectedSlot.start_time,
+          end_time: endTime,
           is_booked: true,
           booked_by_user_id: user.id,
           booked_by_group_id: groupId,
           booked_by_session_id: session.id,
           payment_status: "pending",
-        } as any)
-        .eq("id", selectedSlot.id)
-        .eq("is_booked", false);
+        })
+        .select()
+        .single();
 
       if (bookingError) throw bookingError;
 
-      // Get court manager ID to create chat conversation for this session
+      // Create chat conversation for this session
       if (court.venues) {
         const { data: venue } = await supabase
           .from("venues")
@@ -185,18 +284,16 @@ export default function CourtDetail() {
           .single();
 
         if (venue) {
-          // Calculate expires_at (48h after session ends)
-          const sessionEndTime = new Date(`${selectedSlot.available_date}T${selectedSlot.end_time}`);
+          const sessionEndTime = new Date(`${dateStr}T${endTime}`);
           const expiresAt = new Date(sessionEndTime.getTime() + 48 * 60 * 60 * 1000);
 
-          // Create chat conversation for this session (wrapped in try-catch to not block booking)
           try {
             await supabase
               .from("chat_conversations")
               .insert({
                 organizer_id: user.id,
                 court_manager_id: venue.owner_id,
-                booking_id: selectedSlot.id,
+                booking_id: bookingRecord.id,
                 session_id: session.id,
                 expires_at: expiresAt.toISOString(),
               } as any);
@@ -208,7 +305,6 @@ export default function CourtDetail() {
 
       // Check if court requires payment at booking
       if (court.payment_timing === "at_booking") {
-        // Redirect to Stripe payment
         toast({
           title: isNewGroup ? "Group created!" : "Booking created!",
           description: "Redirecting to payment...",
@@ -227,14 +323,11 @@ export default function CourtDetail() {
           if (paymentError) throw paymentError;
 
           if (paymentData?.url) {
-            // Detect if running inside an iframe (preview mode)
             const isInIframe = window.self !== window.top;
             if (isInIframe) {
-              // In preview: open in new tab since Stripe won't render in iframe
               const opened = window.open(paymentData.url, "_blank", "noopener,noreferrer");
               if (!opened) window.location.href = paymentData.url;
             } else {
-              // Standalone: redirect in same tab for better mobile UX
               window.location.href = paymentData.url;
             }
             return;
@@ -250,37 +343,26 @@ export default function CourtDetail() {
       } else {
         toast({
           title: isNewGroup ? "Group created & court booked!" : "Court booked!",
-          description: `You've booked ${court.name} on ${format(
-            new Date(selectedSlot.available_date),
-            "MMMM d"
-          )} at ${selectedSlot.start_time}. Check your games for details.`,
+          description: `You've booked ${court.name} on ${format(selectedDate, "MMMM d")} at ${selectedSlot.start_time}. Check your games for details.`,
         });
       }
 
       // Update UI
-      setAvailability((prev) => prev.filter((s) => s.id !== selectedSlot.id));
       setSelectedSlot(null);
-      fetchAvailability();
+      setSelectedDuration(null);
+      if (court.venues) {
+        fetchAvailability(court.venues.id, court.id, selectedDate);
+      }
     } catch (error: any) {
       toast({
         title: "Booking failed",
-        description:
-          error?.message ||
-          "There was an error processing your booking. Please try again.",
+        description: error?.message || "There was an error processing your booking. Please try again.",
         variant: "destructive",
       });
     } finally {
       setBooking(false);
     }
   };
-
-  const slotsForSelectedDate = selectedDate
-    ? availability.filter(slot => 
-        isSameDay(new Date(slot.available_date), selectedDate)
-      )
-    : [];
-
-  const datesWithAvailability = availability.map(slot => new Date(slot.available_date));
 
   // Get court photo
   const getCourtPhotos = (): string[] => {
@@ -299,8 +381,24 @@ export default function CourtDetail() {
     setCurrentImageIndex((prev) => (prev - 1 + photos.length) % photos.length);
   };
 
+  // Format duration for display
+  const formatDuration = (minutes: number): string => {
+    if (minutes < 60) return `${minutes}min`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (mins === 0) return `${hours}h`;
+    return `${hours}h ${mins}m`;
+  };
+
+  // Calculate price for duration
+  const calculatePrice = (durationMinutes: number): number => {
+    if (!court) return 0;
+    return court.hourly_rate * (durationMinutes / 60);
+  };
+
   // Use public layout for unauthenticated users
   const Layout = user ? MobileLayout : PublicLayout;
+  
   if (loading) {
     return (
       <Layout>
@@ -340,7 +438,6 @@ export default function CourtDetail() {
           <>
             {/* Main Gallery View */}
             {photos.length === 1 ? (
-              // Single image
               <div className="aspect-video bg-muted relative">
                 <img 
                   src={photos[0]} 
@@ -354,7 +451,6 @@ export default function CourtDetail() {
                 </Badge>
               </div>
             ) : photos.length === 2 ? (
-              // Two images side by side
               <div className="grid grid-cols-2 gap-1 aspect-video">
                 {photos.map((photo, index) => (
                   <div key={index} className="relative overflow-hidden">
@@ -377,9 +473,7 @@ export default function CourtDetail() {
                 ))}
               </div>
             ) : (
-              // 3-4 images in grid layout
               <div className="grid grid-cols-4 grid-rows-2 gap-1 aspect-[2/1]">
-                {/* Main large image */}
                 <div className="col-span-2 row-span-2 relative overflow-hidden">
                   <img 
                     src={photos[0]} 
@@ -395,7 +489,6 @@ export default function CourtDetail() {
                     {court.sport_type}
                   </Badge>
                 </div>
-                {/* Secondary images */}
                 {photos.slice(1, 5).map((photo, index) => (
                   <div key={index} className="relative overflow-hidden">
                     <img 
@@ -407,7 +500,6 @@ export default function CourtDetail() {
                         setShowGallery(true);
                       }}
                     />
-                    {/* Show all photos button on last visible image */}
                     {index === Math.min(photos.length - 2, 3) && photos.length > 4 && (
                       <div 
                         className="absolute inset-0 bg-black/50 flex items-center justify-center cursor-pointer"
@@ -421,7 +513,6 @@ export default function CourtDetail() {
               </div>
             )}
 
-            {/* Show all photos button */}
             {photos.length > 1 && (
               <div className="px-4 py-2">
                 <Button 
@@ -438,7 +529,6 @@ export default function CourtDetail() {
             {/* Fullscreen Gallery Modal */}
             {showGallery && (
               <div className="fixed inset-0 z-50 bg-black flex flex-col">
-                {/* Header */}
                 <div className="flex items-center justify-between p-4 text-white">
                   <span className="font-medium">{currentImageIndex + 1} / {photos.length}</span>
                   <Button 
@@ -451,7 +541,6 @@ export default function CourtDetail() {
                   </Button>
                 </div>
 
-                {/* Image */}
                 <div className="flex-1 flex items-center justify-center relative px-4">
                   <img 
                     src={photos[currentImageIndex]} 
@@ -459,7 +548,6 @@ export default function CourtDetail() {
                     className="max-w-full max-h-full object-contain"
                   />
 
-                  {/* Navigation arrows */}
                   {photos.length > 1 && (
                     <>
                       <button
@@ -478,7 +566,6 @@ export default function CourtDetail() {
                   )}
                 </div>
 
-                {/* Thumbnail strip */}
                 {photos.length > 1 && (
                   <div className="p-4 flex justify-center gap-2 overflow-x-auto">
                     {photos.map((photo, index) => (
@@ -504,7 +591,6 @@ export default function CourtDetail() {
             )}
           </>
         ) : (
-          // No photos placeholder
           <div className="aspect-video bg-muted relative flex items-center justify-center">
             <SportIcon sport={court.sport_type} className="h-16 w-16 text-muted-foreground" />
             <Badge className="absolute top-4 left-4 capitalize">
@@ -572,13 +658,7 @@ export default function CourtDetail() {
                 mode="single"
                 selected={selectedDate}
                 onSelect={setSelectedDate}
-                disabled={(date) => date < new Date() || !datesWithAvailability.some(d => isSameDay(d, date))}
-                modifiers={{
-                  available: datesWithAvailability,
-                }}
-                modifiersStyles={{
-                  available: { backgroundColor: "hsl(var(--primary) / 0.1)" }
-                }}
+                disabled={(date) => date < new Date()}
                 className="mx-auto"
               />
             </div>
@@ -591,23 +671,78 @@ export default function CourtDetail() {
                 <Clock className="h-5 w-5 text-primary" />
                 Available Times for {format(selectedDate, "MMMM d")}
               </h3>
-              {slotsForSelectedDate.length === 0 ? (
+              
+              {availabilityLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <span className="ml-2 text-muted-foreground">Loading availability...</span>
+                </div>
+              ) : availabilityError ? (
+                <div className="flex items-center gap-2 text-destructive py-4">
+                  <AlertCircle className="h-5 w-5" />
+                  <span>{availabilityError}</span>
+                </div>
+              ) : !availabilityData?.available ? (
+                <div className="bg-muted/50 rounded-lg p-4 text-center">
+                  <p className="text-muted-foreground">
+                    {availabilityData?.reason === "closed" 
+                      ? "Venue is closed on this date." 
+                      : "No availability for this date."}
+                  </p>
+                </div>
+              ) : availabilityData.slots.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
-                  No available slots for this date. Try another day.
+                  All slots are booked for this date. Try another day.
                 </p>
               ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  {slotsForSelectedDate.map((slot) => (
-                    <Button
-                      key={slot.id}
-                      variant={selectedSlot?.id === slot.id ? "default" : "outline"}
-                      className="flex-col h-auto py-3"
-                      onClick={() => setSelectedSlot(slot)}
-                    >
-                      <span className="font-semibold">{slot.start_time.slice(0, 5)}</span>
-                      <span className="text-xs opacity-70">to {slot.end_time.slice(0, 5)}</span>
-                    </Button>
-                  ))}
+                <div className="space-y-4">
+                  {/* Venue hours info */}
+                  {availabilityData.window && (
+                    <div className="text-sm text-muted-foreground">
+                      Open: {availabilityData.window.start_time.slice(0, 5)} - {availabilityData.window.end_time.slice(0, 5)}
+                    </div>
+                  )}
+                  
+                  {/* Time slot grid */}
+                  <div className="grid grid-cols-4 gap-2">
+                    {availabilityData.slots.map((slot) => (
+                      <Button
+                        key={slot.start_time}
+                        variant={selectedSlot?.start_time === slot.start_time ? "default" : "outline"}
+                        className="h-auto py-2 px-2"
+                        onClick={() => setSelectedSlot(slot)}
+                      >
+                        <span className="text-sm font-medium">{slot.start_time.slice(0, 5)}</span>
+                      </Button>
+                    ))}
+                  </div>
+
+                  {/* Duration selector */}
+                  {selectedSlot && selectedSlot.available_durations.length > 0 && (
+                    <div className="bg-card rounded-xl border border-border p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">Select Duration</span>
+                        <span className="text-sm text-muted-foreground">
+                          Starting at {selectedSlot.start_time.slice(0, 5)}
+                        </span>
+                      </div>
+                      <Select
+                        value={selectedDuration?.toString()}
+                        onValueChange={(value) => setSelectedDuration(parseInt(value))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose duration" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {selectedSlot.available_durations.map((duration) => (
+                            <SelectItem key={duration} value={duration.toString()}>
+                              {formatDuration(duration)} — ${calculatePrice(duration).toFixed(2)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -615,13 +750,13 @@ export default function CourtDetail() {
         </div>
 
         {/* Booking Footer */}
-        {selectedSlot && (
+        {selectedSlot && selectedDuration && selectedDate && (
           <div className="fixed left-0 right-0 p-4 glass border-t border-border lg:bottom-0" style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}>
             <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
               <div>
-                <div className="font-semibold">${court.hourly_rate}</div>
+                <div className="font-semibold">${calculatePrice(selectedDuration).toFixed(2)}</div>
                 <div className="text-sm text-muted-foreground">
-                  {format(new Date(selectedSlot.available_date), "MMM d")} • {selectedSlot.start_time.slice(0, 5)}
+                  {format(selectedDate, "MMM d")} • {selectedSlot.start_time.slice(0, 5)} • {formatDuration(selectedDuration)}
                 </div>
               </div>
               {user ? (
@@ -651,19 +786,23 @@ export default function CourtDetail() {
         )}
 
         {/* Group Selection Modal */}
-        {court && selectedSlot && (
+        {court && selectedSlot && selectedDate && selectedDuration && (
           <GroupSelectionModal
             open={showGroupModal}
             onOpenChange={setShowGroupModal}
             onConfirm={handleGroupConfirm}
             sportType={court.sport_type}
-            courtPrice={court.hourly_rate}
-            dayOfWeek={getDay(new Date(selectedSlot.available_date))}
+            courtPrice={calculatePrice(selectedDuration)}
+            dayOfWeek={getDay(selectedDate)}
             startTime={selectedSlot.start_time}
             city={court.venues?.city || ""}
-            slotDate={selectedSlot.available_date}
+            slotDate={format(selectedDate, "yyyy-MM-dd")}
             slotStartTime={selectedSlot.start_time}
-            slotEndTime={selectedSlot.end_time}
+            slotEndTime={(() => {
+              const startMinutes = parseInt(selectedSlot.start_time.split(":")[0]) * 60 + parseInt(selectedSlot.start_time.split(":")[1]);
+              const endMinutes = startMinutes + selectedDuration;
+              return `${Math.floor(endMinutes / 60).toString().padStart(2, "0")}:${(endMinutes % 60).toString().padStart(2, "0")}`;
+            })()}
             courtName={court.name}
           />
         )}
