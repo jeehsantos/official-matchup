@@ -28,6 +28,8 @@ import { useToast } from "@/hooks/use-toast";
 import { format, getDay } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import { GroupSelectionModal } from "@/components/booking/GroupSelectionModal";
+import { checkProfileComplete } from "@/lib/profile-utils";
+import type { SessionType } from "@/components/session/SessionTypeSelector";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
 type Venue = Database["public"]["Tables"]["venues"]["Row"];
@@ -329,6 +331,25 @@ export default function CourtDetail() {
 
     if (selectedSlots.length === 0 || !court || !selectedDate) return;
 
+    // Check profile completeness
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const { isComplete, missingFields } = checkProfileComplete(profile);
+
+    if (!isComplete) {
+      toast({
+        title: "Complete your profile first",
+        description: `Please add: ${missingFields.join(", ")}`,
+        variant: "destructive",
+      });
+      navigate("/profile");
+      return;
+    }
+
     const totalDuration = getTotalDuration();
     const startTime = getStartTime();
 
@@ -370,7 +391,7 @@ export default function CourtDetail() {
     }
   };
 
-  const handleGroupConfirm = async (groupId: string, isNewGroup: boolean, paymentType: "single" | "split") => {
+  const handleGroupConfirm = async (groupId: string, isNewGroup: boolean, paymentType: "single" | "split", sessionType: SessionType) => {
     if (selectedSlots.length === 0 || !court || !user || !selectedDate) return;
 
     setShowGroupModal(false);
@@ -405,6 +426,7 @@ export default function CourtDetail() {
           payment_deadline: paymentDeadline.toISOString(),
           state: "protected",
           payment_type: paymentType,
+          session_type: sessionType,
         })
         .select()
         .single();

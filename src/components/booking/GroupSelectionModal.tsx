@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { PaymentTypeSelector } from "@/components/booking/PaymentTypeSelector";
+import { SessionTypeSelector, type SessionType } from "@/components/session/SessionTypeSelector";
 import type { Database } from "@/integrations/supabase/types";
 
 type Group = Database["public"]["Tables"]["groups"]["Row"];
@@ -31,7 +32,7 @@ type BookingPaymentType = "single" | "split";
 interface GroupSelectionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (groupId: string, isNewGroup: boolean, paymentType: BookingPaymentType) => void;
+  onConfirm: (groupId: string, isNewGroup: boolean, paymentType: BookingPaymentType, sessionType: SessionType) => void;
   sportType: SportType;
   courtPrice: number;
   dayOfWeek: number;
@@ -64,6 +65,7 @@ export function GroupSelectionModal({
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [newGroupName, setNewGroupName] = useState("");
   const [paymentType, setPaymentType] = useState<BookingPaymentType>("single");
+  const [sessionType, setSessionType] = useState<SessionType>("casual");
 
   const isNewGroup = selectedGroupId === "new";
 
@@ -79,6 +81,7 @@ export function GroupSelectionModal({
       setSelectedGroupId("");
       setNewGroupName("");
       setPaymentType("single");
+      setSessionType("casual");
     }
   }, [open]);
 
@@ -140,7 +143,7 @@ export function GroupSelectionModal({
 
         if (memberError) throw memberError;
 
-        onConfirm(data.id, true, paymentType);
+        onConfirm(data.id, true, paymentType, sessionType);
       } catch (error: any) {
         console.error("Error creating group:", error);
         toast.error(error?.message ?? "Failed to create group. Please try again.");
@@ -149,7 +152,7 @@ export function GroupSelectionModal({
       }
     } else {
       if (!selectedGroupId) return;
-      onConfirm(selectedGroupId, false, paymentType);
+      onConfirm(selectedGroupId, false, paymentType, sessionType);
     }
   };
 
@@ -266,6 +269,12 @@ export function GroupSelectionModal({
                 </p>
               </div>
             )}
+
+            {/* Session Type Selection */}
+            <SessionTypeSelector
+              value={sessionType}
+              onChange={setSessionType}
+            />
 
             {/* Payment Type Selection */}
             <PaymentTypeSelector

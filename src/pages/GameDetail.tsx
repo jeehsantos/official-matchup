@@ -14,6 +14,8 @@ import { EditPlayerLimits } from "@/components/session/EditPlayerLimits";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
+import { checkProfileComplete } from "@/lib/profile-utils";
+import { getSessionTypeInfo } from "@/components/session/SessionTypeSelector";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -280,6 +282,25 @@ export default function GameDetail() {
 
     setActionLoading(true);
     try {
+      // Check profile completeness first
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const { isComplete, missingFields } = checkProfileComplete(profile);
+
+      if (!isComplete) {
+        toast({
+          title: "Complete your profile first",
+          description: `Please add: ${missingFields.join(", ")}`,
+          variant: "destructive",
+        });
+        navigate("/profile");
+        return;
+      }
+
       // Check if already joined
       const { data: existingPlayer } = await supabase
         .from("session_players")
@@ -495,6 +516,12 @@ export default function GameDetail() {
                   <div>
                     <h2 className="font-display text-xl lg:text-2xl font-bold">{group.name}</h2>
                     <p className="text-muted-foreground">{getSportLabel(group.sport_type as SportType)}</p>
+                    {/* Session Type Badge */}
+                    {session.session_type && (
+                      <Badge variant="outline" className="mt-2">
+                        {getSessionTypeInfo(session.session_type as any).icon} {getSessionTypeInfo(session.session_type as any).label}
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

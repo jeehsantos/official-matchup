@@ -18,7 +18,7 @@ interface CourtWithVenue extends Court {
   venues: Venue | null;
 }
 
-const sportFilters = ["all", "futsal", "basketball", "tennis", "volleyball", "badminton", "turf_hockey"] as const;
+const groundTypeFilters = ["all", "grass", "turf", "sand", "hard", "clay", "other"] as const;
 const ITEMS_PER_PAGE = 9;
 
 export default function Courts() {
@@ -27,7 +27,8 @@ export default function Courts() {
   const [courts, setCourts] = useState<CourtWithVenue[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSport, setSelectedSport] = useState<string>("all");
+  const [selectedGroundType, setSelectedGroundType] = useState<string>("all");
+  const [selectedVenueType, setSelectedVenueType] = useState<"all" | "indoor" | "outdoor">("all");
   const [selectedCity, setSelectedCity] = useState<string>("all");
   const [cities, setCities] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -73,10 +74,14 @@ export default function Courts() {
       court.venues?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       court.venues?.city.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesSport = selectedSport === "all" || court.sport_type === selectedSport;
+    const matchesGroundType = selectedGroundType === "all" || court.ground_type === selectedGroundType;
+    const matchesVenueType = 
+      selectedVenueType === "all" ||
+      (selectedVenueType === "indoor" && court.is_indoor) ||
+      (selectedVenueType === "outdoor" && !court.is_indoor);
     const matchesCity = selectedCity === "all" || court.venues?.city === selectedCity;
 
-    return matchesSearch && matchesSport && matchesCity;
+    return matchesSearch && matchesGroundType && matchesVenueType && matchesCity;
   });
 
   // Pagination (desktop only)
@@ -89,7 +94,7 @@ export default function Courts() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedSport, selectedCity]);
+  }, [searchQuery, selectedGroundType, selectedVenueType, selectedCity]);
 
   // Scroll detection for pagination visibility
   const handleScroll = useCallback(() => {
@@ -119,15 +124,15 @@ export default function Courts() {
 
   const Layout = user ? MobileLayout : PublicLayout;
 
-  // Sport filter data with emojis
-  const sportData = {
-    all: { emoji: "🎯", label: "All" },
-    futsal: { emoji: "⚽", label: "Futsal" },
-    basketball: { emoji: "🏀", label: "Basketball" },
-    tennis: { emoji: "🎾", label: "Tennis" },
-    volleyball: { emoji: "🏐", label: "Volleyball" },
-    badminton: { emoji: "🏸", label: "Badminton" },
-    turf_hockey: { emoji: "🏑", label: "Hockey" },
+  // Ground type filter data with emojis
+  const groundTypeData = {
+    all: { emoji: "🎯", label: "All Surfaces" },
+    grass: { emoji: "🌱", label: "Grass" },
+    turf: { emoji: "🟩", label: "Turf" },
+    sand: { emoji: "🏖️", label: "Sand" },
+    hard: { emoji: "🟫", label: "Hard Court" },
+    clay: { emoji: "🟠", label: "Clay" },
+    other: { emoji: "⚪", label: "Other" },
   };
 
   // Desktop Filter bar component
@@ -155,16 +160,16 @@ export default function Courts() {
         </div>
       </div>
 
-      {/* Sport Category Tabs */}
+      {/* Ground Type Category Tabs */}
       <div className="flex gap-1 overflow-x-auto pb-3 scrollbar-hide -mx-6 px-6">
-        {sportFilters.map((sport) => {
-          const isActive = selectedSport === sport;
-          const data = sportData[sport as keyof typeof sportData];
+        {groundTypeFilters.map((groundType) => {
+          const isActive = selectedGroundType === groundType;
+          const data = groundTypeData[groundType as keyof typeof groundTypeData];
           
           return (
             <button
-              key={sport}
-              onClick={() => setSelectedSport(sport)}
+              key={groundType}
+              onClick={() => setSelectedGroundType(groundType)}
               className={`flex flex-col items-center gap-2 px-4 py-3 min-w-[72px] shrink-0 border-b-2 transition-all ${
                 isActive 
                   ? "border-foreground text-foreground" 
@@ -173,11 +178,28 @@ export default function Courts() {
             >
               <span className="text-2xl">{data?.emoji || "🎯"}</span>
               <span className="text-xs font-medium whitespace-nowrap">
-                {data?.label || sport.replace("_", " ")}
+                {data?.label || groundType}
               </span>
             </button>
           );
         })}
+      </div>
+
+      {/* Indoor/Outdoor Toggle */}
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+        {(["all", "indoor", "outdoor"] as const).map((type) => (
+          <button
+            key={type}
+            onClick={() => setSelectedVenueType(type)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium shrink-0 transition-all ${
+              selectedVenueType === type
+                ? "bg-foreground text-background"
+                : "bg-card border border-border text-foreground hover:border-foreground"
+            }`}
+          >
+            {type === "all" ? "All" : type === "indoor" ? "🏢 Indoor" : "🌳 Outdoor"}
+          </button>
+        ))}
       </div>
 
       {/* City Filter - Clean pill chips */}

@@ -581,6 +581,7 @@ export type Database = {
             | Database["public"]["Enums"]["booking_payment_type"]
             | null
           session_date: string
+          session_type: Database["public"]["Enums"]["session_type"] | null
           start_time: string
           state: Database["public"]["Enums"]["session_state"]
           updated_at: string
@@ -602,6 +603,7 @@ export type Database = {
             | Database["public"]["Enums"]["booking_payment_type"]
             | null
           session_date: string
+          session_type?: Database["public"]["Enums"]["session_type"] | null
           start_time: string
           state?: Database["public"]["Enums"]["session_state"]
           updated_at?: string
@@ -623,6 +625,7 @@ export type Database = {
             | Database["public"]["Enums"]["booking_payment_type"]
             | null
           session_date?: string
+          session_type?: Database["public"]["Enums"]["session_type"] | null
           start_time?: string
           state?: Database["public"]["Enums"]["session_state"]
           updated_at?: string
@@ -862,6 +865,12 @@ export type Database = {
       payment_status: "pending" | "completed" | "failed" | "refunded"
       payment_timing: "at_booking" | "before_session"
       session_state: "protected" | "rescue" | "released"
+      session_type:
+        | "casual"
+        | "competitive"
+        | "training"
+        | "private"
+        | "tournament"
       sport_type:
         | "futsal"
         | "tennis"
@@ -1012,6 +1021,13 @@ export const Constants = {
       payment_status: ["pending", "completed", "failed", "refunded"],
       payment_timing: ["at_booking", "before_session"],
       session_state: ["protected", "rescue", "released"],
+      session_type: [
+        "casual",
+        "competitive",
+        "training",
+        "private",
+        "tournament",
+      ],
       sport_type: [
         "futsal",
         "tennis",
