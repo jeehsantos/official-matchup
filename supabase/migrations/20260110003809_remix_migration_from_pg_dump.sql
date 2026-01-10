@@ -378,7 +378,8 @@ CREATE TABLE public.courts (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     ground_type public.ground_type DEFAULT 'turf'::public.ground_type,
     payment_timing public.payment_timing DEFAULT 'at_booking'::public.payment_timing,
-    payment_hours_before integer DEFAULT 24
+    payment_hours_before integer DEFAULT 24,
+    photo_urls text[] DEFAULT '{}'::text[]
 );
 
 
@@ -544,6 +545,44 @@ CREATE TABLE public.user_roles (
 
 
 --
+-- Name: venue_date_overrides; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.venue_date_overrides (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    venue_id uuid NOT NULL,
+    start_date date NOT NULL,
+    end_date date,
+    is_closed boolean DEFAULT false NOT NULL,
+    custom_start_time time without time zone,
+    custom_end_time time without time zone,
+    note text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT valid_custom_time_range CHECK ((((custom_start_time IS NULL) AND (custom_end_time IS NULL)) OR ((custom_start_time IS NOT NULL) AND (custom_end_time IS NOT NULL) AND (custom_start_time < custom_end_time)))),
+    CONSTRAINT valid_date_range CHECK (((end_date IS NULL) OR (start_date <= end_date)))
+);
+
+
+--
+-- Name: venue_weekly_rules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.venue_weekly_rules (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    venue_id uuid NOT NULL,
+    day_of_week integer NOT NULL,
+    start_time time without time zone NOT NULL,
+    end_time time without time zone NOT NULL,
+    is_closed boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT valid_time_range CHECK (((start_time < end_time) OR (is_closed = true))),
+    CONSTRAINT venue_weekly_rules_day_of_week_check CHECK (((day_of_week >= 0) AND (day_of_week <= 6)))
+);
+
+
+--
 -- Name: venues; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -565,7 +604,9 @@ CREATE TABLE public.venues (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     country text DEFAULT 'New Zealand'::text,
     suburb text,
-    stripe_account_id text
+    stripe_account_id text,
+    slot_interval_minutes integer DEFAULT 30 NOT NULL,
+    max_booking_minutes integer DEFAULT 120 NOT NULL
 );
 
 
@@ -722,6 +763,14 @@ ALTER TABLE ONLY public.sessions
 
 
 --
+-- Name: venue_weekly_rules unique_venue_day; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.venue_weekly_rules
+    ADD CONSTRAINT unique_venue_day UNIQUE (venue_id, day_of_week);
+
+
+--
 -- Name: user_roles user_roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -738,6 +787,22 @@ ALTER TABLE ONLY public.user_roles
 
 
 --
+-- Name: venue_date_overrides venue_date_overrides_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.venue_date_overrides
+    ADD CONSTRAINT venue_date_overrides_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: venue_weekly_rules venue_weekly_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.venue_weekly_rules
+    ADD CONSTRAINT venue_weekly_rules_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: venues venues_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -746,10 +811,31 @@ ALTER TABLE ONLY public.venues
 
 
 --
+-- Name: idx_court_availability_booking; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_court_availability_booking ON public.court_availability USING btree (court_id, available_date, start_time, end_time) WHERE (is_booked = true);
+
+
+--
 -- Name: idx_court_availability_template_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_court_availability_template_id ON public.court_availability USING btree (template_id) WHERE (template_id IS NOT NULL);
+
+
+--
+-- Name: idx_venue_date_overrides_venue_dates; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_venue_date_overrides_venue_dates ON public.venue_date_overrides USING btree (venue_id, start_date, end_date);
+
+
+--
+-- Name: idx_venue_weekly_rules_venue_day; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_venue_weekly_rules_venue_day ON public.venue_weekly_rules USING btree (venue_id, day_of_week);
 
 
 --
@@ -806,6 +892,20 @@ CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON public.profiles FOR E
 --
 
 CREATE TRIGGER update_sessions_updated_at BEFORE UPDATE ON public.sessions FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: venue_date_overrides update_venue_date_overrides_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_venue_date_overrides_updated_at BEFORE UPDATE ON public.venue_date_overrides FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: venue_weekly_rules update_venue_weekly_rules_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_venue_weekly_rules_updated_at BEFORE UPDATE ON public.venue_weekly_rules FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
@@ -1016,6 +1116,22 @@ ALTER TABLE ONLY public.user_roles
 
 
 --
+-- Name: venue_date_overrides venue_date_overrides_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.venue_date_overrides
+    ADD CONSTRAINT venue_date_overrides_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON DELETE CASCADE;
+
+
+--
+-- Name: venue_weekly_rules venue_weekly_rules_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.venue_weekly_rules
+    ADD CONSTRAINT venue_weekly_rules_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON DELETE CASCADE;
+
+
+--
 -- Name: venues venues_owner_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1132,6 +1248,15 @@ CREATE POLICY "Court managers can update own venues" ON public.venues FOR UPDATE
 --
 
 CREATE POLICY "Courts are viewable by everyone" ON public.courts FOR SELECT USING ((is_active = true));
+
+
+--
+-- Name: venue_date_overrides Date overrides viewable by everyone; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Date overrides viewable by everyone" ON public.venue_date_overrides FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM public.venues v
+  WHERE ((v.id = venue_date_overrides.venue_id) AND (v.is_active = true)))));
 
 
 --
@@ -1381,12 +1506,48 @@ CREATE POLICY "Venue owners can create courts" ON public.courts FOR INSERT WITH 
 
 
 --
+-- Name: venue_date_overrides Venue owners can create date overrides; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Venue owners can create date overrides" ON public.venue_date_overrides FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.venues v
+  WHERE ((v.id = venue_date_overrides.venue_id) AND (v.owner_id = auth.uid())))));
+
+
+--
+-- Name: venue_weekly_rules Venue owners can create weekly rules; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Venue owners can create weekly rules" ON public.venue_weekly_rules FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.venues v
+  WHERE ((v.id = venue_weekly_rules.venue_id) AND (v.owner_id = auth.uid())))));
+
+
+--
 -- Name: courts Venue owners can delete courts; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Venue owners can delete courts" ON public.courts FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.venues
   WHERE ((venues.id = courts.venue_id) AND (venues.owner_id = auth.uid())))));
+
+
+--
+-- Name: venue_date_overrides Venue owners can delete date overrides; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Venue owners can delete date overrides" ON public.venue_date_overrides FOR DELETE USING ((EXISTS ( SELECT 1
+   FROM public.venues v
+  WHERE ((v.id = venue_date_overrides.venue_id) AND (v.owner_id = auth.uid())))));
+
+
+--
+-- Name: venue_weekly_rules Venue owners can delete weekly rules; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Venue owners can delete weekly rules" ON public.venue_weekly_rules FOR DELETE USING ((EXISTS ( SELECT 1
+   FROM public.venues v
+  WHERE ((v.id = venue_weekly_rules.venue_id) AND (v.owner_id = auth.uid())))));
 
 
 --
@@ -1399,10 +1560,37 @@ CREATE POLICY "Venue owners can update courts" ON public.courts FOR UPDATE USING
 
 
 --
+-- Name: venue_date_overrides Venue owners can update date overrides; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Venue owners can update date overrides" ON public.venue_date_overrides FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM public.venues v
+  WHERE ((v.id = venue_date_overrides.venue_id) AND (v.owner_id = auth.uid())))));
+
+
+--
+-- Name: venue_weekly_rules Venue owners can update weekly rules; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Venue owners can update weekly rules" ON public.venue_weekly_rules FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM public.venues v
+  WHERE ((v.id = venue_weekly_rules.venue_id) AND (v.owner_id = auth.uid())))));
+
+
+--
 -- Name: venues Venues are viewable by everyone; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Venues are viewable by everyone" ON public.venues FOR SELECT USING ((is_active = true));
+
+
+--
+-- Name: venue_weekly_rules Weekly rules viewable by everyone; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Weekly rules viewable by everyone" ON public.venue_weekly_rules FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM public.venues v
+  WHERE ((v.id = venue_weekly_rules.venue_id) AND (v.is_active = true)))));
 
 
 --
@@ -1488,6 +1676,18 @@ ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: venue_date_overrides; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.venue_date_overrides ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: venue_weekly_rules; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.venue_weekly_rules ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: venues; Type: ROW SECURITY; Schema: public; Owner: -
