@@ -19,27 +19,22 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  AlertCircle
+  AlertCircle,
+  Expand
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { format, getDay, addDays } from "date-fns";
+import { format, getDay } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import { GroupSelectionModal } from "@/components/booking/GroupSelectionModal";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
 type Venue = Database["public"]["Tables"]["venues"]["Row"];
 
-interface CourtWithVenue extends Court {
+interface CourtWithVenue extends Omit<Court, 'photo_urls'> {
   venues: Venue | null;
+  photo_urls?: string[] | null;
 }
 
 interface AvailableSlot {
@@ -68,14 +63,13 @@ export default function CourtDetail() {
   const [court, setCourt] = useState<CourtWithVenue | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
-  const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [booking, setBooking] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
   
-  // New availability state
+  // Availability state
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityData, setAvailabilityData] = useState<AvailabilityResponse | null>(null);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
@@ -93,14 +87,10 @@ export default function CourtDetail() {
     }
   }, [court, selectedDate]);
 
-  // Reset duration when slot changes
+  // Reset selected slots when date changes
   useEffect(() => {
-    if (selectedSlot && selectedSlot.available_durations.length > 0) {
-      setSelectedDuration(selectedSlot.available_durations[0]);
-    } else {
-      setSelectedDuration(null);
-    }
-  }, [selectedSlot]);
+    setSelectedSlots([]);
+  }, [selectedDate]);
 
   const fetchCourt = async () => {
     try {
@@ -126,8 +116,7 @@ export default function CourtDetail() {
   const fetchAvailability = useCallback(async (venueId: string, courtId: string, date: Date) => {
     setAvailabilityLoading(true);
     setAvailabilityError(null);
-    setSelectedSlot(null);
-    setSelectedDuration(null);
+    setSelectedSlots([]);
 
     try {
       const { data, error } = await supabase.functions.invoke("get-availability", {
@@ -149,6 +138,96 @@ export default function CourtDetail() {
     }
   }, []);
 
+  // Convert time string to minutes for comparison
+  const timeToMinutes = (time: string): number => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return hours * 60 + minutes;
+  };
+
+  // Check if slots are consecutive
+  const areSlotsConsecutive = (slots: string[]): boolean => {
+    if (slots.length <= 1) return true;
+    const sorted = [...slots].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+    const interval = availabilityData?.slot_interval_minutes || 30;
+    
+    for (let i = 1; i < sorted.length; i++) {
+      const prevMinutes = timeToMinutes(sorted[i - 1]);
+      const currMinutes = timeToMinutes(sorted[i]);
+      if (currMinutes - prevMinutes !== interval) return false;
+    }
+    return true;
+  };
+
+  // Check if a slot is available (exists in the available slots list)
+  const isSlotAvailable = (slotTime: string): boolean => {
+    return availabilityData?.slots.some(s => s.start_time.slice(0, 5) === slotTime.slice(0, 5)) || false;
+  };
+
+  // Toggle slot selection
+  const toggleSlot = (slotTime: string) => {
+    const normalizedTime = slotTime.slice(0, 5);
+    
+    setSelectedSlots(prev => {
+      // If already selected, remove it
+      if (prev.includes(normalizedTime)) {
+        return prev.filter(t => t !== normalizedTime);
+      }
+      
+      // If this is the first selection, just add it
+      if (prev.length === 0) {
+        return [normalizedTime];
+      }
+      
+      // Check if adding this slot would maintain consecutiveness
+      const newSelection = [...prev, normalizedTime].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+      
+      if (areSlotsConsecutive(newSelection)) {
+        // Check if we're within max booking duration
+        const interval = availabilityData?.slot_interval_minutes || 30;
+        const maxMinutes = availabilityData?.max_booking_minutes || 120;
+        const totalDuration = newSelection.length * interval;
+        
+        if (totalDuration <= maxMinutes) {
+          return newSelection;
+        } else {
+          toast({
+            title: "Maximum duration reached",
+            description: `You can book up to ${formatDuration(maxMinutes)}`,
+            variant: "destructive",
+          });
+          return prev;
+        }
+      }
+      
+      // If not consecutive, start fresh with this slot
+      return [normalizedTime];
+    });
+  };
+
+  // Calculate total duration from selected slots
+  const getTotalDuration = (): number => {
+    if (selectedSlots.length === 0) return 0;
+    const interval = availabilityData?.slot_interval_minutes || 30;
+    return selectedSlots.length * interval;
+  };
+
+  // Calculate end time from selected slots
+  const getEndTime = (): string => {
+    if (selectedSlots.length === 0) return "";
+    const sorted = [...selectedSlots].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+    const lastSlot = sorted[sorted.length - 1];
+    const interval = availabilityData?.slot_interval_minutes || 30;
+    const endMinutes = timeToMinutes(lastSlot) + interval;
+    return `${Math.floor(endMinutes / 60).toString().padStart(2, "0")}:${(endMinutes % 60).toString().padStart(2, "0")}`;
+  };
+
+  // Get start time from selected slots
+  const getStartTime = (): string => {
+    if (selectedSlots.length === 0) return "";
+    const sorted = [...selectedSlots].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+    return sorted[0];
+  };
+
   const handleBookSlot = async () => {
     if (!user) {
       toast({
@@ -160,7 +239,10 @@ export default function CourtDetail() {
       return;
     }
 
-    if (!selectedSlot || !court || !selectedDuration || !selectedDate) return;
+    if (selectedSlots.length === 0 || !court || !selectedDate) return;
+
+    const totalDuration = getTotalDuration();
+    const startTime = getStartTime();
 
     // Validate booking with backend before proceeding
     try {
@@ -169,8 +251,8 @@ export default function CourtDetail() {
           venueId: court.venue_id,
           courtId: court.id,
           date: format(selectedDate, "yyyy-MM-dd"),
-          startTime: selectedSlot.start_time,
-          durationMinutes: selectedDuration,
+          startTime,
+          durationMinutes: totalDuration,
         },
       });
 
@@ -201,24 +283,23 @@ export default function CourtDetail() {
   };
 
   const handleGroupConfirm = async (groupId: string, isNewGroup: boolean, paymentType: "single" | "split") => {
-    if (!selectedSlot || !court || !user || !selectedDuration || !selectedDate) return;
+    if (selectedSlots.length === 0 || !court || !user || !selectedDate) return;
 
     setShowGroupModal(false);
     setBooking(true);
 
+    const totalDuration = getTotalDuration();
+    const startTime = getStartTime();
+    const endTime = getEndTime();
+
     try {
-      // Calculate end time
-      const startMinutes = parseInt(selectedSlot.start_time.split(":")[0]) * 60 + parseInt(selectedSlot.start_time.split(":")[1]);
-      const endMinutes = startMinutes + selectedDuration;
-      const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, "0")}:${(endMinutes % 60).toString().padStart(2, "0")}`;
-      
       const dateStr = format(selectedDate, "yyyy-MM-dd");
       const slotDate = new Date(dateStr);
       const paymentDeadline = new Date(slotDate);
       paymentDeadline.setHours(paymentDeadline.getHours() - 24);
 
       // Calculate price based on duration
-      const hours = selectedDuration / 60;
+      const hours = totalDuration / 60;
       const totalPrice = court.hourly_rate * hours;
 
       // Create a session for this booking
@@ -228,8 +309,8 @@ export default function CourtDetail() {
           group_id: groupId,
           court_id: court.id,
           session_date: dateStr,
-          start_time: selectedSlot.start_time,
-          duration_minutes: selectedDuration,
+          start_time: startTime,
+          duration_minutes: totalDuration,
           court_price: totalPrice,
           min_players: 6,
           max_players: court.capacity,
@@ -262,7 +343,7 @@ export default function CourtDetail() {
         .insert({
           court_id: court.id,
           available_date: dateStr,
-          start_time: selectedSlot.start_time,
+          start_time: startTime,
           end_time: endTime,
           is_booked: true,
           booked_by_user_id: user.id,
@@ -343,13 +424,12 @@ export default function CourtDetail() {
       } else {
         toast({
           title: isNewGroup ? "Group created & court booked!" : "Court booked!",
-          description: `You've booked ${court.name} on ${format(selectedDate, "MMMM d")} at ${selectedSlot.start_time}. Check your games for details.`,
+          description: `You've booked ${court.name} on ${format(selectedDate, "MMMM d")} at ${startTime}. Check your games for details.`,
         });
       }
 
       // Update UI
-      setSelectedSlot(null);
-      setSelectedDuration(null);
+      setSelectedSlots([]);
       if (court.venues) {
         fetchAvailability(court.venues.id, court.id, selectedDate);
       }
@@ -364,9 +444,13 @@ export default function CourtDetail() {
     }
   };
 
-  // Get court photo
+  // Get court photos (support both photo_urls array and legacy photo_url)
   const getCourtPhotos = (): string[] => {
     if (!court) return [];
+    const photos = (court as any).photo_urls;
+    if (photos && Array.isArray(photos) && photos.length > 0) {
+      return photos;
+    }
     if (court.photo_url) return [court.photo_url];
     return [];
   };
@@ -422,6 +506,9 @@ export default function CourtDetail() {
     );
   }
 
+  const totalDuration = getTotalDuration();
+  const totalPrice = calculatePrice(totalDuration);
+
   return (
     <Layout>
       <div className="pb-32">
@@ -433,330 +520,341 @@ export default function CourtDetail() {
           </Button>
         </div>
 
-        {/* Image Gallery */}
-        {photos.length > 0 ? (
-          <>
-            {/* Main Gallery View */}
-            {photos.length === 1 ? (
-              <div className="aspect-video bg-muted relative">
-                <img 
-                  src={photos[0]} 
-                  alt={court.name}
-                  className="w-full h-full object-cover cursor-pointer"
-                  onClick={() => setShowGallery(true)}
-                />
-                <Badge className="absolute top-4 left-4 capitalize">
+        {/* Main Content - Two Column Layout on Desktop */}
+        <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:px-6">
+          {/* Left Column - Details and Booking */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Court Header */}
+            <div className="px-4 lg:px-0">
+              <div className="flex items-start gap-3 mb-3">
+                <Badge className="capitalize shrink-0">
                   <SportIcon sport={court.sport_type} className="h-3 w-3 mr-1" />
                   {court.sport_type}
                 </Badge>
+                <Badge variant="outline" className="shrink-0">
+                  {court.is_indoor ? "Indoor" : "Outdoor"}
+                </Badge>
               </div>
-            ) : photos.length === 2 ? (
-              <div className="grid grid-cols-2 gap-1 aspect-video">
-                {photos.map((photo, index) => (
-                  <div key={index} className="relative overflow-hidden">
-                    <img 
-                      src={photo} 
-                      alt={`${court.name} ${index + 1}`}
-                      className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                      onClick={() => {
-                        setCurrentImageIndex(index);
-                        setShowGallery(true);
-                      }}
-                    />
-                    {index === 0 && (
-                      <Badge className="absolute top-4 left-4 capitalize">
-                        <SportIcon sport={court.sport_type} className="h-3 w-3 mr-1" />
-                        {court.sport_type}
-                      </Badge>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-4 grid-rows-2 gap-1 aspect-[2/1]">
-                <div className="col-span-2 row-span-2 relative overflow-hidden">
+              <h1 className="font-display text-2xl lg:text-3xl font-bold mb-2">{court.name}</h1>
+              {court.venues && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <MapPin className="h-4 w-4 shrink-0" />
+                  <span>{court.venues.address}, {court.venues.city}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Photo Gallery */}
+            <div className="lg:hidden">
+              {photos.length > 0 ? (
+                <div className="relative aspect-video bg-muted">
                   <img 
                     src={photos[0]} 
                     alt={court.name}
-                    className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={() => {
-                      setCurrentImageIndex(0);
-                      setShowGallery(true);
-                    }}
+                    className="w-full h-full object-cover"
+                    onClick={() => setShowGallery(true)}
                   />
-                  <Badge className="absolute top-4 left-4 capitalize">
-                    <SportIcon sport={court.sport_type} className="h-3 w-3 mr-1" />
-                    {court.sport_type}
-                  </Badge>
-                </div>
-                {photos.slice(1, 5).map((photo, index) => (
-                  <div key={index} className="relative overflow-hidden">
-                    <img 
-                      src={photo} 
-                      alt={`${court.name} ${index + 2}`}
-                      className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                      onClick={() => {
-                        setCurrentImageIndex(index + 1);
-                        setShowGallery(true);
-                      }}
-                    />
-                    {index === Math.min(photos.length - 2, 3) && photos.length > 4 && (
-                      <div 
-                        className="absolute inset-0 bg-black/50 flex items-center justify-center cursor-pointer"
-                        onClick={() => setShowGallery(true)}
-                      >
-                        <span className="text-white font-medium">+{photos.length - 4} more</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {photos.length > 1 && (
-              <div className="px-4 py-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full"
-                  onClick={() => setShowGallery(true)}
-                >
-                  Show all {photos.length} photos
-                </Button>
-              </div>
-            )}
-
-            {/* Fullscreen Gallery Modal */}
-            {showGallery && (
-              <div className="fixed inset-0 z-50 bg-black flex flex-col">
-                <div className="flex items-center justify-between p-4 text-white">
-                  <span className="font-medium">{currentImageIndex + 1} / {photos.length}</span>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    className="text-white hover:bg-white/20"
-                    onClick={() => setShowGallery(false)}
-                  >
-                    <X className="h-6 w-6" />
-                  </Button>
-                </div>
-
-                <div className="flex-1 flex items-center justify-center relative px-4">
-                  <img 
-                    src={photos[currentImageIndex]} 
-                    alt={`${court.name} ${currentImageIndex + 1}`}
-                    className="max-w-full max-h-full object-contain"
-                  />
-
                   {photos.length > 1 && (
-                    <>
-                      <button
-                        onClick={prevImage}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-lg"
-                      >
-                        <ChevronLeft className="h-6 w-6 text-gray-800" />
-                      </button>
-                      <button
-                        onClick={nextImage}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-lg"
-                      >
-                        <ChevronRight className="h-6 w-6 text-gray-800" />
-                      </button>
-                    </>
+                    <button 
+                      onClick={() => setShowGallery(true)}
+                      className="absolute bottom-3 right-3 bg-black/70 text-white text-sm px-3 py-1.5 rounded-full flex items-center gap-1.5"
+                    >
+                      <Expand className="h-3.5 w-3.5" />
+                      {photos.length} photos
+                    </button>
                   )}
                 </div>
+              ) : (
+                <div className="aspect-video bg-muted flex items-center justify-center">
+                  <SportIcon sport={court.sport_type} className="h-16 w-16 text-muted-foreground" />
+                </div>
+              )}
+            </div>
 
-                {photos.length > 1 && (
-                  <div className="p-4 flex justify-center gap-2 overflow-x-auto">
-                    {photos.map((photo, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentImageIndex(index)}
-                        className={`w-16 h-16 rounded-lg overflow-hidden shrink-0 border-2 transition-all ${
-                          index === currentImageIndex 
-                            ? 'border-white opacity-100' 
-                            : 'border-transparent opacity-60 hover:opacity-80'
-                        }`}
-                      >
-                        <img 
-                          src={photo} 
-                          alt={`Thumbnail ${index + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </button>
-                    ))}
+            {/* Quick Info */}
+            <div className="px-4 lg:px-0">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-card rounded-xl p-4 border border-border text-center">
+                  <DollarSign className="h-5 w-5 mx-auto mb-2 text-primary" />
+                  <div className="font-semibold">${court.hourly_rate}</div>
+                  <div className="text-xs text-muted-foreground">per hour</div>
+                </div>
+                <div className="bg-card rounded-xl p-4 border border-border text-center">
+                  <Users className="h-5 w-5 mx-auto mb-2 text-primary" />
+                  <div className="font-semibold">{court.capacity}</div>
+                  <div className="text-xs text-muted-foreground">max players</div>
+                </div>
+                <div className="bg-card rounded-xl p-4 border border-border text-center">
+                  <div className="h-5 w-5 mx-auto mb-2 text-primary flex items-center justify-center text-lg">
+                    {court.is_indoor ? "🏢" : "🌳"}
+                  </div>
+                  <div className="font-semibold capitalize">{court.ground_type || "turf"}</div>
+                  <div className="text-xs text-muted-foreground">surface</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Amenities */}
+            {court.venues?.amenities && court.venues.amenities.length > 0 && (
+              <div className="px-4 lg:px-0">
+                <h3 className="font-semibold mb-3">Amenities</h3>
+                <div className="flex flex-wrap gap-2">
+                  {court.venues.amenities.map((amenity, i) => (
+                    <Badge key={i} variant="secondary">{amenity}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Date Selection */}
+            <div className="px-4 lg:px-0">
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 text-primary" />
+                Select a Date
+              </h3>
+              <div className="bg-card rounded-xl border border-border p-4">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                  disabled={(date) => date < new Date()}
+                  className="mx-auto"
+                />
+              </div>
+            </div>
+
+            {/* Time Slots */}
+            {selectedDate && (
+              <div className="px-4 lg:px-0">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  Available Times for {format(selectedDate, "MMMM d")}
+                </h3>
+                
+                {availabilityLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <span className="ml-2 text-muted-foreground">Loading availability...</span>
+                  </div>
+                ) : availabilityError ? (
+                  <div className="flex items-center gap-2 text-destructive py-4">
+                    <AlertCircle className="h-5 w-5" />
+                    <span>{availabilityError}</span>
+                  </div>
+                ) : !availabilityData?.available ? (
+                  <div className="bg-muted/50 rounded-lg p-4 text-center">
+                    <p className="text-muted-foreground">
+                      {availabilityData?.reason === "closed" 
+                        ? "Venue is closed on this date." 
+                        : "No availability for this date."}
+                    </p>
+                  </div>
+                ) : availabilityData.slots.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    All slots are booked for this date. Try another day.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Venue hours info */}
+                    {availabilityData.window && (
+                      <div className="text-sm text-muted-foreground">
+                        Open: {availabilityData.window.start_time.slice(0, 5)} - {availabilityData.window.end_time.slice(0, 5)}
+                      </div>
+                    )}
+                    
+                    {/* Instruction */}
+                    <p className="text-sm text-muted-foreground">
+                      Tap to select consecutive time slots. Tap again to deselect.
+                    </p>
+                    
+                    {/* Time slot grid */}
+                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                      {availabilityData.slots.map((slot) => {
+                        const slotTime = slot.start_time.slice(0, 5);
+                        const isSelected = selectedSlots.includes(slotTime);
+                        
+                        return (
+                          <Button
+                            key={slot.start_time}
+                            variant={isSelected ? "default" : "outline"}
+                            className={`h-auto py-2.5 px-2 transition-all ${
+                              isSelected 
+                                ? "ring-2 ring-primary ring-offset-2 ring-offset-background" 
+                                : "hover:border-primary/50"
+                            }`}
+                            onClick={() => toggleSlot(slot.start_time)}
+                          >
+                            <span className="text-sm font-medium">{slotTime}</span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Selected slots summary */}
+                    {selectedSlots.length > 0 && (
+                      <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">Selected Time</span>
+                          <button 
+                            onClick={() => setSelectedSlots([])}
+                            className="text-sm text-muted-foreground hover:text-foreground"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2 text-lg font-semibold">
+                          <Clock className="h-5 w-5 text-primary" />
+                          {getStartTime()} - {getEndTime()}
+                          <span className="text-muted-foreground font-normal text-sm">
+                            ({formatDuration(totalDuration)})
+                          </span>
+                        </div>
+                        <div className="text-xl font-bold text-primary">
+                          ${totalPrice.toFixed(2)}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
-          </>
-        ) : (
-          <div className="aspect-video bg-muted relative flex items-center justify-center">
-            <SportIcon sport={court.sport_type} className="h-16 w-16 text-muted-foreground" />
-            <Badge className="absolute top-4 left-4 capitalize">
-              <SportIcon sport={court.sport_type} className="h-3 w-3 mr-1" />
-              {court.sport_type}
-            </Badge>
-          </div>
-        )}
-
-        {/* Court Info */}
-        <div className="p-4 space-y-6">
-          <div>
-            <h1 className="font-display text-2xl font-bold mb-2">{court.name}</h1>
-            {court.venues && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <MapPin className="h-4 w-4" />
-                <span>{court.venues.name}</span>
-                <span>•</span>
-                <span>{court.venues.address}, {court.venues.city}</span>
-              </div>
-            )}
           </div>
 
-          {/* Quick Info */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-card rounded-xl p-4 border border-border text-center">
-              <DollarSign className="h-5 w-5 mx-auto mb-2 text-primary" />
-              <div className="font-semibold">${court.hourly_rate}</div>
-              <div className="text-xs text-muted-foreground">per hour</div>
-            </div>
-            <div className="bg-card rounded-xl p-4 border border-border text-center">
-              <Users className="h-5 w-5 mx-auto mb-2 text-primary" />
-              <div className="font-semibold">{court.capacity}</div>
-              <div className="text-xs text-muted-foreground">max players</div>
-            </div>
-            <div className="bg-card rounded-xl p-4 border border-border text-center">
-              <div className="h-5 w-5 mx-auto mb-2 text-primary flex items-center justify-center">
-                {court.is_indoor ? "🏢" : "🌳"}
-              </div>
-              <div className="font-semibold">{court.is_indoor ? "Indoor" : "Outdoor"}</div>
-              <div className="text-xs text-muted-foreground">facility</div>
-            </div>
-          </div>
-
-          {/* Venue Details */}
-          {court.venues?.amenities && court.venues.amenities.length > 0 && (
-            <div>
-              <h3 className="font-semibold mb-3">Amenities</h3>
-              <div className="flex flex-wrap gap-2">
-                {court.venues.amenities.map((amenity, i) => (
-                  <Badge key={i} variant="secondary">{amenity}</Badge>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Availability Calendar */}
-          <div>
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <CalendarDays className="h-5 w-5 text-primary" />
-              Select a Date
-            </h3>
-            <div className="bg-card rounded-xl border border-border p-4">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={setSelectedDate}
-                disabled={(date) => date < new Date()}
-                className="mx-auto"
-              />
-            </div>
-          </div>
-
-          {/* Time Slots */}
-          {selectedDate && (
-            <div>
-              <h3 className="font-semibold mb-3 flex items-center gap-2">
-                <Clock className="h-5 w-5 text-primary" />
-                Available Times for {format(selectedDate, "MMMM d")}
-              </h3>
-              
-              {availabilityLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <span className="ml-2 text-muted-foreground">Loading availability...</span>
-                </div>
-              ) : availabilityError ? (
-                <div className="flex items-center gap-2 text-destructive py-4">
-                  <AlertCircle className="h-5 w-5" />
-                  <span>{availabilityError}</span>
-                </div>
-              ) : !availabilityData?.available ? (
-                <div className="bg-muted/50 rounded-lg p-4 text-center">
-                  <p className="text-muted-foreground">
-                    {availabilityData?.reason === "closed" 
-                      ? "Venue is closed on this date." 
-                      : "No availability for this date."}
-                  </p>
-                </div>
-              ) : availabilityData.slots.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  All slots are booked for this date. Try another day.
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {/* Venue hours info */}
-                  {availabilityData.window && (
-                    <div className="text-sm text-muted-foreground">
-                      Open: {availabilityData.window.start_time.slice(0, 5)} - {availabilityData.window.end_time.slice(0, 5)}
-                    </div>
-                  )}
-                  
-                  {/* Time slot grid */}
-                  <div className="grid grid-cols-4 gap-2">
-                    {availabilityData.slots.map((slot) => (
-                      <Button
-                        key={slot.start_time}
-                        variant={selectedSlot?.start_time === slot.start_time ? "default" : "outline"}
-                        className="h-auto py-2 px-2"
-                        onClick={() => setSelectedSlot(slot)}
-                      >
-                        <span className="text-sm font-medium">{slot.start_time.slice(0, 5)}</span>
-                      </Button>
-                    ))}
-                  </div>
-
-                  {/* Duration selector */}
-                  {selectedSlot && selectedSlot.available_durations.length > 0 && (
-                    <div className="bg-card rounded-xl border border-border p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">Select Duration</span>
-                        <span className="text-sm text-muted-foreground">
-                          Starting at {selectedSlot.start_time.slice(0, 5)}
-                        </span>
+          {/* Right Column - Photo Gallery (Desktop only) */}
+          <div className="hidden lg:block">
+            <div className="sticky top-24 space-y-4">
+              {photos.length > 0 ? (
+                <>
+                  {/* Main Photo */}
+                  <div 
+                    className="aspect-square rounded-xl overflow-hidden bg-muted cursor-pointer relative group"
+                    onClick={() => setShowGallery(true)}
+                  >
+                    <img 
+                      src={photos[currentImageIndex]} 
+                      alt={court.name}
+                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 px-4 py-2 rounded-full flex items-center gap-2">
+                        <Expand className="h-4 w-4" />
+                        <span className="text-sm font-medium">View photos</span>
                       </div>
-                      <Select
-                        value={selectedDuration?.toString()}
-                        onValueChange={(value) => setSelectedDuration(parseInt(value))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Choose duration" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {selectedSlot.available_durations.map((duration) => (
-                            <SelectItem key={duration} value={duration.toString()}>
-                              {formatDuration(duration)} — ${calculatePrice(duration).toFixed(2)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    </div>
+                  </div>
+                  
+                  {/* Thumbnail strip */}
+                  {photos.length > 1 && (
+                    <div className="grid grid-cols-4 gap-2">
+                      {photos.slice(0, 4).map((photo, index) => (
+                        <button
+                          key={index}
+                          onClick={() => {
+                            setCurrentImageIndex(index);
+                            if (index === 3 && photos.length > 4) {
+                              setShowGallery(true);
+                            }
+                          }}
+                          className={`aspect-square rounded-lg overflow-hidden relative ${
+                            currentImageIndex === index ? "ring-2 ring-primary" : ""
+                          }`}
+                        >
+                          <img 
+                            src={photo} 
+                            alt={`${court.name} ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          {index === 3 && photos.length > 4 && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-medium">
+                              +{photos.length - 4}
+                            </div>
+                          )}
+                        </button>
+                      ))}
                     </div>
                   )}
+                </>
+              ) : (
+                <div className="aspect-square rounded-xl bg-muted flex items-center justify-center">
+                  <SportIcon sport={court.sport_type} className="h-20 w-20 text-muted-foreground" />
                 </div>
               )}
             </div>
-          )}
+          </div>
         </div>
 
+        {/* Fullscreen Gallery Modal */}
+        {showGallery && photos.length > 0 && (
+          <div className="fixed inset-0 z-50 bg-black flex flex-col">
+            <div className="flex items-center justify-between p-4 text-white">
+              <span className="font-medium">{currentImageIndex + 1} / {photos.length}</span>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className="text-white hover:bg-white/20"
+                onClick={() => setShowGallery(false)}
+              >
+                <X className="h-6 w-6" />
+              </Button>
+            </div>
+
+            <div className="flex-1 flex items-center justify-center relative px-4">
+              <img 
+                src={photos[currentImageIndex]} 
+                alt={`${court.name} ${currentImageIndex + 1}`}
+                className="max-w-full max-h-full object-contain"
+              />
+
+              {photos.length > 1 && (
+                <>
+                  <button
+                    onClick={prevImage}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-lg"
+                  >
+                    <ChevronLeft className="h-6 w-6 text-gray-800" />
+                  </button>
+                  <button
+                    onClick={nextImage}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-lg"
+                  >
+                    <ChevronRight className="h-6 w-6 text-gray-800" />
+                  </button>
+                </>
+              )}
+            </div>
+
+            {photos.length > 1 && (
+              <div className="p-4 flex justify-center gap-2 overflow-x-auto">
+                {photos.map((photo, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentImageIndex(index)}
+                    className={`w-16 h-16 rounded-lg overflow-hidden shrink-0 border-2 transition-all ${
+                      index === currentImageIndex 
+                        ? 'border-white opacity-100' 
+                        : 'border-transparent opacity-60 hover:opacity-80'
+                    }`}
+                  >
+                    <img 
+                      src={photo} 
+                      alt={`Thumbnail ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Booking Footer */}
-        {selectedSlot && selectedDuration && selectedDate && (
+        {selectedSlots.length > 0 && selectedDate && (
           <div className="fixed left-0 right-0 p-4 glass border-t border-border lg:bottom-0" style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}>
             <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
               <div>
-                <div className="font-semibold">${calculatePrice(selectedDuration).toFixed(2)}</div>
+                <div className="font-semibold">${totalPrice.toFixed(2)}</div>
                 <div className="text-sm text-muted-foreground">
-                  {format(selectedDate, "MMM d")} • {selectedSlot.start_time.slice(0, 5)} • {formatDuration(selectedDuration)}
+                  {format(selectedDate, "MMM d")} • {getStartTime()} - {getEndTime()} • {formatDuration(totalDuration)}
                 </div>
               </div>
               {user ? (
@@ -786,23 +884,19 @@ export default function CourtDetail() {
         )}
 
         {/* Group Selection Modal */}
-        {court && selectedSlot && selectedDate && selectedDuration && (
+        {court && selectedSlots.length > 0 && selectedDate && (
           <GroupSelectionModal
             open={showGroupModal}
             onOpenChange={setShowGroupModal}
             onConfirm={handleGroupConfirm}
             sportType={court.sport_type}
-            courtPrice={calculatePrice(selectedDuration)}
+            courtPrice={totalPrice}
             dayOfWeek={getDay(selectedDate)}
-            startTime={selectedSlot.start_time}
+            startTime={getStartTime()}
             city={court.venues?.city || ""}
             slotDate={format(selectedDate, "yyyy-MM-dd")}
-            slotStartTime={selectedSlot.start_time}
-            slotEndTime={(() => {
-              const startMinutes = parseInt(selectedSlot.start_time.split(":")[0]) * 60 + parseInt(selectedSlot.start_time.split(":")[1]);
-              const endMinutes = startMinutes + selectedDuration;
-              return `${Math.floor(endMinutes / 60).toString().padStart(2, "0")}:${(endMinutes % 60).toString().padStart(2, "0")}`;
-            })()}
+            slotStartTime={getStartTime()}
+            slotEndTime={getEndTime()}
             courtName={court.name}
           />
         )}

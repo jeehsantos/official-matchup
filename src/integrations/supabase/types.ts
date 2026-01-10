@@ -210,6 +210,7 @@ export type Database = {
           payment_hours_before: number | null
           payment_timing: Database["public"]["Enums"]["payment_timing"] | null
           photo_url: string | null
+          photo_urls: string[] | null
           sport_type: Database["public"]["Enums"]["sport_type"]
           updated_at: string
           venue_id: string
@@ -226,6 +227,7 @@ export type Database = {
           payment_hours_before?: number | null
           payment_timing?: Database["public"]["Enums"]["payment_timing"] | null
           photo_url?: string | null
+          photo_urls?: string[] | null
           sport_type: Database["public"]["Enums"]["sport_type"]
           updated_at?: string
           venue_id: string
@@ -242,6 +244,7 @@ export type Database = {
           payment_hours_before?: number | null
           payment_timing?: Database["public"]["Enums"]["payment_timing"] | null
           photo_url?: string | null
+          photo_urls?: string[] | null
           sport_type?: Database["public"]["Enums"]["sport_type"]
           updated_at?: string
           venue_id?: string
