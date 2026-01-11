@@ -854,7 +854,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "court_manager" | "organizer" | "player"
+      app_role: "court_manager" | "organizer" | "player" | "admin"
       booking_payment_type: "single" | "split"
       ground_type: "grass" | "turf" | "sand" | "hard" | "clay" | "other"
       notification_type:
@@ -1009,7 +1009,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["court_manager", "organizer", "player"],
+      app_role: ["court_manager", "organizer", "player", "admin"],
       booking_payment_type: ["single", "split"],
       ground_type: ["grass", "turf", "sand", "hard", "clay", "other"],
       notification_type: [
