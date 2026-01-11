@@ -39,7 +39,8 @@ SET row_security = off;
 CREATE TYPE public.app_role AS ENUM (
     'court_manager',
     'organizer',
-    'player'
+    'player',
+    'admin'
 );
 
 
@@ -308,6 +309,20 @@ $$;
 SET default_table_access_method = heap;
 
 --
+-- Name: booking_equipment; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.booking_equipment (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    booking_id uuid NOT NULL,
+    equipment_id uuid NOT NULL,
+    quantity integer DEFAULT 1 NOT NULL,
+    price_at_booking numeric NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: chat_conversations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -392,7 +407,25 @@ CREATE TABLE public.courts (
     ground_type public.ground_type DEFAULT 'turf'::public.ground_type,
     payment_timing public.payment_timing DEFAULT 'at_booking'::public.payment_timing,
     payment_hours_before integer DEFAULT 24,
-    photo_urls text[] DEFAULT '{}'::text[]
+    photo_urls text[] DEFAULT '{}'::text[],
+    rules text
+);
+
+
+--
+-- Name: equipment_inventory; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.equipment_inventory (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    venue_id uuid NOT NULL,
+    name text NOT NULL,
+    description text,
+    quantity_available integer DEFAULT 1 NOT NULL,
+    price_per_unit numeric DEFAULT 0 NOT NULL,
+    is_active boolean DEFAULT true,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -547,6 +580,37 @@ CREATE TABLE public.sessions (
 
 
 --
+-- Name: sport_categories; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.sport_categories (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    display_name text NOT NULL,
+    icon text,
+    is_active boolean DEFAULT true,
+    sort_order integer DEFAULT 0,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: surface_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.surface_types (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    display_name text NOT NULL,
+    is_active boolean DEFAULT true,
+    sort_order integer DEFAULT 0,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: user_roles; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -625,6 +689,22 @@ CREATE TABLE public.venues (
 
 
 --
+-- Name: booking_equipment booking_equipment_booking_id_equipment_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.booking_equipment
+    ADD CONSTRAINT booking_equipment_booking_id_equipment_id_key UNIQUE (booking_id, equipment_id);
+
+
+--
+-- Name: booking_equipment booking_equipment_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.booking_equipment
+    ADD CONSTRAINT booking_equipment_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: chat_conversations chat_conversations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -678,6 +758,14 @@ ALTER TABLE ONLY public.court_availability
 
 ALTER TABLE ONLY public.courts
     ADD CONSTRAINT courts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: equipment_inventory equipment_inventory_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.equipment_inventory
+    ADD CONSTRAINT equipment_inventory_pkey PRIMARY KEY (id);
 
 
 --
@@ -774,6 +862,38 @@ ALTER TABLE ONLY public.session_players
 
 ALTER TABLE ONLY public.sessions
     ADD CONSTRAINT sessions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sport_categories sport_categories_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sport_categories
+    ADD CONSTRAINT sport_categories_name_key UNIQUE (name);
+
+
+--
+-- Name: sport_categories sport_categories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sport_categories
+    ADD CONSTRAINT sport_categories_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: surface_types surface_types_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.surface_types
+    ADD CONSTRAINT surface_types_name_key UNIQUE (name);
+
+
+--
+-- Name: surface_types surface_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.surface_types
+    ADD CONSTRAINT surface_types_pkey PRIMARY KEY (id);
 
 
 --
@@ -881,6 +1001,13 @@ CREATE TRIGGER update_courts_updated_at BEFORE UPDATE ON public.courts FOR EACH 
 
 
 --
+-- Name: equipment_inventory update_equipment_inventory_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_equipment_inventory_updated_at BEFORE UPDATE ON public.equipment_inventory FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
 -- Name: groups update_groups_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -909,6 +1036,20 @@ CREATE TRIGGER update_sessions_updated_at BEFORE UPDATE ON public.sessions FOR E
 
 
 --
+-- Name: sport_categories update_sport_categories_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_sport_categories_updated_at BEFORE UPDATE ON public.sport_categories FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: surface_types update_surface_types_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_surface_types_updated_at BEFORE UPDATE ON public.surface_types FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
 -- Name: venue_date_overrides update_venue_date_overrides_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -927,6 +1068,22 @@ CREATE TRIGGER update_venue_weekly_rules_updated_at BEFORE UPDATE ON public.venu
 --
 
 CREATE TRIGGER update_venues_updated_at BEFORE UPDATE ON public.venues FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: booking_equipment booking_equipment_booking_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.booking_equipment
+    ADD CONSTRAINT booking_equipment_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.court_availability(id) ON DELETE CASCADE;
+
+
+--
+-- Name: booking_equipment booking_equipment_equipment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.booking_equipment
+    ADD CONSTRAINT booking_equipment_equipment_id_fkey FOREIGN KEY (equipment_id) REFERENCES public.equipment_inventory(id) ON DELETE CASCADE;
 
 
 --
@@ -1007,6 +1164,14 @@ ALTER TABLE ONLY public.court_availability
 
 ALTER TABLE ONLY public.courts
     ADD CONSTRAINT courts_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON DELETE CASCADE;
+
+
+--
+-- Name: equipment_inventory equipment_inventory_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.equipment_inventory
+    ADD CONSTRAINT equipment_inventory_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON DELETE CASCADE;
 
 
 --
@@ -1154,6 +1319,20 @@ ALTER TABLE ONLY public.venues
 
 
 --
+-- Name: sport_categories Admins can manage sport categories; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can manage sport categories" ON public.sport_categories USING (public.has_role(auth.uid(), 'admin'::public.app_role));
+
+
+--
+-- Name: surface_types Admins can manage surface types; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can manage surface types" ON public.surface_types USING (public.has_role(auth.uid(), 'admin'::public.app_role));
+
+
+--
 -- Name: contact_messages Anyone can submit contact messages; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1168,10 +1347,24 @@ CREATE POLICY "Anyone can view active invitations by code" ON public.group_invit
 
 
 --
+-- Name: court_availability Authenticated users can book available slots; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Authenticated users can book available slots" ON public.court_availability FOR UPDATE TO authenticated USING ((is_booked = false)) WITH CHECK (((is_booked = true) AND (booked_by_user_id = auth.uid())));
+
+
+--
 -- Name: groups Authenticated users can create groups; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Authenticated users can create groups" ON public.groups FOR INSERT WITH CHECK ((auth.uid() = organizer_id));
+
+
+--
+-- Name: court_availability Authenticated users can insert bookings; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Authenticated users can insert bookings" ON public.court_availability FOR INSERT TO authenticated WITH CHECK (((is_booked = true) AND (booked_by_user_id = auth.uid())));
 
 
 --
@@ -1274,6 +1467,13 @@ CREATE POLICY "Date overrides viewable by everyone" ON public.venue_date_overrid
 
 
 --
+-- Name: equipment_inventory Equipment viewable by everyone; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Equipment viewable by everyone" ON public.equipment_inventory FOR SELECT USING ((is_active = true));
+
+
+--
 -- Name: group_members Group members can view members; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1344,13 +1544,6 @@ CREATE POLICY "Organizers can update sessions" ON public.sessions FOR UPDATE USI
 --
 
 CREATE POLICY "Organizers can view own groups" ON public.groups FOR SELECT USING ((auth.uid() = organizer_id));
-
-
---
--- Name: court_availability Players can book available slots; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Players can book available slots" ON public.court_availability FOR UPDATE USING ((is_booked = false)) WITH CHECK (((is_booked = true) AND (booked_by_user_id = auth.uid()) AND (payment_status = 'pending'::public.payment_status)));
 
 
 --
@@ -1455,10 +1648,42 @@ CREATE POLICY "Sessions viewable by group members or rescue" ON public.sessions 
 
 
 --
+-- Name: sport_categories Sport categories viewable by everyone; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Sport categories viewable by everyone" ON public.sport_categories FOR SELECT USING ((is_active = true));
+
+
+--
+-- Name: surface_types Surface types viewable by everyone; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Surface types viewable by everyone" ON public.surface_types FOR SELECT USING ((is_active = true));
+
+
+--
+-- Name: booking_equipment Users can add equipment to their bookings; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can add equipment to their bookings" ON public.booking_equipment FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.court_availability ca
+  WHERE ((ca.id = booking_equipment.booking_id) AND (ca.booked_by_user_id = auth.uid())))));
+
+
+--
 -- Name: payments Users can create own payments; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can create own payments" ON public.payments FOR INSERT WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: booking_equipment Users can delete their booking equipment; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can delete their booking equipment" ON public.booking_equipment FOR DELETE USING ((EXISTS ( SELECT 1
+   FROM public.court_availability ca
+  WHERE ((ca.id = booking_equipment.booking_id) AND (ca.booked_by_user_id = auth.uid())))));
 
 
 --
@@ -1497,6 +1722,22 @@ CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING
 
 
 --
+-- Name: booking_equipment Users can update their booking equipment; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can update their booking equipment" ON public.booking_equipment FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM public.court_availability ca
+  WHERE ((ca.id = booking_equipment.booking_id) AND (ca.booked_by_user_id = auth.uid())))));
+
+
+--
+-- Name: court_availability Users can update their own bookings; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can update their own bookings" ON public.court_availability FOR UPDATE TO authenticated USING ((booked_by_user_id = auth.uid())) WITH CHECK (((booked_by_user_id = auth.uid()) OR (booked_by_user_id IS NULL)));
+
+
+--
 -- Name: notifications Users can view own notifications; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1515,6 +1756,15 @@ CREATE POLICY "Users can view own payments" ON public.payments FOR SELECT USING 
 --
 
 CREATE POLICY "Users can view own roles" ON public.user_roles FOR SELECT USING ((auth.uid() = user_id));
+
+
+--
+-- Name: booking_equipment Users can view their booking equipment; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can view their booking equipment" ON public.booking_equipment FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM public.court_availability ca
+  WHERE ((ca.id = booking_equipment.booking_id) AND (ca.booked_by_user_id = auth.uid())))));
 
 
 --
@@ -1572,6 +1822,15 @@ CREATE POLICY "Venue owners can delete weekly rules" ON public.venue_weekly_rule
 
 
 --
+-- Name: equipment_inventory Venue owners can manage equipment; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Venue owners can manage equipment" ON public.equipment_inventory USING ((EXISTS ( SELECT 1
+   FROM public.venues v
+  WHERE ((v.id = equipment_inventory.venue_id) AND (v.owner_id = auth.uid())))));
+
+
+--
 -- Name: courts Venue owners can update courts; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1615,6 +1874,12 @@ CREATE POLICY "Weekly rules viewable by everyone" ON public.venue_weekly_rules F
 
 
 --
+-- Name: booking_equipment; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.booking_equipment ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: chat_conversations; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -1643,6 +1908,12 @@ ALTER TABLE public.court_availability ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.courts ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: equipment_inventory; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.equipment_inventory ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: group_invitations; Type: ROW SECURITY; Schema: public; Owner: -
@@ -1691,6 +1962,18 @@ ALTER TABLE public.session_players ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: sport_categories; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.sport_categories ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: surface_types; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.surface_types ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: user_roles; Type: ROW SECURITY; Schema: public; Owner: -
