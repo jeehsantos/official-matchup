@@ -12,7 +12,8 @@ import {
   Loader2,
   Menu,
   X,
-  Settings
+  Settings,
+  Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/manager" },
   { icon: Building2, label: "Courts", path: "/manager/courts" },
   { icon: Calendar, label: "Availability", path: "/manager/availability" },
+  { icon: Package, label: "Equipment", path: "/manager/equipment" },
   { icon: CreditCard, label: "Bookings", path: "/manager/bookings" },
   { icon: Settings, label: "Settings", path: "/manager/settings" },
 ];
@@ -32,7 +34,7 @@ const navItems = [
 const mobileNavItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/manager" },
   { icon: Building2, label: "Courts", path: "/manager/courts" },
-  { icon: Calendar, label: "Schedule", path: "/manager/availability" },
+  { icon: Package, label: "Gear", path: "/manager/equipment" },
   { icon: Settings, label: "Settings", path: "/manager/settings" },
 ];
 

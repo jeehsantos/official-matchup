@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Search, AlertTriangle, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSportCategories } from "@/hooks/useSportCategories";
+import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
 
 type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "other";
 
@@ -46,7 +48,8 @@ interface PublicGroup {
   weeklyPrice: number;
 }
 
-const sports = [
+// Fallback data in case database is empty
+const fallbackSports = [
   { value: "all", label: "All Sports", emoji: "🎯" },
   { value: "futsal", label: "Futsal", emoji: "⚽" },
   { value: "basketball", label: "Basketball", emoji: "🏀" },
@@ -57,7 +60,7 @@ const sports = [
   { value: "other", label: "Other", emoji: "🎲" },
 ];
 
-const courtTypes = [
+const fallbackCourtTypes = [
   { value: "all", label: "All Surfaces", emoji: "🎯" },
   { value: "grass", label: "Grass", emoji: "🌱" },
   { value: "turf", label: "Turf", emoji: "🟩" },
@@ -81,6 +84,44 @@ export default function Discover() {
   const [rescueGames, setRescueGames] = useState<RescueGame[]>([]);
   const [publicGroups, setPublicGroups] = useState<PublicGroup[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  
+  // Fetch dynamic categories from database
+  const { data: sportCategories = [] } = useSportCategories();
+  const { data: surfaceTypes = [] } = useSurfaceTypes();
+  
+  // Build sports dropdown from database or fallback
+  const sports = useMemo(() => {
+    if (sportCategories.length > 0) {
+      return [
+        { value: "all", label: "All Sports", emoji: "🎯" },
+        ...sportCategories.map(cat => ({
+          value: cat.name,
+          label: cat.display_name,
+          emoji: cat.icon || "🎯",
+        }))
+      ];
+    }
+    return fallbackSports;
+  }, [sportCategories]);
+  
+  // Build court types dropdown from database or fallback
+  const courtTypes = useMemo(() => {
+    if (surfaceTypes.length > 0) {
+      return [
+        { value: "all", label: "All Surfaces", emoji: "🎯" },
+        ...surfaceTypes.map(surface => ({
+          value: surface.name,
+          label: surface.display_name,
+          emoji: surface.name === "grass" ? "🌱" : 
+                 surface.name === "turf" ? "🟩" :
+                 surface.name === "sand" ? "🏖️" :
+                 surface.name === "hard" ? "🟫" :
+                 surface.name === "clay" ? "🟠" : "🎯",
+        }))
+      ];
+    }
+    return fallbackCourtTypes;
+  }, [surfaceTypes]);
 
   useEffect(() => {
     if (!isLoading && !user) {

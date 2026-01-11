@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,10 +24,12 @@ import { useToast } from "@/hooks/use-toast";
 import { CourtPhotosUpload } from "@/components/manager/CourtPhotosUpload";
 import { PaymentSettingsCard } from "@/components/manager/PaymentSettingsCard";
 import { nzCities, getSuburbsForCity } from "@/data/nzLocations";
+import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
 
-const groundTypes = ["grass", "turf", "sand", "hard", "clay", "other"] as const;
+// Fallback ground types in case database is empty
+const fallbackGroundTypes = ["grass", "turf", "sand", "hard", "clay", "other"] as const;
 
-const groundTypeLabels: Record<string, string> = {
+const fallbackGroundTypeLabels: Record<string, string> = {
   grass: "Grass",
   turf: "Artificial Turf",
   sand: "Sand",
@@ -39,7 +41,7 @@ const groundTypeLabels: Record<string, string> = {
 const courtSchema = z.object({
   // Court details
   name: z.string().min(2, "Name must be at least 2 characters"),
-  ground_type: z.enum(groundTypes),
+  ground_type: z.string().min(1, "Surface type is required"),
   hourly_rate: z.number().min(0),
   is_indoor: z.boolean(),
   is_active: z.boolean(),
@@ -70,6 +72,24 @@ export default function ManagerCourtFormNew() {
   const [deleting, setDeleting] = useState(false);
   const [existingVenueId, setExistingVenueId] = useState<string | null>(null);
   const [availableSuburbs, setAvailableSuburbs] = useState<string[]>([]);
+  
+  // Fetch surface types from database
+  const { data: surfaceTypesData = [] } = useSurfaceTypes();
+  
+  // Build ground types from database or fallback
+  const groundTypes = useMemo(() => {
+    if (surfaceTypesData.length > 0) {
+      return surfaceTypesData.map(s => s.name) as string[];
+    }
+    return fallbackGroundTypes as unknown as string[];
+  }, [surfaceTypesData]);
+  
+  const groundTypeLabels = useMemo(() => {
+    if (surfaceTypesData.length > 0) {
+      return Object.fromEntries(surfaceTypesData.map(s => [s.name, s.display_name]));
+    }
+    return fallbackGroundTypeLabels;
+  }, [surfaceTypesData]);
 
   const {
     register,
@@ -196,7 +216,7 @@ export default function ManagerCourtFormNew() {
         // Create new venue and court
         const { data: venueData, error: venueError } = await supabase
           .from("venues")
-          .insert({
+          .insert([{
             owner_id: user.id,
             name: data.name,
             address: data.address,
@@ -204,7 +224,7 @@ export default function ManagerCourtFormNew() {
             suburb: data.suburb || null,
             country: data.country,
             is_active: true,
-          })
+          }])
           .select()
           .single();
 
