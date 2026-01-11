@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
@@ -85,6 +85,10 @@ export default function CourtDetail() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityData, setAvailabilityData] = useState<AvailabilityResponse | null>(null);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  
+  // Refs to prevent race conditions during state restoration
+  const isRestoringRef = useRef(false);
+  const hasRestoredRef = useRef(false);
 
   // Function declarations first (before useEffects that use them)
   const fetchCourt = useCallback(async () => {
@@ -132,26 +136,33 @@ export default function CourtDetail() {
     }
   }, []);
 
-  // Restore booking state from localStorage after auth redirect
+  // Restore booking state from localStorage after auth redirect - only runs once
   useEffect(() => {
+    if (hasRestoredRef.current) return;
+    
     const savedBookingState = localStorage.getItem('pendingBookingState');
     if (savedBookingState && id) {
       try {
         const state = JSON.parse(savedBookingState);
         // Only restore if it's for the same court
         if (state.courtId === id) {
+          isRestoringRef.current = true;
+          hasRestoredRef.current = true;
+          
           if (state.selectedDate) {
             setSelectedDate(new Date(state.selectedDate));
           }
           if (state.selectedSlots && state.selectedSlots.length > 0) {
-            // We'll set these after availability loads
-            localStorage.setItem('pendingSlots', JSON.stringify(state.selectedSlots));
+            // Store normalized slots for restoration after availability loads
+            const normalizedSlots = state.selectedSlots.map((s: string) => s.slice(0, 5));
+            localStorage.setItem('pendingSlots', JSON.stringify(normalizedSlots));
           }
         }
         localStorage.removeItem('pendingBookingState');
       } catch (e) {
         console.error('Error restoring booking state:', e);
         localStorage.removeItem('pendingBookingState');
+        localStorage.removeItem('pendingSlots');
       }
     }
   }, [id]);
@@ -169,36 +180,49 @@ export default function CourtDetail() {
     }
   }, [court, selectedDate, fetchAvailability]);
 
-  // Restore selected slots after availability loads
+  // Restore selected slots after availability loads - only if we're in restoration mode
   useEffect(() => {
-    if (availabilityData && !availabilityLoading) {
-      const pendingSlots = localStorage.getItem('pendingSlots');
-      if (pendingSlots) {
-        try {
-          const slots = JSON.parse(pendingSlots);
-          // Filter to only include still-available slots
-          const validSlots = slots.filter((slot: string) => 
-            availabilityData.slots.some(s => s.start_time.slice(0, 5) === slot.slice(0, 5))
-          );
-          if (validSlots.length > 0) {
-            setSelectedSlots(validSlots);
-          }
-          localStorage.removeItem('pendingSlots');
-        } catch (e) {
-          console.error('Error restoring slots:', e);
-          localStorage.removeItem('pendingSlots');
+    if (!availabilityData || availabilityLoading) return;
+    
+    const pendingSlots = localStorage.getItem('pendingSlots');
+    if (pendingSlots && isRestoringRef.current) {
+      try {
+        const slots: string[] = JSON.parse(pendingSlots);
+        // Filter to only include still-available slots (normalize both sides)
+        const validSlots = slots.filter((slot: string) => {
+          const normalizedSlot = slot.slice(0, 5);
+          return availabilityData.slots.some(s => s.start_time.slice(0, 5) === normalizedSlot);
+        });
+        
+        if (validSlots.length > 0) {
+          setSelectedSlots(validSlots);
+          toast({
+            title: "Booking restored",
+            description: `${validSlots.length} time slot(s) have been restored.`,
+          });
+        } else if (slots.length > 0) {
+          toast({
+            title: "Slots no longer available",
+            description: "Your previously selected time slots are no longer available.",
+            variant: "destructive",
+          });
         }
+      } catch (e) {
+        console.error('Error restoring slots:', e);
+      } finally {
+        localStorage.removeItem('pendingSlots');
+        isRestoringRef.current = false;
       }
     }
-  }, [availabilityData, availabilityLoading]);
+  }, [availabilityData, availabilityLoading, toast]);
 
-  // Reset selected slots when date changes (but not on initial restore)
+  // Reset selected slots when date changes - but NOT during restoration
   useEffect(() => {
-    // Only reset if we don't have pending slots to restore
-    const pendingSlots = localStorage.getItem('pendingSlots');
-    if (!pendingSlots) {
-      setSelectedSlots([]);
-    }
+    // Skip reset during restoration
+    if (isRestoringRef.current) return;
+    
+    // Clear slots when date changes (user-initiated date change)
+    setSelectedSlots([]);
   }, [selectedDate]);
 
   // Real-time subscription for availability updates
