@@ -666,24 +666,24 @@ export default function GameDetail() {
                   <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                     <MapPin className="h-5 w-5 text-primary" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                  <p className="text-sm text-muted-foreground">Venue</p>
-                  <p className="font-semibold">{court?.venues?.name || "TBA"}</p>
-                  <p className="text-sm text-muted-foreground">{court?.name || ""}</p>
-                  
-                  {/* Check specifically for the address property */}
-                  {court?.venues?.address && (
-                    <a 
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(court.venues.address)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-primary hover:underline inline-flex items-center gap-1 mt-1"
-                    >
-                      <span className="truncate">{court.venues.address}</span>
-                      <ExternalLink className="h-3 w-3 flex-shrink-0" />
-                    </a>
-                  )}
-                </div>
+                    <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground">Venue</p>
+                    <p className="font-semibold">{court?.venues?.name || "TBA"}</p>
+                    <p className="text-sm text-muted-foreground">{court?.name || ""}</p>
+                    
+                    {court?.venues?.address && (
+                      <a 
+                        // Use the standard google.com/maps/search/ URL
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(court.venues.address)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary hover:underline inline-flex items-center gap-1 mt-1"
+                      >
+                        <span className="truncate">{court.venues.address}</span>
+                        <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                      </a>
+                    )}
+                  </div>
                 </div>
 
                 {/* Court Manager Contact */}
