@@ -501,9 +501,18 @@ export default function GameDetail() {
   const { session, group, court, players, waitingList, courtManagerId, courtManagerProfile } = gameData;
   
   // Helper function to get Google Maps URL - using simpler format for better browser compatibility
-  const getGoogleMapsUrl = (address: string): string => {
-    return `https://maps.google.com/maps?q=${encodeURIComponent(address)}`;
-  };
+const getGoogleMapsUrl = (address: string): string => {
+  // 1. Return empty string if no address is provided to prevent broken links
+  if (!address) return "";
+
+  // 2. Use the standard search endpoint
+  const baseUrl = "https://www.google.com/maps/search/?api=1";
+  
+  // 3. Encode the address (handles spaces, commas, and special characters)
+  const encodedAddress = encodeURIComponent(address);
+
+  return `${baseUrl}&query=${encodedAddress}`;
+};
   
   // Combine session date and start time for accurate past check
   const sessionDateTime = new Date(`${session.session_date}T${session.start_time}`);
@@ -667,21 +676,23 @@ export default function GameDetail() {
                     <MapPin className="h-5 w-5 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-muted-foreground">Venue</p>
-                    <p className="font-semibold">{court?.venues?.name || "TBA"}</p>
-                    <p className="text-sm text-muted-foreground">{court?.name || ""}</p>
-                    {court?.venues?.address && (
-                      <a 
-                        href={getGoogleMapsUrl(court.venues.address)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-primary hover:underline flex items-center gap-1 mt-1"
-                      >
-                        {court.venues.address}
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
+                  <p className="text-sm text-muted-foreground">Venue</p>
+                  <p className="font-semibold">{court?.venues?.name || "TBA"}</p>
+                  <p className="text-sm text-muted-foreground">{court?.name || ""}</p>
+                  
+                  {court?.venues?.address && (
+                    <a 
+                      // Use the standard google.com/maps/search/ URL
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(court.venues.address)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary hover:underline inline-flex items-center gap-1 mt-1"
+                    >
+                      <span className="truncate">{court.venues.address}</span>
+                      <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                    </a>
+                  )}
+                </div>
                 </div>
 
                 {/* Court Manager Contact */}
