@@ -502,13 +502,11 @@ export default function GameDetail() {
   
   // Helper function to get Google Maps URL - using simpler format for better browser compatibility
 const getGoogleMapsUrl = (address: string): string => {
-  // 1. Return empty string if no address is provided to prevent broken links
   if (!address) return "";
 
-  // 2. Use the standard search endpoint
+  // This is the correct, official search endpoint
   const baseUrl = "https://www.google.com/maps/search/?api=1";
   
-  // 3. Encode the address (handles spaces, commas, and special characters)
   const encodedAddress = encodeURIComponent(address);
 
   return `${baseUrl}&query=${encodedAddress}`;
