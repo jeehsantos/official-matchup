@@ -502,8 +502,8 @@ export default function GameDetail() {
   
   // Helper function to get Google Maps URL - using simpler format for better browser compatibility
   const getGoogleMapsUrl = (address: string): string => {
-    return `https://maps.google.com/maps?q=${encodeURIComponent(address)}`;
-  };
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+};
   
   // Combine session date and start time for accurate past check
   const sessionDateTime = new Date(`${session.session_date}T${session.start_time}`);
@@ -667,21 +667,23 @@ export default function GameDetail() {
                     <MapPin className="h-5 w-5 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-muted-foreground">Venue</p>
-                    <p className="font-semibold">{court?.venues?.name || "TBA"}</p>
-                    <p className="text-sm text-muted-foreground">{court?.name || ""}</p>
-                    {court?.venues?.address && (
-                      <a 
-                        href={getGoogleMapsUrl(court.venues.address)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-primary hover:underline flex items-center gap-1 mt-1"
-                      >
-                        {court.venues.address}
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
+                  <p className="text-sm text-muted-foreground">Venue</p>
+                  <p className="font-semibold">{court?.venues?.name || "TBA"}</p>
+                  <p className="text-sm text-muted-foreground">{court?.name || ""}</p>
+                  
+                  {/* Check specifically for the address property */}
+                  {court?.venues?.address && (
+                    <a 
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(court.venues.address)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary hover:underline inline-flex items-center gap-1 mt-1"
+                    >
+                      <span className="truncate">{court.venues.address}</span>
+                      <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                    </a>
+                  )}
+                </div>
                 </div>
 
                 {/* Court Manager Contact */}
