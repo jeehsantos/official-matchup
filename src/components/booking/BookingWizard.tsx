@@ -46,15 +46,13 @@ type Group = Database["public"]["Tables"]["groups"]["Row"];
 type SportType = Database["public"]["Enums"]["sport_type"];
 type BookingPaymentType = "single" | "split";
 
-// Session type mapping using sport categories from backend
-type SessionType = "casual" | "competitive" | "training" | "private" | "tournament";
-
-const sessionTypeConfig: { value: SessionType; label: string; emoji: string; description: string }[] = [
-  { value: "casual", label: "Casual Pickup", emoji: "🎮", description: "Relaxed game, all skill levels" },
-  { value: "competitive", label: "Competitive", emoji: "🏆", description: "Serious play" },
-  { value: "training", label: "Training", emoji: "📚", description: "Skill focus" },
-  { value: "private", label: "Private", emoji: "🔒", description: "Invited only" },
-  { value: "tournament", label: "Tournament", emoji: "🎯", description: "Competition" },
+// Fallback session types in case backend data is unavailable
+const fallbackSessionTypes: { value: string; label: string; icon: string }[] = [
+  { value: "casual", label: "Casual Pickup", icon: "🎮" },
+  { value: "competitive", label: "Competitive", icon: "🏆" },
+  { value: "training", label: "Training", icon: "📚" },
+  { value: "private", label: "Private", icon: "🔒" },
+  { value: "tournament", label: "Tournament", icon: "🎯" },
 ];
 
 import type { Equipment } from "@/hooks/useVenueEquipment";
@@ -66,7 +64,7 @@ interface BookingWizardProps {
     groupId: string;
     isNewGroup: boolean;
     paymentType: BookingPaymentType;
-    sessionType: SessionType;
+    sessionType: string;
     equipment: SelectedEquipment[];
   }) => void;
   sportType: SportType;
@@ -119,7 +117,7 @@ export function BookingWizard({
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [newGroupName, setNewGroupName] = useState("");
-  const [sessionType, setSessionType] = useState<SessionType>("casual");
+  const [sessionType, setSessionType] = useState<string>("casual");
   
   // Step 3: Payment
   const [paymentType, setPaymentType] = useState<BookingPaymentType>("single");
@@ -461,37 +459,62 @@ export function BookingWizard({
                 )}
               </div>
 
-              {/* Session Type - Using backend data when available */}
+              {/* Session Type - Using sport_categories from backend */}
               <div className="space-y-3">
                 <Label className="text-sm font-medium">Session Type</Label>
-                <Select value={sessionType} onValueChange={(val) => setSessionType(val as SessionType)}>
-                  <SelectTrigger className="w-full h-12">
-                    <SelectValue>
-                      {(() => {
-                        const selected = sessionTypeConfig.find(t => t.value === sessionType);
-                        return selected && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">{selected.emoji}</span>
-                            <span>{selected.label}</span>
-                          </div>
-                        );
-                      })()}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border border-border shadow-lg z-50">
-                    {sessionTypeConfig.map((type) => (
-                      <SelectItem key={type.value} value={type.value} className="py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">{type.emoji}</span>
-                          <div>
-                            <span className="font-medium">{type.label}</span>
-                            <span className="text-xs text-muted-foreground ml-2">— {type.description}</span>
-                          </div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {loadingSportCategories ? (
+                  <div className="flex items-center gap-2 text-muted-foreground py-4">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading session types...
+                  </div>
+                ) : (
+                  <Select value={sessionType} onValueChange={setSessionType}>
+                    <SelectTrigger className="w-full h-12">
+                      <SelectValue>
+                        {(() => {
+                          // Try to find in sport categories first, then fallback
+                          const fromCategories = sportCategories.find(c => c.name === sessionType);
+                          if (fromCategories) {
+                            return (
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg">{fromCategories.icon || "🎮"}</span>
+                                <span>{fromCategories.display_name}</span>
+                              </div>
+                            );
+                          }
+                          const fromFallback = fallbackSessionTypes.find(t => t.value === sessionType);
+                          return fromFallback && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">{fromFallback.icon}</span>
+                              <span>{fromFallback.label}</span>
+                            </div>
+                          );
+                        })()}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border border-border shadow-lg z-50">
+                      {sportCategories.length > 0 ? (
+                        sportCategories.map((category) => (
+                          <SelectItem key={category.id} value={category.name} className="py-3">
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg">{category.icon || "🎮"}</span>
+                              <span className="font-medium">{category.display_name}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        fallbackSessionTypes.map((type) => (
+                          <SelectItem key={type.value} value={type.value} className="py-3">
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg">{type.icon}</span>
+                              <span className="font-medium">{type.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Equipment Rental */}
