@@ -1,15 +1,17 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useQuery } from "@tanstack/react-query";
 import { ManagerLayout } from "@/components/layout/ManagerLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -17,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Building2, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
@@ -72,6 +74,22 @@ export default function ManagerCourtFormNew() {
   const [deleting, setDeleting] = useState(false);
   const [existingVenueId, setExistingVenueId] = useState<string | null>(null);
   const [availableSuburbs, setAvailableSuburbs] = useState<string[]>([]);
+  
+  // Fetch other courts at the same venue (for multi-court display)
+  const { data: venueCourts = [] } = useQuery({
+    queryKey: ["venue-courts", existingVenueId],
+    queryFn: async () => {
+      if (!existingVenueId) return [];
+      const { data, error } = await supabase
+        .from("courts")
+        .select("id, name, hourly_rate, is_active")
+        .eq("venue_id", existingVenueId)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!existingVenueId,
+  });
   
   // Fetch surface types from database
   const { data: surfaceTypesData = [] } = useSurfaceTypes();
@@ -333,6 +351,36 @@ export default function ManagerCourtFormNew() {
             </p>
           </div>
         </div>
+
+        {/* Multi-Court Info - Show when editing and venue has multiple courts */}
+        {isEditing && venueCourts.length > 1 && (
+          <Card className="bg-primary/5 border-primary/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                Multi-Court Venue
+              </CardTitle>
+              <CardDescription>
+                This venue has {venueCourts.length} courts. Players can see all available courts when booking.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {venueCourts.map((court) => (
+                  <Link key={court.id} to={`/manager/courts/${court.id}/edit`}>
+                    <Badge 
+                      variant={court.id === id ? "default" : "outline"}
+                      className="cursor-pointer hover:bg-primary/10"
+                    >
+                      {court.name} - ${court.hourly_rate}/hr
+                      {!court.is_active && " (inactive)"}
+                    </Badge>
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">

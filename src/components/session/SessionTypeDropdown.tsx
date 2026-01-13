@@ -6,6 +6,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useSportCategories, type SportCategory } from "@/hooks/useSportCategories";
+import { Loader2 } from "lucide-react";
 
 export type SessionType = "casual" | "competitive" | "training" | "private" | "tournament";
 
@@ -14,7 +16,8 @@ interface SessionTypeDropdownProps {
   onChange: (value: SessionType) => void;
 }
 
-const sessionTypes: { value: SessionType; label: string; emoji: string; description: string }[] = [
+// Fallback session types when backend data is not available
+const fallbackSessionTypes: { value: SessionType; label: string; emoji: string; description: string }[] = [
   { value: "casual", label: "Casual Pickup", emoji: "🎮", description: "Relaxed game" },
   { value: "competitive", label: "Competitive", emoji: "🏆", description: "Serious play" },
   { value: "training", label: "Training", emoji: "📚", description: "Skill focus" },
@@ -22,33 +25,26 @@ const sessionTypes: { value: SessionType; label: string; emoji: string; descript
   { value: "tournament", label: "Tournament", emoji: "🎯", description: "Competition" },
 ];
 
-// Sport-based quick suggestions
-const sportSuggestions = [
-  { emoji: "⚽", label: "Futsal" },
-  { emoji: "🏐", label: "Volleyball" },
-  { emoji: "🏀", label: "Basketball" },
-  { emoji: "🎾", label: "Tennis" },
-];
+// Map session type values to emojis
+const sessionTypeEmojis: Record<string, string> = {
+  casual: "🎮",
+  competitive: "🏆",
+  training: "📚",
+  private: "🔒",
+  tournament: "🎯",
+};
 
 export function SessionTypeDropdown({ value, onChange }: SessionTypeDropdownProps) {
+  // Note: sport_categories table is for sports (futsal, tennis, etc.)
+  // Session types are still managed as an enum in the database
+  // We keep the static list but could migrate to a session_types table in the future
+  
+  const sessionTypes = fallbackSessionTypes;
   const selectedType = sessionTypes.find(t => t.value === value);
 
   return (
     <div className="space-y-3">
       <Label className="text-sm font-medium">Session Type</Label>
-      
-      {/* Quick Sport Pills */}
-      <div className="flex flex-wrap gap-2 mb-3">
-        {sportSuggestions.map((sport) => (
-          <span
-            key={sport.label}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-muted-foreground"
-          >
-            <span>{sport.emoji}</span>
-            {sport.label}
-          </span>
-        ))}
-      </div>
 
       <Select value={value} onValueChange={(val) => onChange(val as SessionType)}>
         <SelectTrigger className="w-full h-12">
@@ -81,10 +77,10 @@ export function SessionTypeDropdown({ value, onChange }: SessionTypeDropdownProp
 }
 
 export function getSessionTypeLabel(sessionType: SessionType | null | undefined): string {
-  const type = sessionTypes.find(t => t.value === sessionType);
+  const type = fallbackSessionTypes.find(t => t.value === sessionType);
   return type ? `${type.emoji} ${type.label}` : "🎮 Casual Pickup";
 }
 
 export function getSessionTypeInfo(sessionType: SessionType | null | undefined) {
-  return sessionTypes.find(t => t.value === sessionType) || sessionTypes[0];
+  return fallbackSessionTypes.find(t => t.value === sessionType) || fallbackSessionTypes[0];
 }

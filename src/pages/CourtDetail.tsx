@@ -29,11 +29,10 @@ import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { format, getDay } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
-import { GroupSelectionModal } from "@/components/booking/GroupSelectionModal";
+import { BookingWizard } from "@/components/booking/BookingWizard";
 import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
 import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/EquipmentSelector";
 import { checkProfileComplete } from "@/lib/profile-utils";
-import type { SessionType } from "@/components/session/SessionTypeDropdown";
 import { useVenueEquipment } from "@/hooks/useVenueEquipment";
 import {
   Dialog,
@@ -465,7 +464,16 @@ export default function CourtDetail() {
     }
   };
 
-  const handleGroupConfirm = async (groupId: string, isNewGroup: boolean, paymentType: "single" | "split", sessionType: SessionType) => {
+  const handleBookingConfirm = async (data: {
+    groupId: string;
+    isNewGroup: boolean;
+    paymentType: "single" | "split";
+    sessionType: "casual" | "competitive" | "training" | "private" | "tournament";
+    equipment: SelectedEquipment[];
+  }) => {
+    const { groupId, isNewGroup, paymentType, sessionType, equipment } = data;
+    // Update selected equipment from wizard
+    setSelectedEquipment(equipment);
     if (selectedSlots.length === 0 || !court || !user || !selectedDate) return;
 
     setShowGroupModal(false);
@@ -1240,21 +1248,26 @@ export default function CourtDetail() {
           </div>
         )}
 
-        {/* Group Selection Modal */}
+        {/* Booking Wizard */}
         {court && selectedSlots.length > 0 && selectedDate && (
-          <GroupSelectionModal
+          <BookingWizard
             open={showGroupModal}
             onOpenChange={setShowGroupModal}
-            onConfirm={handleGroupConfirm}
+            onConfirm={handleBookingConfirm}
             sportType={court.sport_type}
-            courtPrice={totalPrice}
+            courtPrice={courtPrice}
             dayOfWeek={getDay(selectedDate)}
             startTime={getStartTime()}
+            endTime={getEndTime()}
             city={court.venues?.city || ""}
             slotDate={format(selectedDate, "yyyy-MM-dd")}
-            slotStartTime={getStartTime()}
-            slotEndTime={getEndTime()}
             courtName={court.name}
+            venueName={court.venues?.name || ""}
+            venueAddress={court.venues?.address || ""}
+            courtRules={(court as any).rules || null}
+            equipment={venueEquipment}
+            selectedEquipment={selectedEquipment}
+            onEquipmentChange={setSelectedEquipment}
           />
         )}
 
