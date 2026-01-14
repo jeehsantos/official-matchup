@@ -48,27 +48,6 @@ interface PublicGroup {
   weeklyPrice: number;
 }
 
-// Fallback data in case database is empty
-const fallbackSports = [
-  { value: "all", label: "All Sports", emoji: "🎯" },
-  { value: "futsal", label: "Futsal", emoji: "⚽" },
-  { value: "basketball", label: "Basketball", emoji: "🏀" },
-  { value: "tennis", label: "Tennis", emoji: "🎾" },
-  { value: "volleyball", label: "Volleyball", emoji: "🏐" },
-  { value: "badminton", label: "Badminton", emoji: "🏸" },
-  { value: "turf_hockey", label: "Turf Hockey", emoji: "🏑" },
-  { value: "other", label: "Other", emoji: "🎲" },
-];
-
-const fallbackCourtTypes = [
-  { value: "all", label: "All Surfaces", emoji: "🎯" },
-  { value: "grass", label: "Grass", emoji: "🌱" },
-  { value: "turf", label: "Turf", emoji: "🟩" },
-  { value: "sand", label: "Sand", emoji: "🏖️" },
-  { value: "hard", label: "Hard Court", emoji: "🟫" },
-  { value: "clay", label: "Clay", emoji: "🟠" },
-];
-
 const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function Discover() {
@@ -85,42 +64,38 @@ export default function Discover() {
   const [publicGroups, setPublicGroups] = useState<PublicGroup[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   
-  // Fetch dynamic categories from database
-  const { data: sportCategories = [] } = useSportCategories();
-  const { data: surfaceTypes = [] } = useSurfaceTypes();
+  // Fetch dynamic categories from database - NO FALLBACKS
+  const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
+  const { data: surfaceTypes = [], isLoading: loadingSurfaces } = useSurfaceTypes();
   
-  // Build sports dropdown from database or fallback
+  // Build sports dropdown from database ONLY
   const sports = useMemo(() => {
-    if (sportCategories.length > 0) {
-      return [
-        { value: "all", label: "All Sports", emoji: "🎯" },
-        ...sportCategories.map(cat => ({
-          value: cat.name,
-          label: cat.display_name,
-          emoji: cat.icon || "🎯",
-        }))
-      ];
-    }
-    return fallbackSports;
+    if (sportCategories.length === 0) return [{ value: "all", label: "All Sports", emoji: "🎯" }];
+    return [
+      { value: "all", label: "All Sports", emoji: "🎯" },
+      ...sportCategories.map(cat => ({
+        value: cat.name,
+        label: cat.display_name,
+        emoji: cat.icon || "🎯",
+      }))
+    ];
   }, [sportCategories]);
   
-  // Build court types dropdown from database or fallback
+  // Build court types dropdown from database ONLY
   const courtTypes = useMemo(() => {
-    if (surfaceTypes.length > 0) {
-      return [
-        { value: "all", label: "All Surfaces", emoji: "🎯" },
-        ...surfaceTypes.map(surface => ({
-          value: surface.name,
-          label: surface.display_name,
-          emoji: surface.name === "grass" ? "🌱" : 
-                 surface.name === "turf" ? "🟩" :
-                 surface.name === "sand" ? "🏖️" :
-                 surface.name === "hard" ? "🟫" :
-                 surface.name === "clay" ? "🟠" : "🎯",
-        }))
-      ];
-    }
-    return fallbackCourtTypes;
+    if (surfaceTypes.length === 0) return [{ value: "all", label: "All Surfaces", emoji: "🎯" }];
+    return [
+      { value: "all", label: "All Surfaces", emoji: "🎯" },
+      ...surfaceTypes.map(surface => ({
+        value: surface.name,
+        label: surface.display_name,
+        emoji: surface.name === "grass" ? "🌱" : 
+               surface.name === "turf" ? "🟩" :
+               surface.name === "sand" ? "🏖️" :
+               surface.name === "hard" ? "🟫" :
+               surface.name === "clay" ? "🟠" : "🎯",
+      }))
+    ];
   }, [surfaceTypes]);
 
   useEffect(() => {
@@ -181,7 +156,7 @@ export default function Discover() {
           .from("session_players")
           .select("id")
           .eq("session_id", session.id)
-          .eq("user_id", user.id)
+          .eq("user_id", user!.id)
           .maybeSingle();
 
         // Skip sessions user already joined
@@ -326,48 +301,62 @@ export default function Discover() {
         {/* Filter Dropdowns */}
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Sport Filter */}
-          <Select value={selectedSport} onValueChange={setSelectedSport}>
-            <SelectTrigger className="w-full sm:w-[180px] h-11">
-              <SelectValue>
-                <div className="flex items-center gap-2">
-                  <span>{sports.find(s => s.value === selectedSport)?.emoji}</span>
-                  <span>{sports.find(s => s.value === selectedSport)?.label}</span>
-                </div>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent className="bg-popover border border-border shadow-lg z-50">
-              {sports.map((sport) => (
-                <SelectItem key={sport.value} value={sport.value}>
+          {loadingSports ? (
+            <div className="flex items-center gap-2 h-11 px-3 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Loading sports...</span>
+            </div>
+          ) : (
+            <Select value={selectedSport} onValueChange={setSelectedSport}>
+              <SelectTrigger className="w-full sm:w-[180px] h-11">
+                <SelectValue>
                   <div className="flex items-center gap-2">
-                    <span>{sport.emoji}</span>
-                    <span>{sport.label}</span>
+                    <span>{sports.find(s => s.value === selectedSport)?.emoji}</span>
+                    <span>{sports.find(s => s.value === selectedSport)?.label}</span>
                   </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent className="bg-popover border border-border shadow-lg z-50">
+                {sports.map((sport) => (
+                  <SelectItem key={sport.value} value={sport.value}>
+                    <div className="flex items-center gap-2">
+                      <span>{sport.emoji}</span>
+                      <span>{sport.label}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           {/* Court Type Filter */}
-          <Select value={selectedCourtType} onValueChange={setSelectedCourtType}>
-            <SelectTrigger className="w-full sm:w-[180px] h-11">
-              <SelectValue>
-                <div className="flex items-center gap-2">
-                  <span>{courtTypes.find(c => c.value === selectedCourtType)?.emoji}</span>
-                  <span>{courtTypes.find(c => c.value === selectedCourtType)?.label}</span>
-                </div>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent className="bg-popover border border-border shadow-lg z-50">
-              {courtTypes.map((type) => (
-                <SelectItem key={type.value} value={type.value}>
+          {loadingSurfaces ? (
+            <div className="flex items-center gap-2 h-11 px-3 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Loading surfaces...</span>
+            </div>
+          ) : (
+            <Select value={selectedCourtType} onValueChange={setSelectedCourtType}>
+              <SelectTrigger className="w-full sm:w-[180px] h-11">
+                <SelectValue>
                   <div className="flex items-center gap-2">
-                    <span>{type.emoji}</span>
-                    <span>{type.label}</span>
+                    <span>{courtTypes.find(c => c.value === selectedCourtType)?.emoji}</span>
+                    <span>{courtTypes.find(c => c.value === selectedCourtType)?.label}</span>
                   </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent className="bg-popover border border-border shadow-lg z-50">
+                {courtTypes.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    <div className="flex items-center gap-2">
+                      <span>{type.emoji}</span>
+                      <span>{type.label}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* Tabs */}

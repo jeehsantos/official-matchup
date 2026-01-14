@@ -43,24 +43,13 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { nzCities } from "@/data/nzLocations";
 import { useToast } from "@/hooks/use-toast";
-
-type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "other";
-
-const sports: { value: SportType; label: string; emoji: string }[] = [
-  { value: "futsal", label: "Futsal", emoji: "⚽" },
-  { value: "basketball", label: "Basketball", emoji: "🏀" },
-  { value: "tennis", label: "Tennis", emoji: "🎾" },
-  { value: "volleyball", label: "Volleyball", emoji: "🏐" },
-  { value: "badminton", label: "Badminton", emoji: "🏸" },
-  { value: "turf_hockey", label: "Turf Hockey", emoji: "🏑" },
-  { value: "other", label: "Other", emoji: "🎯" },
-];
+import { useSportCategories } from "@/hooks/useSportCategories";
 
 interface ProfileData {
   full_name: string;
   phone: string;
   city: string;
-  preferred_sports: SportType[];
+  preferred_sports: string[];
 }
 
 export default function Profile() {
@@ -75,6 +64,9 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  
+  // Fetch sports from database - NO FALLBACKS
+  const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
   
   // Password change state
   const [passwordData, setPasswordData] = useState({
@@ -137,7 +129,7 @@ export default function Profile() {
           full_name: data.full_name || "",
           phone: data.phone || "",
           city: data.city || "",
-          preferred_sports: (data.preferred_sports as SportType[]) || [],
+          preferred_sports: (data.preferred_sports as string[]) || [],
         };
         setProfileData(profileValues);
         setOriginalData(profileValues);
@@ -156,15 +148,13 @@ export default function Profile() {
     try {
       const { error } = await supabase
         .from("profiles")
-        .upsert({
-          user_id: user.id,
+        .update({
           full_name: profileData.full_name,
           phone: profileData.phone,
           city: profileData.city,
-          preferred_sports: profileData.preferred_sports,
-        }, {
-          onConflict: 'user_id'
-        });
+          preferred_sports: profileData.preferred_sports as any,
+        })
+        .eq("user_id", user.id);
 
       if (error) throw error;
 
@@ -265,12 +255,12 @@ export default function Profile() {
     );
   };
 
-  const toggleSport = (sport: SportType) => {
+  const toggleSport = (sportName: string) => {
     setProfileData((prev) => ({
       ...prev,
-      preferred_sports: prev.preferred_sports.includes(sport)
-        ? prev.preferred_sports.filter((s) => s !== sport)
-        : [...prev.preferred_sports, sport],
+      preferred_sports: prev.preferred_sports.includes(sportName)
+        ? prev.preferred_sports.filter((s) => s !== sportName)
+        : [...prev.preferred_sports, sportName],
     }));
   };
 
@@ -440,27 +430,38 @@ export default function Profile() {
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent className="px-4 pb-4 pt-2 border-b border-border">
-                <div className="flex flex-wrap gap-2">
-                  {sports.map((sport) => (
-                    <Badge
-                      key={sport.value}
-                      variant={
-                        profileData.preferred_sports.includes(sport.value)
-                          ? "default"
-                          : "outline"
-                      }
-                      className={`cursor-pointer px-3 py-1.5 text-sm transition-all ${
-                        profileData.preferred_sports.includes(sport.value)
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-muted"
-                      }`}
-                      onClick={() => toggleSport(sport.value)}
-                    >
-                      <span className="mr-1.5">{sport.emoji}</span>
-                      {sport.label}
-                    </Badge>
-                  ))}
-                </div>
+                {loadingSports ? (
+                  <div className="flex items-center gap-2 text-muted-foreground py-4">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading sports...
+                  </div>
+                ) : sportCategories.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">
+                    No sports available. Please contact support.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {sportCategories.map((sport) => (
+                      <Badge
+                        key={sport.id}
+                        variant={
+                          profileData.preferred_sports.includes(sport.name)
+                            ? "default"
+                            : "outline"
+                        }
+                        className={`cursor-pointer px-3 py-1.5 text-sm transition-all ${
+                          profileData.preferred_sports.includes(sport.name)
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-muted"
+                        }`}
+                        onClick={() => toggleSport(sport.name)}
+                      >
+                        <span className="mr-1.5">{sport.icon || "🎯"}</span>
+                        {sport.display_name}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground mt-3">
                   Select sports you enjoy playing
                 </p>
@@ -490,136 +491,90 @@ export default function Profile() {
               </CollapsibleTrigger>
               <CollapsibleContent className="px-4 pb-4 pt-2 space-y-4 border-b border-border">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-sm">Profile Visibility</p>
-                    <p className="text-xs text-muted-foreground">Allow others to see your profile</p>
+                  <div className="flex items-center gap-3">
+                    <Key className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-sm font-medium">Change Password</span>
                   </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-sm">Show in Public Games</p>
-                    <p className="text-xs text-muted-foreground">Appear in rescue game searches</p>
-                  </div>
-                  <Switch defaultChecked />
                 </div>
                 
-                {/* Change Password Section */}
-                <div className="pt-4 border-t border-border space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Key className="h-4 w-4 text-muted-foreground" />
-                    <p className="font-medium text-sm">Change Password</p>
-                  </div>
-                  
-                  {/* New Password */}
+                <div className="space-y-3 pl-8">
                   <div className="space-y-2">
-                    <Label htmlFor="new_password" className="text-sm">New Password</Label>
+                    <Label htmlFor="newPassword">New Password</Label>
                     <div className="relative">
                       <Input
-                        id="new_password"
+                        id="newPassword"
                         type={showNewPassword ? "text" : "password"}
                         placeholder="Enter new password"
                         value={passwordData.newPassword}
                         onChange={(e) => handlePasswordChange(e.target.value)}
-                        className="pr-10"
                       />
                       <button
                         type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                         onClick={() => setShowNewPassword(!showNewPassword)}
                       >
                         {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
                     
-                    {/* Password Requirements */}
+                    {/* Password requirements */}
                     {passwordData.newPassword && (
-                      <div className="space-y-1 mt-2">
-                        {[
-                          { text: "At least 8 characters", check: passwordData.newPassword.length >= 8 },
-                          { text: "One uppercase letter", check: /[A-Z]/.test(passwordData.newPassword) },
-                          { text: "One lowercase letter", check: /[a-z]/.test(passwordData.newPassword) },
-                          { text: "One number", check: /[0-9]/.test(passwordData.newPassword) },
-                        ].map((req) => (
-                          <div
-                            key={req.text}
-                            className={`flex items-center gap-2 text-xs ${
-                              req.check ? "text-success" : "text-muted-foreground"
-                            }`}
-                          >
-                            {req.check ? (
-                              <CheckCircle2 className="h-3 w-3" />
-                            ) : (
-                              <XCircle className="h-3 w-3" />
-                            )}
-                            {req.text}
-                          </div>
-                        ))}
+                      <div className="text-xs space-y-1 mt-2">
+                        {["At least 8 characters", "One uppercase letter", "One lowercase letter", "One number"].map((req) => {
+                          const isMet = !passwordErrors.includes(req);
+                          return (
+                            <div key={req} className={`flex items-center gap-1.5 ${isMet ? 'text-primary' : 'text-muted-foreground'}`}>
+                              {isMet ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                              {req}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
                   
-                  {/* Confirm Password */}
                   <div className="space-y-2">
-                    <Label htmlFor="confirm_password" className="text-sm">Confirm New Password</Label>
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
                     <div className="relative">
                       <Input
-                        id="confirm_password"
+                        id="confirmPassword"
                         type={showConfirmPassword ? "text" : "password"}
                         placeholder="Confirm new password"
                         value={passwordData.confirmPassword}
-                        onChange={(e) =>
-                          setPasswordData((prev) => ({ ...prev, confirmPassword: e.target.value }))
-                        }
-                        className="pr-10"
+                        onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                       />
                       <button
                         type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       >
                         {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
                     {passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword && (
-                      <p className="text-xs text-destructive flex items-center gap-1">
-                        <XCircle className="h-3 w-3" />
-                        Passwords don't match
-                      </p>
-                    )}
-                    {passwordData.confirmPassword && passwordData.newPassword === passwordData.confirmPassword && passwordData.newPassword.length > 0 && (
-                      <p className="text-xs text-success flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3" />
-                        Passwords match
-                      </p>
+                      <p className="text-xs text-destructive">Passwords don't match</p>
                     )}
                   </div>
                   
-                  {/* Update Password Button */}
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleUpdatePassword}
-                    disabled={
-                      passwordLoading ||
-                      !passwordData.newPassword ||
-                      !passwordData.confirmPassword ||
-                      passwordData.newPassword !== passwordData.confirmPassword ||
-                      validatePassword(passwordData.newPassword).length > 0
-                    }
+                  <Button 
+                    onClick={handleUpdatePassword} 
+                    disabled={passwordLoading || passwordErrors.length > 0 || !passwordData.newPassword || passwordData.newPassword !== passwordData.confirmPassword}
+                    size="sm"
                   >
                     {passwordLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Updating...
+                      </>
                     ) : (
-                      <Key className="h-4 w-4 mr-2" />
+                      "Update Password"
                     )}
-                    Update Password
                   </Button>
                 </div>
               </CollapsibleContent>
             </Collapsible>
 
-            {/* Settings */}
+            {/* App Settings */}
             <Collapsible 
               open={expandedSections.includes("settings")}
               onOpenChange={() => toggleSection("settings")}
@@ -630,9 +585,9 @@ export default function Profile() {
                     <Settings className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="font-medium text-sm">Settings</p>
+                    <p className="font-medium text-sm">App Settings</p>
                     <p className="text-xs text-muted-foreground">
-                      App preferences
+                      Theme and preferences
                     </p>
                   </div>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${
@@ -644,86 +599,61 @@ export default function Profile() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     {theme === 'dark' ? (
-                      <Sun className="h-5 w-5 text-muted-foreground" />
-                    ) : (
                       <Moon className="h-5 w-5 text-muted-foreground" />
+                    ) : (
+                      <Sun className="h-5 w-5 text-muted-foreground" />
                     )}
                     <div>
-                      <p className="font-medium text-sm">
-                        {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-                      </p>
+                      <p className="text-sm font-medium">Dark Mode</p>
                       <p className="text-xs text-muted-foreground">
-                        Switch to {theme === 'dark' ? 'light' : 'dark'} theme
+                        Toggle dark theme
                       </p>
                     </div>
                   </div>
-                  <Switch 
-                    checked={theme === 'dark'} 
+                  <Switch
+                    checked={theme === 'dark'}
                     onCheckedChange={toggleTheme}
                   />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-sm">Push Notifications</p>
-                    <p className="text-xs text-muted-foreground">Get game reminders and updates</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-sm">Email Notifications</p>
-                    <p className="text-xs text-muted-foreground">Receive weekly summaries</p>
-                  </div>
-                  <Switch />
                 </div>
               </CollapsibleContent>
             </Collapsible>
           </CardContent>
         </Card>
 
-        {/* Fixed bottom actions - Improved mobile layout */}
-        <div className="fixed bottom-16 left-0 right-0 p-4 bg-background border-t border-border lg:relative lg:bottom-auto lg:border-none lg:p-0">
-          <div className="max-w-2xl mx-auto space-y-3">
-            {/* Save button - full width */}
-            <Button 
-              className="w-full h-12" 
-              onClick={handleSave}
-              disabled={saving || !hasChanges}
-            >
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              Save Changes
-            </Button>
-            
-            {/* Sign out on mobile - separate row, less prominent */}
-            {isMobile && (
+        {/* Save Button - Fixed at bottom when has changes */}
+        {hasChanges && (
+          <div className="fixed bottom-20 left-0 right-0 p-4 bg-background/95 backdrop-blur border-t border-border z-50">
+            <div className="max-w-2xl mx-auto">
               <Button 
-                variant="ghost" 
-                size="sm"
-                className="w-full text-muted-foreground hover:text-destructive"
-                onClick={handleSignOut}
+                onClick={handleSave} 
+                disabled={saving}
+                className="w-full h-12"
               >
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Changes
+                  </>
+                )}
               </Button>
-            )}
+            </div>
           </div>
-        </div>
-
-        {/* Desktop Sign Out */}
-        {!isMobile && (
-          <Button
-            variant="outline"
-            className="w-full text-destructive hover:text-destructive"
-            onClick={handleSignOut}
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign Out
-          </Button>
         )}
+
+        {/* Sign Out */}
+        <Button
+          variant="outline"
+          className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+          onClick={handleSignOut}
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Sign Out
+        </Button>
       </div>
     </MobileLayout>
   );

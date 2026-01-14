@@ -1,14 +1,17 @@
 import { cn } from "@/lib/utils";
 
-export type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "hockey" | "other";
+export type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "hockey" | "other" | string;
 
 interface SportIconProps {
   sport: SportType;
   size?: "sm" | "md" | "lg";
   className?: string;
+  icon?: string | null;
+  label?: string;
 }
 
-const sportEmojis: Record<SportType, string> = {
+// Default emoji mappings - used as fallback when icon prop not provided
+const defaultSportEmojis: Record<string, string> = {
   futsal: "⚽",
   tennis: "🎾",
   volleyball: "🏐",
@@ -19,7 +22,8 @@ const sportEmojis: Record<SportType, string> = {
   other: "🎯",
 };
 
-const sportLabels: Record<SportType, string> = {
+// Default label mappings - used as fallback when label prop not provided
+const defaultSportLabels: Record<string, string> = {
   futsal: "Futsal",
   tennis: "Tennis",
   volleyball: "Volleyball",
@@ -36,7 +40,11 @@ const sizeClasses = {
   lg: "w-14 h-14 text-2xl",
 };
 
-export function SportIcon({ sport, size = "md", className }: SportIconProps) {
+export function SportIcon({ sport, size = "md", className, icon, label }: SportIconProps) {
+  // Use provided icon or fallback to default mapping
+  const displayIcon = icon || defaultSportEmojis[sport] || "🎯";
+  const displayLabel = label || defaultSportLabels[sport] || sport;
+  
   return (
     <div
       className={cn(
@@ -45,13 +53,17 @@ export function SportIcon({ sport, size = "md", className }: SportIconProps) {
         className
       )}
       role="img"
-      aria-label={sportLabels[sport] || sport}
+      aria-label={displayLabel}
     >
-      {sportEmojis[sport] || "🎯"}
+      {displayIcon}
     </div>
   );
 }
 
-export function getSportLabel(sport: SportType): string {
-  return sportLabels[sport] || sport;
+export function getSportLabel(sport: SportType, customLabel?: string): string {
+  return customLabel || defaultSportLabels[sport] || sport;
+}
+
+export function getSportEmoji(sport: SportType, customIcon?: string | null): string {
+  return customIcon || defaultSportEmojis[sport] || "🎯";
 }

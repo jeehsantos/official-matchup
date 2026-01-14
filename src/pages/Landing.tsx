@@ -8,11 +8,13 @@ import {
   ChevronRight,
   CheckCircle2,
   Zap,
-  Star
+  Star,
+  Loader2
 } from "lucide-react";
-import { SportIcon } from "@/components/ui/sport-icon";
+import { SportIcon, getSportEmoji } from "@/components/ui/sport-icon";
 import { Footer } from "@/components/layout/Footer";
 import { FloatingShapes } from "@/components/ui/floating-shapes";
+import { useSportCategories } from "@/hooks/useSportCategories";
 
 const valueProps = [
   {
@@ -55,8 +57,6 @@ const features = [
   }
 ];
 
-const sports = ["futsal", "basketball", "tennis", "volleyball", "badminton", "turf_hockey"] as const;
-
 const howItWorks = {
   players: [
     { step: "1", title: "Discover Courts", description: "Browse verified venues across New Zealand and find the perfect court" },
@@ -78,6 +78,9 @@ const stats = [
 ];
 
 export default function Landing() {
+  // Fetch sports from database - NO FALLBACKS
+  const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
+  
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
@@ -271,7 +274,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Sports Showcase */}
+      {/* Sports Showcase - Dynamic from database */}
       <section className="py-20 px-4">
         <div className="container mx-auto max-w-4xl text-center">
           <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
@@ -280,17 +283,32 @@ export default function Landing() {
           <p className="text-muted-foreground mb-10 max-w-xl mx-auto">
             From futsal to hockey, we've got courts for every sport you love.
           </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            {sports.map((sport) => (
-              <div 
-                key={sport} 
-                className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-card border border-border hover:border-primary/50 hover:shadow-lg transition-all duration-300 min-w-[120px]"
-              >
-                <SportIcon sport={sport} className="h-12 w-12 text-primary" />
-                <span className="text-sm font-medium capitalize">{sport.replace('_', ' ')}</span>
-              </div>
-            ))}
-          </div>
+          {loadingSports ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : sportCategories.length === 0 ? (
+            <p className="text-muted-foreground py-12">
+              Sports coming soon...
+            </p>
+          ) : (
+            <div className="flex flex-wrap justify-center gap-4">
+              {sportCategories.map((sport) => (
+                <div 
+                  key={sport.id} 
+                  className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-card border border-border hover:border-primary/50 hover:shadow-lg transition-all duration-300 min-w-[120px]"
+                >
+                  <SportIcon 
+                    sport={sport.name} 
+                    icon={sport.icon}
+                    label={sport.display_name}
+                    className="h-12 w-12 text-primary" 
+                  />
+                  <span className="text-sm font-medium">{sport.display_name}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -377,16 +395,15 @@ export default function Landing() {
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="w-full sm:w-auto text-base px-8 py-6 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10"
+                className="w-full sm:w-auto text-base px-8 py-6 border-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/10"
               >
-                Talk to Sales
+                Contact Us
               </Button>
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
       <Footer />
     </div>
   );

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -13,7 +14,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { MapPin, RotateCcw, Check } from "lucide-react";
+import { MapPin, RotateCcw, Check, Loader2 } from "lucide-react";
+import type { SurfaceType } from "@/hooks/useSurfaceTypes";
 
 interface MobileCourtFiltersProps {
   open: boolean;
@@ -26,19 +28,8 @@ interface MobileCourtFiltersProps {
   setSelectedCity: (value: string) => void;
   cities: string[];
   activeFiltersCount: number;
+  surfaceTypes?: SurfaceType[];
 }
-
-const groundTypeFilters = ["all", "grass", "turf", "sand", "hard", "clay", "other"] as const;
-
-const groundTypeData: Record<string, { emoji: string; label: string }> = {
-  all: { emoji: "🎯", label: "All Surfaces" },
-  grass: { emoji: "🌱", label: "Grass" },
-  turf: { emoji: "🟩", label: "Turf" },
-  sand: { emoji: "🏖️", label: "Sand" },
-  hard: { emoji: "🟫", label: "Hard Court" },
-  clay: { emoji: "🟠", label: "Clay" },
-  other: { emoji: "⚪", label: "Other" },
-};
 
 const venueTypeData = [
   { value: "all", emoji: "🏟️", label: "All Types" },
@@ -57,7 +48,31 @@ export function MobileCourtFilters({
   setSelectedCity,
   cities,
   activeFiltersCount,
+  surfaceTypes = [],
 }: MobileCourtFiltersProps) {
+  // Build ground type data from database
+  const groundTypeData = useMemo(() => {
+    const data: Record<string, { emoji: string; label: string }> = {
+      all: { emoji: "🎯", label: "All Surfaces" },
+    };
+    surfaceTypes.forEach(surface => {
+      data[surface.name] = {
+        emoji: surface.name === "grass" ? "🌱" : 
+               surface.name === "turf" ? "🟩" :
+               surface.name === "sand" ? "🏖️" :
+               surface.name === "hard" ? "🟫" :
+               surface.name === "clay" ? "🟠" : "⚪",
+        label: surface.display_name,
+      };
+    });
+    return data;
+  }, [surfaceTypes]);
+
+  // Build ground type filters from database
+  const groundTypeFilters = useMemo(() => {
+    return ["all", ...surfaceTypes.map(s => s.name)];
+  }, [surfaceTypes]);
+
   const handleClearFilters = () => {
     setSelectedGroundType("all");
     setSelectedVenueType("all");
@@ -90,23 +105,30 @@ export function MobileCourtFilters({
           {/* Surface Type */}
           <div className="space-y-3">
             <Label className="text-sm font-medium">Surface Type</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {groundTypeFilters.map((type) => {
-                const data = groundTypeData[type];
-                const isSelected = selectedGroundType === type;
-                return (
-                  <Button
-                    key={type}
-                    variant={isSelected ? "default" : "outline"}
-                    onClick={() => setSelectedGroundType(type)}
-                    className="flex-col h-auto py-3 gap-1"
-                  >
-                    <span className="text-lg">{data.emoji}</span>
-                    <span className="text-xs">{data.label}</span>
-                  </Button>
-                );
-              })}
-            </div>
+            {surfaceTypes.length === 0 ? (
+              <div className="flex items-center gap-2 text-muted-foreground py-4">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading surface types...
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {groundTypeFilters.map((type) => {
+                  const data = groundTypeData[type];
+                  const isSelected = selectedGroundType === type;
+                  return (
+                    <Button
+                      key={type}
+                      variant={isSelected ? "default" : "outline"}
+                      onClick={() => setSelectedGroundType(type)}
+                      className="flex-col h-auto py-3 gap-1"
+                    >
+                      <span className="text-lg">{data?.emoji || "🎯"}</span>
+                      <span className="text-xs">{data?.label || type}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Indoor / Outdoor */}

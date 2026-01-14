@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { CourtCard } from "@/components/courts/CourtCard";
@@ -6,7 +6,8 @@ import { CourtsMap } from "@/components/courts/CourtsMap";
 import { CourtsPagination } from "@/components/courts/CourtsPagination";
 import { MobileCourtSheet } from "@/components/courts/MobileCourtSheet";
 import { MobileCourtFilters } from "@/components/courts/MobileCourtFilters";
-import { Search, MapPin, SlidersHorizontal, Building2 } from "lucide-react";
+import { Search, MapPin, SlidersHorizontal, Building2, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -17,6 +18,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
 import type { Database } from "@/integrations/supabase/types";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
@@ -26,19 +28,7 @@ interface CourtWithVenue extends Court {
   venues: Venue | null;
 }
 
-const groundTypeFilters = ["all", "grass", "turf", "sand", "hard", "clay", "other"] as const;
 const ITEMS_PER_PAGE = 9;
-
-// Ground type filter data with emojis
-const groundTypeData: Record<string, { emoji: string; label: string }> = {
-  all: { emoji: "🎯", label: "All Surfaces" },
-  grass: { emoji: "🌱", label: "Grass" },
-  turf: { emoji: "🟩", label: "Turf" },
-  sand: { emoji: "🏖️", label: "Sand" },
-  hard: { emoji: "🟫", label: "Hard Court" },
-  clay: { emoji: "🟠", label: "Clay" },
-  other: { emoji: "⚪", label: "Other" },
-};
 
 export default function Courts() {
   const { user } = useAuth();
@@ -56,6 +46,32 @@ export default function Courts() {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Fetch surface types from database - NO FALLBACKS
+  const { data: surfaceTypes = [], isLoading: loadingSurfaceTypes } = useSurfaceTypes();
+
+  // Build ground type data from database
+  const groundTypeData = useMemo(() => {
+    const data: Record<string, { emoji: string; label: string }> = {
+      all: { emoji: "🎯", label: "All Surfaces" },
+    };
+    surfaceTypes.forEach(surface => {
+      data[surface.name] = {
+        emoji: surface.name === "grass" ? "🌱" : 
+               surface.name === "turf" ? "🟩" :
+               surface.name === "sand" ? "🏖️" :
+               surface.name === "hard" ? "🟫" :
+               surface.name === "clay" ? "🟠" : "⚪",
+        label: surface.display_name,
+      };
+    });
+    return data;
+  }, [surfaceTypes]);
+
+  // Build ground type filters from database
+  const groundTypeFilters = useMemo(() => {
+    return ["all", ...surfaceTypes.map(s => s.name)];
+  }, [surfaceTypes]);
 
   useEffect(() => {
     fetchCourts();
@@ -179,29 +195,36 @@ export default function Courts() {
       {/* Filter Dropdowns Row */}
       <div className="flex flex-wrap gap-3">
         {/* Ground Type Dropdown */}
-        <Select value={selectedGroundType} onValueChange={setSelectedGroundType}>
-          <SelectTrigger className="w-[160px] h-10">
-            <SelectValue>
-              <div className="flex items-center gap-2">
-                <span>{groundTypeData[selectedGroundType]?.emoji || "🎯"}</span>
-                <span>{groundTypeData[selectedGroundType]?.label || "All Surfaces"}</span>
-              </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="bg-popover border border-border shadow-lg z-50">
-            {groundTypeFilters.map((groundType) => {
-              const data = groundTypeData[groundType];
-              return (
-                <SelectItem key={groundType} value={groundType}>
-                  <div className="flex items-center gap-2">
-                    <span>{data?.emoji || "🎯"}</span>
-                    <span>{data?.label || groundType}</span>
-                  </div>
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
+        {loadingSurfaceTypes ? (
+          <div className="flex items-center gap-2 h-10 px-3 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Loading...</span>
+          </div>
+        ) : (
+          <Select value={selectedGroundType} onValueChange={setSelectedGroundType}>
+            <SelectTrigger className="w-[160px] h-10">
+              <SelectValue>
+                <div className="flex items-center gap-2">
+                  <span>{groundTypeData[selectedGroundType]?.emoji || "🎯"}</span>
+                  <span>{groundTypeData[selectedGroundType]?.label || "All Surfaces"}</span>
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="bg-popover border border-border shadow-lg z-50">
+              {groundTypeFilters.map((groundType) => {
+                const data = groundTypeData[groundType];
+                return (
+                  <SelectItem key={groundType} value={groundType}>
+                    <div className="flex items-center gap-2">
+                      <span>{data?.emoji || "🎯"}</span>
+                      <span>{data?.label || groundType}</span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        )}
 
         {/* Indoor/Outdoor Dropdown */}
         <Select value={selectedVenueType} onValueChange={(val) => setSelectedVenueType(val as "all" | "indoor" | "outdoor")}>
@@ -292,37 +315,8 @@ export default function Courts() {
     </div>
   );
 
-  // Mobile/Tablet: Floating search header
-  const MobileSearchHeader = () => (
-    <div className="absolute top-4 left-4 right-4 z-[1000]">
-      <div className="flex items-center gap-2 bg-background rounded-full px-4 py-3 shadow-lg border border-border">
-        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-        <input
-          type="text"
-          placeholder="Search courts..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground min-w-0"
-        />
-        {searchQuery ? (
-          <button 
-            onClick={() => setSearchQuery("")}
-            className="h-6 w-6 rounded-full bg-muted flex items-center justify-center"
-          >
-            <span className="text-xs">✕</span>
-          </button>
-        ) : (
-          <button className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-            <SlidersHorizontal className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
   // Mobile/Tablet Layout
   if (isMobile) {
-    // For mobile courts view, we use MobileLayout with header hidden for full-screen map
     return (
       <MobileLayout showHeader={false} showBottomNav={true}>
         <div className="fixed inset-0 top-0 bottom-16 overflow-hidden">
@@ -389,6 +383,7 @@ export default function Courts() {
             setSelectedCity={setSelectedCity}
             cities={cities}
             activeFiltersCount={activeFiltersCount}
+            surfaceTypes={surfaceTypes}
           />
         </div>
       </MobileLayout>
@@ -426,12 +421,19 @@ export default function Courts() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                   {paginatedCourts.map((court) => (
-                    <CourtCard
-                      key={court.id}
-                      court={court}
-                      onHover={setHighlightedCourtId}
-                      isHighlighted={court.id === highlightedCourtId}
-                    />
+                    <div key={court.id} className="relative">
+                      <CourtCard
+                        court={court}
+                        onHover={setHighlightedCourtId}
+                        isHighlighted={court.id === highlightedCourtId}
+                      />
+                      {/* Multi-court badge */}
+                      {(court as any).is_multi_court && (
+                        <Badge className="absolute top-2 left-2 bg-accent text-accent-foreground">
+                          Multi-Court
+                        </Badge>
+                      )}
+                    </div>
                   ))}
                 </div>
 

@@ -248,7 +248,9 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_indoor: boolean | null
+          is_multi_court: boolean | null
           name: string
+          parent_court_id: string | null
           payment_hours_before: number | null
           payment_timing: Database["public"]["Enums"]["payment_timing"] | null
           photo_url: string | null
@@ -266,7 +268,9 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_indoor?: boolean | null
+          is_multi_court?: boolean | null
           name: string
+          parent_court_id?: string | null
           payment_hours_before?: number | null
           payment_timing?: Database["public"]["Enums"]["payment_timing"] | null
           photo_url?: string | null
@@ -284,7 +288,9 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_indoor?: boolean | null
+          is_multi_court?: boolean | null
           name?: string
+          parent_court_id?: string | null
           payment_hours_before?: number | null
           payment_timing?: Database["public"]["Enums"]["payment_timing"] | null
           photo_url?: string | null
@@ -295,6 +301,13 @@ export type Database = {
           venue_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "courts_parent_court_id_fkey"
+            columns: ["parent_court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "courts_venue_id_fkey"
             columns: ["venue_id"]

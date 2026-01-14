@@ -17,29 +17,18 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { nzCities } from "@/data/nzLocations";
 import { useToast } from "@/hooks/use-toast";
+import { useSportCategories } from "@/hooks/useSportCategories";
 import {
   Loader2,
   ArrowLeft,
   Save,
 } from "lucide-react";
 
-type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "other";
-
-const sports: { value: SportType; label: string; emoji: string }[] = [
-  { value: "futsal", label: "Futsal", emoji: "⚽" },
-  { value: "basketball", label: "Basketball", emoji: "🏀" },
-  { value: "tennis", label: "Tennis", emoji: "🎾" },
-  { value: "volleyball", label: "Volleyball", emoji: "🏐" },
-  { value: "badminton", label: "Badminton", emoji: "🏸" },
-  { value: "turf_hockey", label: "Turf Hockey", emoji: "🏑" },
-  { value: "other", label: "Other", emoji: "🎯" },
-];
-
 interface ProfileData {
   full_name: string;
   phone: string;
   city: string;
-  preferred_sports: SportType[];
+  preferred_sports: string[];
 }
 
 export default function ProfileEdit() {
@@ -55,6 +44,9 @@ export default function ProfileEdit() {
     city: "",
     preferred_sports: [],
   });
+  
+  // Fetch sports from database - NO FALLBACKS
+  const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -87,7 +79,7 @@ export default function ProfileEdit() {
           full_name: data.full_name || "",
           phone: data.phone || "",
           city: data.city || "",
-          preferred_sports: (data.preferred_sports as SportType[]) || [],
+          preferred_sports: (data.preferred_sports as string[]) || [],
         });
       } else {
         setProfileExists(false);
@@ -112,24 +104,21 @@ export default function ProfileEdit() {
             full_name: profileData.full_name,
             phone: profileData.phone,
             city: profileData.city,
-            preferred_sports: profileData.preferred_sports,
+            preferred_sports: profileData.preferred_sports as any,
           })
           .eq("user_id", user.id);
 
         if (error) throw error;
       } else {
-        // Insert new profile - but this should be handled by the trigger
-        // Let's try upsert approach
+        // Insert new profile
         const { error } = await supabase
           .from("profiles")
-          .upsert({
+          .insert({
             user_id: user.id,
             full_name: profileData.full_name,
             phone: profileData.phone,
             city: profileData.city,
-            preferred_sports: profileData.preferred_sports,
-          }, {
-            onConflict: 'user_id'
+            preferred_sports: profileData.preferred_sports as any,
           });
 
         if (error) throw error;
@@ -152,12 +141,12 @@ export default function ProfileEdit() {
     }
   };
 
-  const toggleSport = (sport: SportType) => {
+  const toggleSport = (sportName: string) => {
     setProfileData((prev) => ({
       ...prev,
-      preferred_sports: prev.preferred_sports.includes(sport)
-        ? prev.preferred_sports.filter((s) => s !== sport)
-        : [...prev.preferred_sports, sport],
+      preferred_sports: prev.preferred_sports.includes(sportName)
+        ? prev.preferred_sports.filter((s) => s !== sportName)
+        : [...prev.preferred_sports, sportName],
     }));
   };
 
@@ -273,27 +262,38 @@ export default function ProfileEdit() {
               <CardTitle className="text-lg">Preferred Sports</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {sports.map((sport) => (
-                  <Badge
-                    key={sport.value}
-                    variant={
-                      profileData.preferred_sports.includes(sport.value)
-                        ? "default"
-                        : "outline"
-                    }
-                    className={`cursor-pointer px-3 py-1.5 text-sm transition-all ${
-                      profileData.preferred_sports.includes(sport.value)
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted"
-                    }`}
-                    onClick={() => toggleSport(sport.value)}
-                  >
-                    <span className="mr-1.5">{sport.emoji}</span>
-                    {sport.label}
-                  </Badge>
-                ))}
-              </div>
+              {loadingSports ? (
+                <div className="flex items-center gap-2 text-muted-foreground py-4">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading sports...
+                </div>
+              ) : sportCategories.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">
+                  No sports available. Please contact support.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {sportCategories.map((sport) => (
+                    <Badge
+                      key={sport.id}
+                      variant={
+                        profileData.preferred_sports.includes(sport.name)
+                          ? "default"
+                          : "outline"
+                      }
+                      className={`cursor-pointer px-3 py-1.5 text-sm transition-all ${
+                        profileData.preferred_sports.includes(sport.name)
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-muted"
+                      }`}
+                      onClick={() => toggleSport(sport.name)}
+                    >
+                      <span className="mr-1.5">{sport.icon || "🎯"}</span>
+                      {sport.display_name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
               <p className="text-xs text-muted-foreground mt-3">
                 Select sports you enjoy playing
               </p>

@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Trash2, Building2, ExternalLink } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Building2, ExternalLink, Link as LinkIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
@@ -28,18 +28,6 @@ import { PaymentSettingsCard } from "@/components/manager/PaymentSettingsCard";
 import { nzCities, getSuburbsForCity } from "@/data/nzLocations";
 import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
 
-// Fallback ground types in case database is empty
-const fallbackGroundTypes = ["grass", "turf", "sand", "hard", "clay", "other"] as const;
-
-const fallbackGroundTypeLabels: Record<string, string> = {
-  grass: "Grass",
-  turf: "Artificial Turf",
-  sand: "Sand",
-  hard: "Hard Court",
-  clay: "Clay",
-  other: "Other",
-};
-
 const courtSchema = z.object({
   // Court details
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -47,6 +35,8 @@ const courtSchema = z.object({
   hourly_rate: z.number().min(0),
   is_indoor: z.boolean(),
   is_active: z.boolean(),
+  is_multi_court: z.boolean().default(false),
+  parent_court_id: z.string().nullable().optional(),
   photo_urls: z.array(z.string()).default([]),
   description: z.string().optional(),
   rules: z.string().optional(),
@@ -82,7 +72,7 @@ export default function ManagerCourtFormNew() {
       if (!existingVenueId) return [];
       const { data, error } = await supabase
         .from("courts")
-        .select("id, name, hourly_rate, is_active")
+        .select("id, name, hourly_rate, is_active, is_multi_court, parent_court_id")
         .eq("venue_id", existingVenueId)
         .order("name");
       if (error) throw error;
@@ -91,23 +81,28 @@ export default function ManagerCourtFormNew() {
     enabled: !!existingVenueId,
   });
   
-  // Fetch surface types from database
-  const { data: surfaceTypesData = [] } = useSurfaceTypes();
+  // Fetch surface types from database - NO FALLBACKS
+  const { data: surfaceTypesData = [], isLoading: loadingSurfaceTypes } = useSurfaceTypes();
   
-  // Build ground types from database or fallback
+  // Build ground types from database ONLY
   const groundTypes = useMemo(() => {
-    if (surfaceTypesData.length > 0) {
-      return surfaceTypesData.map(s => s.name) as string[];
-    }
-    return fallbackGroundTypes as unknown as string[];
+    return surfaceTypesData.map(s => s.name);
   }, [surfaceTypesData]);
   
   const groundTypeLabels = useMemo(() => {
-    if (surfaceTypesData.length > 0) {
-      return Object.fromEntries(surfaceTypesData.map(s => [s.name, s.display_name]));
-    }
-    return fallbackGroundTypeLabels;
+    return Object.fromEntries(surfaceTypesData.map(s => [s.name, s.display_name]));
   }, [surfaceTypesData]);
+
+  // Get multi-court parent courts (courts that can be parents)
+  const multiCourtParents = useMemo(() => {
+    return venueCourts.filter(c => c.is_multi_court && c.id !== id);
+  }, [venueCourts, id]);
+
+  // Get child courts linked to current court
+  const childCourts = useMemo(() => {
+    if (!id) return [];
+    return venueCourts.filter(c => c.parent_court_id === id);
+  }, [venueCourts, id]);
 
   const {
     register,
@@ -122,7 +117,9 @@ export default function ManagerCourtFormNew() {
       hourly_rate: 50,
       is_indoor: true,
       is_active: true,
-      ground_type: "turf",
+      is_multi_court: false,
+      parent_court_id: null,
+      ground_type: surfaceTypesData.length > 0 ? surfaceTypesData[0].name : "",
       country: "New Zealand",
       payment_timing: "at_booking",
       payment_hours_before: 24,
@@ -133,6 +130,8 @@ export default function ManagerCourtFormNew() {
   const selectedCity = watch("city");
   const paymentTiming = watch("payment_timing");
   const paymentHoursBefore = watch("payment_hours_before");
+  const isMultiCourt = watch("is_multi_court");
+  const parentCourtId = watch("parent_court_id");
 
   useEffect(() => {
     if (selectedCity) {
@@ -141,6 +140,13 @@ export default function ManagerCourtFormNew() {
       setAvailableSuburbs([]);
     }
   }, [selectedCity]);
+
+  // Set default ground type when surface types load
+  useEffect(() => {
+    if (surfaceTypesData.length > 0 && !watch("ground_type")) {
+      setValue("ground_type", surfaceTypesData[0].name);
+    }
+  }, [surfaceTypesData, setValue, watch]);
 
   useEffect(() => {
     if (isEditing && id) {
@@ -171,10 +177,12 @@ export default function ManagerCourtFormNew() {
       
       reset({
         name: data.name,
-        ground_type: (data.ground_type as any) || "turf",
+        ground_type: (data.ground_type as any) || (surfaceTypesData.length > 0 ? surfaceTypesData[0].name : ""),
         hourly_rate: Number(data.hourly_rate),
         is_indoor: data.is_indoor ?? true,
         is_active: data.is_active ?? true,
+        is_multi_court: (data as any).is_multi_court ?? false,
+        parent_court_id: (data as any).parent_court_id || null,
         photo_urls: (data as any).photo_urls || (data.photo_url ? [data.photo_url] : []),
         description: "",
         rules: (data as any).rules || "",
@@ -220,6 +228,8 @@ export default function ManagerCourtFormNew() {
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
             is_active: data.is_active,
+            is_multi_court: data.is_multi_court,
+            parent_court_id: data.is_multi_court ? null : (data.parent_court_id || null),
             photo_urls: data.photo_urls,
             photo_url: data.photo_urls[0] || null, // Keep backward compatibility
             payment_timing: data.payment_timing as any,
@@ -258,6 +268,8 @@ export default function ManagerCourtFormNew() {
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
             is_active: data.is_active,
+            is_multi_court: data.is_multi_court,
+            parent_court_id: data.is_multi_court ? null : (data.parent_court_id || null),
             photo_urls: data.photo_urls,
             photo_url: data.photo_urls[0] || null, // Keep backward compatibility
             payment_timing: data.payment_timing as any,
@@ -374,6 +386,7 @@ export default function ManagerCourtFormNew() {
                     >
                       {court.name} - ${court.hourly_rate}/hr
                       {!court.is_active && " (inactive)"}
+                      {court.is_multi_court && " 🏟️"}
                     </Badge>
                   </Link>
                 ))}
@@ -418,21 +431,32 @@ export default function ManagerCourtFormNew() {
 
               <div>
                 <Label htmlFor="ground_type">Surface Type *</Label>
-                <Select
-                  value={watch("ground_type")}
-                  onValueChange={(value) => setValue("ground_type", value as any)}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select surface type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {groundTypes.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {groundTypeLabels[type]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {loadingSurfaceTypes ? (
+                  <div className="flex items-center gap-2 text-muted-foreground py-2 mt-1">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading surface types...
+                  </div>
+                ) : surfaceTypesData.length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    No surface types available. Please contact support.
+                  </p>
+                ) : (
+                  <Select
+                    value={watch("ground_type")}
+                    onValueChange={(value) => setValue("ground_type", value as any)}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select surface type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groundTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {groundTypeLabels[type] || type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 {errors.ground_type && (
                   <p className="text-sm text-destructive mt-1">{errors.ground_type.message}</p>
                 )}
@@ -476,6 +500,87 @@ export default function ManagerCourtFormNew() {
                   <p className="text-sm text-destructive mt-1">{errors.hourly_rate.message}</p>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Multi-Court Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <LinkIcon className="h-5 w-5" />
+                Multi-Court Configuration
+              </CardTitle>
+              <CardDescription>
+                Configure this court as part of a multi-court venue
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="is_multi_court">Is Multi-Court Parent</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Enable if this court groups multiple sub-courts together
+                  </p>
+                </div>
+                <Switch
+                  id="is_multi_court"
+                  checked={isMultiCourt}
+                  onCheckedChange={(checked) => {
+                    setValue("is_multi_court", checked);
+                    if (checked) {
+                      setValue("parent_court_id", null);
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Show parent selector only if NOT a multi-court parent and there are multi-court parents */}
+              {!isMultiCourt && multiCourtParents.length > 0 && (
+                <div>
+                  <Label htmlFor="parent_court_id">Link to Parent Court (Optional)</Label>
+                  <Select
+                    value={parentCourtId || "none"}
+                    onValueChange={(value) => setValue("parent_court_id", value === "none" ? null : value)}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select parent court" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No parent (standalone court)</SelectItem>
+                      {multiCourtParents.map((court) => (
+                        <SelectItem key={court.id} value={court.id}>
+                          {court.name} (Multi-Court)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Link this court to a multi-court parent to group them together
+                  </p>
+                </div>
+              )}
+
+              {/* Show linked child courts if this is a multi-court parent */}
+              {isMultiCourt && childCourts.length > 0 && (
+                <div className="pt-2">
+                  <Label>Linked Sub-Courts</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {childCourts.map((court) => (
+                      <Link key={court.id} to={`/manager/courts/${court.id}/edit`}>
+                        <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
+                          {court.name}
+                        </Badge>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isMultiCourt && childCourts.length === 0 && isEditing && (
+                <p className="text-sm text-muted-foreground">
+                  No sub-courts linked yet. Create additional courts and link them to this multi-court.
+                </p>
+              )}
             </CardContent>
           </Card>
 
