@@ -364,8 +364,8 @@ export default function ManagerCourtFormNew() {
           </div>
         </div>
 
-        {/* Court Carousel - Show when editing and venue has multiple courts */}
-        {isEditing && venueCourts.length > 1 && (
+        {/* Court Carousel - Show when editing and venue has courts (or always for navigation) */}
+        {isEditing && existingVenueId && (
           <div className="overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0">
             <div className="flex gap-3 min-w-min">
               {venueCourts.map((court) => (
