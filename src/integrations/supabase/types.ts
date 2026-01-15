@@ -602,7 +602,7 @@ export type Database = {
           full_name: string | null
           id: string
           phone: string | null
-          preferred_sports: Database["public"]["Enums"]["sport_type"][] | null
+          preferred_sports: string[] | null
           updated_at: string
           user_id: string
         }
@@ -613,7 +613,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           phone?: string | null
-          preferred_sports?: Database["public"]["Enums"]["sport_type"][] | null
+          preferred_sports?: string[] | null
           updated_at?: string
           user_id: string
         }
@@ -624,7 +624,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           phone?: string | null
-          preferred_sports?: Database["public"]["Enums"]["sport_type"][] | null
+          preferred_sports?: string[] | null
           updated_at?: string
           user_id?: string
         }

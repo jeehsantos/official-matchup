@@ -201,12 +201,12 @@ export default function CourtDetail() {
     }
   }, [id, fetchCourt]);
 
-  // Fetch availability when date or court changes
+  // Fetch availability when date or selected court changes
   useEffect(() => {
-    if (court?.venues && selectedDate) {
-      fetchAvailability(court.venues.id, court.id, selectedDate);
+    if (court?.venues && selectedDate && selectedCourtId) {
+      fetchAvailability(court.venues.id, selectedCourtId, selectedDate);
     }
-  }, [court, selectedDate, fetchAvailability]);
+  }, [court, selectedDate, selectedCourtId, fetchAvailability]);
 
   // Restore selected slots after availability loads - only if we're in restoration mode
   useEffect(() => {
@@ -833,19 +833,49 @@ export default function CourtDetail() {
               )}
             </div>
 
-            {/* Quick Info */}
+            {/* Quick Info with Court Selector */}
             <div className="px-4 lg:px-0">
               <div className="grid grid-cols-3 gap-3">
+                {/* Court Selector (replaces Max Players when multiple courts) */}
+                {hasMultipleCourts ? (
+                  <div className="bg-[hsl(var(--card))]/50 border border-border backdrop-blur-md rounded-xl p-4 flex flex-col justify-center">
+                    <label className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest mb-1">
+                      Select Court
+                    </label>
+                    <select 
+                      value={selectedCourtId || ""}
+                      onChange={(e) => {
+                        setSelectedCourtId(e.target.value);
+                        // Reset slots when court changes
+                        setSelectedSlots([]);
+                      }}
+                      className="bg-transparent text-[#00f2ea] font-bold outline-none cursor-pointer appearance-none text-sm"
+                    >
+                      {venueCourts.map((c) => (
+                        <option key={c.id} value={c.id} className="bg-background text-foreground">
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="bg-card rounded-xl p-4 border border-border text-center">
+                    <Users className="h-5 w-5 mx-auto mb-2 text-primary" />
+                    <div className="font-semibold">{court.capacity}</div>
+                    <div className="text-xs text-muted-foreground">max players</div>
+                  </div>
+                )}
+                
+                {/* Price - Dynamic based on selected court */}
                 <div className="bg-card rounded-xl p-4 border border-border text-center">
                   <DollarSign className="h-5 w-5 mx-auto mb-2 text-primary" />
-                  <div className="font-semibold">${court.hourly_rate}</div>
+                  <div className="font-semibold">
+                    ${getSelectedCourt()?.hourly_rate || court.hourly_rate}
+                  </div>
                   <div className="text-xs text-muted-foreground">per hour</div>
                 </div>
-                <div className="bg-card rounded-xl p-4 border border-border text-center">
-                  <Users className="h-5 w-5 mx-auto mb-2 text-primary" />
-                  <div className="font-semibold">{court.capacity}</div>
-                  <div className="text-xs text-muted-foreground">max players</div>
-                </div>
+                
+                {/* Surface */}
                 <div className="bg-card rounded-xl p-4 border border-border text-center">
                   <div className="h-5 w-5 mx-auto mb-2 text-primary flex items-center justify-center text-lg">
                     {court.is_indoor ? "🏢" : "🌳"}
@@ -951,24 +981,7 @@ export default function CourtDetail() {
                       </div>
                     )}
                     
-                    {/* Court selector if multiple courts */}
-                    {hasMultipleCourts && (
-                      <div className="bg-card rounded-lg border border-border p-4">
-                        <label className="text-sm font-medium mb-2 block">Select Court</label>
-                        <Select value={selectedCourtId || ""} onValueChange={setSelectedCourtId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Choose a court" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {venueCourts.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.name} - ${c.hourly_rate}/hr
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+                    {/* Note: Court selector is now in Quick Info bar above */}
                     
                     {/* Instruction */}
                     <p className="text-sm text-muted-foreground">

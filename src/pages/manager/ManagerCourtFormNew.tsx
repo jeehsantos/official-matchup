@@ -364,35 +364,50 @@ export default function ManagerCourtFormNew() {
           </div>
         </div>
 
-        {/* Multi-Court Info - Show when editing and venue has multiple courts */}
+        {/* Court Carousel - Show when editing and venue has multiple courts */}
         {isEditing && venueCourts.length > 1 && (
-          <Card className="bg-primary/5 border-primary/20">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-primary" />
-                Multi-Court Venue
-              </CardTitle>
-              <CardDescription>
-                This venue has {venueCourts.length} courts. Players can see all available courts when booking.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {venueCourts.map((court) => (
-                  <Link key={court.id} to={`/manager/courts/${court.id}/edit`}>
-                    <Badge 
-                      variant={court.id === id ? "default" : "outline"}
-                      className="cursor-pointer hover:bg-primary/10"
-                    >
-                      {court.name} - ${court.hourly_rate}/hr
-                      {!court.is_active && " (inactive)"}
-                      {court.is_multi_court && " 🏟️"}
-                    </Badge>
-                  </Link>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <div className="overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0">
+            <div className="flex gap-3 min-w-min">
+              {venueCourts.map((court) => (
+                <Link 
+                  key={court.id} 
+                  to={`/manager/courts/${court.id}/edit`}
+                  className={`min-w-[160px] p-4 rounded-xl border-2 transition-all duration-300 text-left flex-shrink-0 ${
+                    court.id === id 
+                      ? 'border-[#00f2ea] bg-[#00f2ea]/5 shadow-[0_0_15px_rgba(0,242,234,0.15)]' 
+                      : 'border-border bg-card hover:border-muted-foreground/50'
+                  }`}
+                >
+                  {court.id === id && (
+                    <span className="text-[#00f2ea] text-[10px] font-bold uppercase tracking-widest">
+                      Editing
+                    </span>
+                  )}
+                  <h3 className="text-base font-semibold mt-0.5">{court.name}</h3>
+                  <p className="text-muted-foreground text-sm mt-1">
+                    ${court.hourly_rate}/hour
+                  </p>
+                  <div className="flex gap-1 mt-2">
+                    {!court.is_active && (
+                      <Badge variant="outline" className="text-[10px]">Inactive</Badge>
+                    )}
+                    {court.is_multi_court && (
+                      <Badge variant="secondary" className="text-[10px]">🏟️ Multi</Badge>
+                    )}
+                  </div>
+                </Link>
+              ))}
+              
+              {/* Add New Court Button */}
+              <Link 
+                to="/manager/courts/new"
+                className="min-w-[140px] p-4 rounded-xl border-2 border-dashed border-muted-foreground/30 hover:border-[#00f2ea] flex flex-col items-center justify-center text-muted-foreground hover:text-[#00f2ea] transition-all flex-shrink-0"
+              >
+                <span className="text-2xl">+</span>
+                <span className="text-xs font-medium mt-1">Add Court</span>
+              </Link>
+            </div>
+          </div>
         )}
 
         {/* Form */}
