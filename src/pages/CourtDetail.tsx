@@ -10,7 +10,6 @@ import {
   ArrowLeft,
   MapPin, 
   Clock,
-  Users,
   DollarSign,
   CheckCircle2,
   Loader2,
@@ -729,7 +728,6 @@ export default function CourtDetail() {
   const equipmentTotal = getEquipmentTotal();
   const totalPrice = courtPrice + equipmentTotal;
   const venueCourts = availabilityData?.venue_courts || [];
-  const hasMultipleCourts = venueCourts.length > 1;
 
   return (
     <Layout>
@@ -756,7 +754,7 @@ export default function CourtDetail() {
                 <Badge variant="outline" className="shrink-0">
                   {court.is_indoor ? "Indoor" : "Outdoor"}
                 </Badge>
-                {hasMultipleCourts && (
+                {venueCourts.length > 1 && (
                   <Badge variant="secondary" className="shrink-0">
                     {venueCourts.length} courts available
                   </Badge>
@@ -836,12 +834,12 @@ export default function CourtDetail() {
             {/* Quick Info with Court Selector */}
             <div className="px-4 lg:px-0">
               <div className="grid grid-cols-3 gap-3">
-                {/* Court Selector (replaces Max Players when multiple courts) */}
-                {hasMultipleCourts ? (
-                  <div className="bg-[hsl(var(--card))]/50 border border-border backdrop-blur-md rounded-xl p-4 flex flex-col justify-center">
-                    <label className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest mb-1">
-                      Select Court
-                    </label>
+                {/* Court Selector - Always show as first item with Glassmorphism style */}
+                <div className="bg-[#111a27]/50 border border-gray-800 backdrop-blur-md rounded-xl p-4 flex flex-col justify-center">
+                  <label className="text-[10px] uppercase text-gray-500 font-bold tracking-widest mb-1">
+                    Select Court
+                  </label>
+                  {venueCourts.length > 0 ? (
                     <select 
                       value={selectedCourtId || ""}
                       onChange={(e) => {
@@ -852,19 +850,15 @@ export default function CourtDetail() {
                       className="bg-transparent text-[#00f2ea] font-bold outline-none cursor-pointer appearance-none text-sm"
                     >
                       {venueCourts.map((c) => (
-                        <option key={c.id} value={c.id} className="bg-background text-foreground">
+                        <option key={c.id} value={c.id} className="bg-[#0a0f18] text-white">
                           {c.name}
                         </option>
                       ))}
                     </select>
-                  </div>
-                ) : (
-                  <div className="bg-card rounded-xl p-4 border border-border text-center">
-                    <Users className="h-5 w-5 mx-auto mb-2 text-primary" />
-                    <div className="font-semibold">{court.capacity}</div>
-                    <div className="text-xs text-muted-foreground">max players</div>
-                  </div>
-                )}
+                  ) : (
+                    <span className="text-[#00f2ea] font-bold text-sm">{court.name}</span>
+                  )}
+                </div>
                 
                 {/* Price - Dynamic based on selected court */}
                 <div className="bg-card rounded-xl p-4 border border-border text-center">
@@ -1011,7 +1005,7 @@ export default function CourtDetail() {
                           >
                             <div className="text-center">
                               <span className="text-sm font-medium">{slotTime}</span>
-                              {hasMultipleCourts && !selectedCourtId && (
+                              {venueCourts.length > 1 && !selectedCourtId && (
                                 <span className="block text-[10px] text-muted-foreground">
                                   {availableCourts.length} court{availableCourts.length !== 1 ? 's' : ''}
                                 </span>
