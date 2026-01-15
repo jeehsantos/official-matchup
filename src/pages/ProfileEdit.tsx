@@ -104,7 +104,7 @@ export default function ProfileEdit() {
             full_name: profileData.full_name,
             phone: profileData.phone,
             city: profileData.city,
-            preferred_sports: profileData.preferred_sports as any,
+            preferred_sports: profileData.preferred_sports,
           })
           .eq("user_id", user.id);
 
@@ -118,7 +118,7 @@ export default function ProfileEdit() {
             full_name: profileData.full_name,
             phone: profileData.phone,
             city: profileData.city,
-            preferred_sports: profileData.preferred_sports as any,
+            preferred_sports: profileData.preferred_sports,
           });
 
         if (error) throw error;
