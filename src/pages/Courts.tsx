@@ -85,7 +85,8 @@ export default function Courts() {
           *,
           venues (*)
         `)
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .is("parent_court_id", null); // Only show parent courts (hide sub-courts)
 
       if (error) throw error;
 

@@ -59,6 +59,9 @@ interface AvailableCourt {
   id: string;
   name: string;
   hourly_rate: number;
+  ground_type: string | null;
+  rules: string | null;
+  photo_urls: string[] | null;
 }
 
 interface AvailableSlot {
@@ -874,12 +877,14 @@ export default function CourtDetail() {
                   <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest">per hour</div>
                 </div>
                 
-                {/* Surface */}
+                {/* Surface - Dynamic based on selected court */}
                 <div className="bg-[#111a27]/60 backdrop-blur-2xl border border-[#00f2ea]/20 rounded-2xl p-4 text-center transition-all hover:border-[#00f2ea]/50">
                   <div className="h-5 w-5 mx-auto mb-2 text-[#00f2ea] flex items-center justify-center text-lg">
                     {court.is_indoor ? "🏢" : "🌳"}
                   </div>
-                  <div className="font-extrabold text-lg text-white capitalize">{court.ground_type || "turf"}</div>
+                  <div className="font-extrabold text-lg text-white capitalize">
+                    {getSelectedCourt()?.ground_type || court.ground_type || "turf"}
+                  </div>
                   <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest">surface</div>
                 </div>
               </div>
@@ -897,15 +902,15 @@ export default function CourtDetail() {
               </div>
             )}
 
-            {/* Court Rules */}
-            {(court as any).rules && (
+            {/* Court Rules - Dynamic based on selected court */}
+            {(getSelectedCourt()?.rules || (court as any).rules) && (
               <div className="px-4 lg:px-0">
                 <h3 className="font-semibold mb-3 flex items-center gap-2">
                   <FileText className="h-5 w-5 text-primary" />
                   Court Rules & Guidelines
                 </h3>
                 <div className="bg-muted/50 rounded-xl p-4 text-sm text-muted-foreground whitespace-pre-wrap border border-border">
-                  {(court as any).rules}
+                  {getSelectedCourt()?.rules || (court as any).rules}
                 </div>
               </div>
             )}

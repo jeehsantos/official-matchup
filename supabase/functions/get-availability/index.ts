@@ -41,6 +41,10 @@ interface Court {
   is_active: boolean;
   is_multi_court: boolean;
   parent_court_id: string | null;
+  ground_type: string | null;
+  rules: string | null;
+  photo_urls: string[] | null;
+  photo_url: string | null;
 }
 
 interface Venue {
@@ -53,6 +57,9 @@ interface AvailableCourt {
   id: string;
   name: string;
   hourly_rate: number;
+  ground_type: string | null;
+  rules: string | null;
+  photo_urls: string[] | null;
 }
 
 interface AvailableSlot {
@@ -219,10 +226,10 @@ serve(async (req) => {
       );
     }
 
-    // Fetch ALL active courts for this venue
+    // Fetch ALL active courts for this venue with full details
     const { data: venueCourts, error: courtsError } = await supabase
       .from("courts")
-      .select("id, name, hourly_rate, is_active, is_multi_court, parent_court_id")
+      .select("id, name, hourly_rate, is_active, is_multi_court, parent_court_id, ground_type, rules, photo_urls, photo_url")
       .eq("venue_id", venueId)
       .eq("is_active", true)
       .order("name", { ascending: true });
@@ -271,7 +278,14 @@ serve(async (req) => {
           available: false,
           reason: "no_courts",
           slots: [],
-          venue_courts: courtsForDropdown.map(c => ({ id: c.id, name: c.name, hourly_rate: c.hourly_rate })),
+          venue_courts: courtsForDropdown.map(c => ({ 
+            id: c.id, 
+            name: c.name, 
+            hourly_rate: c.hourly_rate,
+            ground_type: c.ground_type,
+            rules: c.rules,
+            photo_urls: c.photo_urls || (c.photo_url ? [c.photo_url] : []),
+          })),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -308,7 +322,14 @@ serve(async (req) => {
           available: false,
           reason: "closed",
           slots: [],
-          venue_courts: courtsForDropdown.map(c => ({ id: c.id, name: c.name, hourly_rate: c.hourly_rate })),
+          venue_courts: courtsForDropdown.map(c => ({ 
+            id: c.id, 
+            name: c.name, 
+            hourly_rate: c.hourly_rate,
+            ground_type: c.ground_type,
+            rules: c.rules,
+            photo_urls: c.photo_urls || (c.photo_url ? [c.photo_url] : []),
+          })),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -366,6 +387,9 @@ serve(async (req) => {
               id: court.id,
               name: court.name,
               hourly_rate: court.hourly_rate,
+              ground_type: court.ground_type,
+              rules: court.rules,
+              photo_urls: court.photo_urls || (court.photo_url ? [court.photo_url] : []),
             });
           }
         }
@@ -410,7 +434,14 @@ serve(async (req) => {
         slot_interval_minutes: venue.slot_interval_minutes,
         max_booking_minutes: venue.max_booking_minutes,
         slots,
-        venue_courts: courtsForDropdown.map(c => ({ id: c.id, name: c.name, hourly_rate: c.hourly_rate })),
+        venue_courts: courtsForDropdown.map(c => ({ 
+          id: c.id, 
+          name: c.name, 
+          hourly_rate: c.hourly_rate,
+          ground_type: c.ground_type,
+          rules: c.rules,
+          photo_urls: c.photo_urls || (c.photo_url ? [c.photo_url] : []),
+        })),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
