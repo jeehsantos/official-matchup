@@ -834,48 +834,53 @@ export default function CourtDetail() {
             {/* Quick Info with Court Selector */}
             <div className="px-4 lg:px-0">
               <div className="grid grid-cols-3 gap-3">
-                {/* Court Selector - Always show as first item with Glassmorphism style */}
-                <div className="bg-[#111a27]/50 border border-gray-800 backdrop-blur-md rounded-xl p-4 flex flex-col justify-center">
-                  <label className="text-[10px] uppercase text-gray-500 font-bold tracking-widest mb-1">
+                {/* Court Selector - Glassmorphism styled dropdown */}
+                <div className="relative group bg-[#111a27]/60 backdrop-blur-2xl border border-[#00f2ea]/20 p-4 rounded-2xl shadow-2xl transition-all hover:border-[#00f2ea]/50">
+                  <label className="block text-[10px] uppercase text-gray-400 font-bold tracking-widest mb-1 opacity-70">
                     Select Court
                   </label>
-                  {venueCourts.length > 0 ? (
-                    <select 
-                      value={selectedCourtId || ""}
-                      onChange={(e) => {
-                        setSelectedCourtId(e.target.value);
-                        // Reset slots when court changes
-                        setSelectedSlots([]);
-                      }}
-                      className="bg-transparent text-[#00f2ea] font-bold outline-none cursor-pointer appearance-none text-sm"
-                    >
-                      {venueCourts.map((c) => (
-                        <option key={c.id} value={c.id} className="bg-[#0a0f18] text-white">
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="text-[#00f2ea] font-bold text-sm">{court.name}</span>
-                  )}
+                  <div className="flex items-center justify-between">
+                    {venueCourts.length > 0 ? (
+                      <>
+                        <select 
+                          value={selectedCourtId || ""}
+                          onChange={(e) => {
+                            setSelectedCourtId(e.target.value);
+                            // Reset slots when court changes
+                            setSelectedSlots([]);
+                          }}
+                          className="bg-transparent text-[#00f2ea] font-extrabold text-lg outline-none cursor-pointer w-full appearance-none pr-6"
+                        >
+                          {venueCourts.map((c) => (
+                            <option key={c.id} value={c.id} className="bg-[#0a0f18] text-white">
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#00f2ea] text-sm">▼</div>
+                      </>
+                    ) : (
+                      <span className="text-[#00f2ea] font-extrabold text-lg">{court.name}</span>
+                    )}
+                  </div>
                 </div>
                 
                 {/* Price - Dynamic based on selected court */}
-                <div className="bg-card rounded-xl p-4 border border-border text-center">
-                  <DollarSign className="h-5 w-5 mx-auto mb-2 text-primary" />
-                  <div className="font-semibold">
+                <div className="bg-[#111a27]/60 backdrop-blur-2xl border border-[#00f2ea]/20 rounded-2xl p-4 text-center transition-all hover:border-[#00f2ea]/50">
+                  <DollarSign className="h-5 w-5 mx-auto mb-2 text-[#00f2ea]" />
+                  <div className="font-extrabold text-lg text-white">
                     ${getSelectedCourt()?.hourly_rate || court.hourly_rate}
                   </div>
-                  <div className="text-xs text-muted-foreground">per hour</div>
+                  <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest">per hour</div>
                 </div>
                 
                 {/* Surface */}
-                <div className="bg-card rounded-xl p-4 border border-border text-center">
-                  <div className="h-5 w-5 mx-auto mb-2 text-primary flex items-center justify-center text-lg">
+                <div className="bg-[#111a27]/60 backdrop-blur-2xl border border-[#00f2ea]/20 rounded-2xl p-4 text-center transition-all hover:border-[#00f2ea]/50">
+                  <div className="h-5 w-5 mx-auto mb-2 text-[#00f2ea] flex items-center justify-center text-lg">
                     {court.is_indoor ? "🏢" : "🌳"}
                   </div>
-                  <div className="font-semibold capitalize">{court.ground_type || "turf"}</div>
-                  <div className="text-xs text-muted-foreground">surface</div>
+                  <div className="font-extrabold text-lg text-white capitalize">{court.ground_type || "turf"}</div>
+                  <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest">surface</div>
                 </div>
               </div>
             </div>

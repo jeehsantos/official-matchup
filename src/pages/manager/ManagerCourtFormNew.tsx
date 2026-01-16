@@ -364,7 +364,7 @@ export default function ManagerCourtFormNew() {
           </div>
         </div>
 
-        {/* Court Carousel - Show when editing and venue has courts (or always for navigation) */}
+        {/* Court Carousel - Show when editing and venue has courts */}
         {isEditing && existingVenueId && (
           <div className="overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0">
             <div className="flex gap-3 min-w-min">
@@ -372,10 +372,10 @@ export default function ManagerCourtFormNew() {
                 <Link 
                   key={court.id} 
                   to={`/manager/courts/${court.id}/edit`}
-                  className={`min-w-[160px] p-4 rounded-xl border-2 transition-all duration-300 text-left flex-shrink-0 ${
+                  className={`min-w-[160px] p-4 rounded-2xl border-2 transition-all duration-300 text-left flex-shrink-0 backdrop-blur-xl ${
                     court.id === id 
-                      ? 'border-[#00f2ea] bg-[#00f2ea]/5 shadow-[0_0_15px_rgba(0,242,234,0.15)]' 
-                      : 'border-border bg-card hover:border-muted-foreground/50'
+                      ? 'border-[#00f2ea] bg-[#00f2ea]/10 shadow-[0_0_25px_rgba(0,242,234,0.25)]' 
+                      : 'border-[#00f2ea]/10 bg-[#111a27]/60 hover:border-[#00f2ea]/40'
                   }`}
                 >
                   {court.id === id && (
@@ -383,7 +383,9 @@ export default function ManagerCourtFormNew() {
                       Editing
                     </span>
                   )}
-                  <h3 className="text-base font-semibold mt-0.5">{court.name}</h3>
+                  <h3 className={`text-base font-semibold mt-0.5 ${court.id === id ? 'text-[#00f2ea]' : ''}`}>
+                    {court.name}
+                  </h3>
                   <p className="text-muted-foreground text-sm mt-1">
                     ${court.hourly_rate}/hour
                   </p>
@@ -392,20 +394,59 @@ export default function ManagerCourtFormNew() {
                       <Badge variant="outline" className="text-[10px]">Inactive</Badge>
                     )}
                     {court.is_multi_court && (
-                      <Badge variant="secondary" className="text-[10px]">🏟️ Multi</Badge>
+                      <Badge variant="secondary" className="text-[10px]">🏟️ Parent</Badge>
+                    )}
+                    {court.parent_court_id && (
+                      <Badge variant="outline" className="text-[10px] border-[#00f2ea]/30 text-[#00f2ea]">Sub</Badge>
                     )}
                   </div>
                 </Link>
               ))}
               
-              {/* Add New Court Button */}
-              <Link 
-                to="/manager/courts/new"
-                className="min-w-[140px] p-4 rounded-xl border-2 border-dashed border-muted-foreground/30 hover:border-[#00f2ea] flex flex-col items-center justify-center text-muted-foreground hover:text-[#00f2ea] transition-all flex-shrink-0"
+              {/* Add Sub-Court Button - Links to parent if current court is multi-court */}
+              <button 
+                type="button"
+                onClick={async () => {
+                  if (!existingVenueId || !user) return;
+                  
+                  // Determine parent court ID
+                  const currentCourt = venueCourts.find(c => c.id === id);
+                  const parentId = currentCourt?.is_multi_court ? id : (currentCourt?.parent_court_id || null);
+                  
+                  try {
+                    const { data: newCourt, error } = await supabase
+                      .from("courts")
+                      .insert([{
+                        venue_id: existingVenueId,
+                        name: `Sub-Court ${venueCourts.length + 1}`,
+                        sport_type: "futsal" as any,
+                        ground_type: surfaceTypesData.length > 0 ? surfaceTypesData[0].name as any : "turf" as any,
+                        hourly_rate: currentCourt?.hourly_rate || 50,
+                        is_indoor: true,
+                        is_active: true,
+                        is_multi_court: false,
+                        parent_court_id: parentId,
+                      } as any])
+                      .select()
+                      .single();
+                    
+                    if (error) throw error;
+                    
+                    toast({ title: "Sub-court created", description: "Redirecting to edit..." });
+                    navigate(`/manager/courts/${newCourt.id}/edit`);
+                  } catch (err: any) {
+                    toast({ 
+                      title: "Error creating sub-court", 
+                      description: err.message,
+                      variant: "destructive" 
+                    });
+                  }
+                }}
+                className="min-w-[140px] p-4 rounded-2xl border-2 border-dashed border-[#00f2ea]/30 hover:border-[#00f2ea] hover:bg-[#00f2ea]/5 flex flex-col items-center justify-center text-muted-foreground hover:text-[#00f2ea] transition-all flex-shrink-0 backdrop-blur-xl"
               >
-                <span className="text-2xl">+</span>
-                <span className="text-xs font-medium mt-1">Add Court</span>
-              </Link>
+                <span className="text-3xl font-light">+</span>
+                <span className="text-xs font-bold mt-1">Add Sub-Court</span>
+              </button>
             </div>
           </div>
         )}

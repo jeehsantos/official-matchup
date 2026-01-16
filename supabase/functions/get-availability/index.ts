@@ -39,6 +39,8 @@ interface Court {
   name: string;
   hourly_rate: number;
   is_active: boolean;
+  is_multi_court: boolean;
+  parent_court_id: string | null;
 }
 
 interface Venue {
@@ -220,19 +222,48 @@ serve(async (req) => {
     // Fetch ALL active courts for this venue
     const { data: venueCourts, error: courtsError } = await supabase
       .from("courts")
-      .select("id, name, hourly_rate, is_active")
+      .select("id, name, hourly_rate, is_active, is_multi_court, parent_court_id")
       .eq("venue_id", venueId)
       .eq("is_active", true)
       .order("name", { ascending: true });
 
     if (courtsError) throw courtsError;
 
-    const courts: Court[] = venueCourts || [];
+    const allCourts: Court[] = venueCourts || [];
     
-    // If a specific court is requested, filter to just that one for backward compatibility
-    const courtsToProcess = courtId 
-      ? courts.filter(c => c.id === courtId)
-      : courts;
+    // Determine which courts to show in the dropdown and process
+    let courtsToProcess: Court[] = [];
+    let courtsForDropdown: Court[] = [];
+    
+    if (courtId) {
+      // Find the requested court
+      const requestedCourt = allCourts.find(c => c.id === courtId);
+      
+      if (requestedCourt) {
+        if (requestedCourt.is_multi_court) {
+          // This is a parent court - show the parent plus all children linked to it
+          courtsForDropdown = [requestedCourt, ...allCourts.filter(c => c.parent_court_id === courtId)];
+        } else if (requestedCourt.parent_court_id) {
+          // This is a child court - show the parent plus all siblings
+          const parentCourt = allCourts.find(c => c.id === requestedCourt.parent_court_id);
+          if (parentCourt) {
+            courtsForDropdown = [parentCourt, ...allCourts.filter(c => c.parent_court_id === parentCourt.id)];
+          } else {
+            courtsForDropdown = [requestedCourt];
+          }
+        } else {
+          // Standalone court - just show this one
+          courtsForDropdown = [requestedCourt];
+        }
+        
+        // Process all courts in the dropdown for availability
+        courtsToProcess = courtsForDropdown;
+      }
+    } else {
+      // No specific court requested - show all courts
+      courtsForDropdown = allCourts;
+      courtsToProcess = allCourts;
+    }
 
     if (courtsToProcess.length === 0) {
       return new Response(
@@ -240,7 +271,7 @@ serve(async (req) => {
           available: false,
           reason: "no_courts",
           slots: [],
-          venue_courts: courts.map(c => ({ id: c.id, name: c.name, hourly_rate: c.hourly_rate })),
+          venue_courts: courtsForDropdown.map(c => ({ id: c.id, name: c.name, hourly_rate: c.hourly_rate })),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -277,7 +308,7 @@ serve(async (req) => {
           available: false,
           reason: "closed",
           slots: [],
-          venue_courts: courts.map(c => ({ id: c.id, name: c.name, hourly_rate: c.hourly_rate })),
+          venue_courts: courtsForDropdown.map(c => ({ id: c.id, name: c.name, hourly_rate: c.hourly_rate })),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -379,7 +410,7 @@ serve(async (req) => {
         slot_interval_minutes: venue.slot_interval_minutes,
         max_booking_minutes: venue.max_booking_minutes,
         slots,
-        venue_courts: courts.map(c => ({ id: c.id, name: c.name, hourly_rate: c.hourly_rate })),
+        venue_courts: courtsForDropdown.map(c => ({ id: c.id, name: c.name, hourly_rate: c.hourly_rate })),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
