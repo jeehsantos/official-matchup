@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Select,
   SelectContent,
@@ -19,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Trash2, Building2, Plus, Link as LinkIcon, DollarSign } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Building2, Plus, Link as LinkIcon, DollarSign, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
@@ -63,6 +64,9 @@ interface VenueCourt {
   photo_urls: string[] | null;
   photo_url: string | null;
   rules: string | null;
+  is_indoor: boolean | null;
+  payment_timing: string | null;
+  payment_hours_before: number | null;
 }
 
 export default function ManagerCourtFormNew() {
@@ -79,9 +83,15 @@ export default function ManagerCourtFormNew() {
   const [existingVenueId, setExistingVenueId] = useState<string | null>(null);
   const [availableSuburbs, setAvailableSuburbs] = useState<string[]>([]);
   const [venueName, setVenueName] = useState<string>("");
+  const [venueData, setVenueData] = useState<any>(null);
   
-  // Multi-court tab state
+  // Multi-court state
   const [selectedTabCourtId, setSelectedTabCourtId] = useState<string | null>(null);
+  const [isAddingNewSubCourt, setIsAddingNewSubCourt] = useState(false);
+  const [multiCourtExpanded, setMultiCourtExpanded] = useState(true);
+  
+  // The ID of the parent court (for existing edits this is the URL id, for new sub-courts we track it)
+  const [parentCourtId, setParentCourtId] = useState<string | null>(null);
   
   // Fetch other courts at the same venue (for multi-court display)
   const { data: venueCourts = [], refetch: refetchCourts } = useQuery({
@@ -90,7 +100,7 @@ export default function ManagerCourtFormNew() {
       if (!existingVenueId) return [];
       const { data, error } = await supabase
         .from("courts")
-        .select("id, name, hourly_rate, is_active, is_multi_court, parent_court_id, ground_type, photo_urls, photo_url, rules")
+        .select("id, name, hourly_rate, is_active, is_multi_court, parent_court_id, ground_type, photo_urls, photo_url, rules, is_indoor, payment_timing, payment_hours_before")
         .eq("venue_id", existingVenueId)
         .order("name");
       if (error) throw error;
@@ -111,28 +121,46 @@ export default function ManagerCourtFormNew() {
     return Object.fromEntries(surfaceTypesData.map(s => [s.name, s.display_name]));
   }, [surfaceTypesData]);
 
-  // Get multi-court parent courts (courts that can be parents)
+  // Get the current court being edited (from URL id)
   const currentCourt = venueCourts.find(c => c.id === id);
-  const isMultiCourtParent = currentCourt?.is_multi_court || false;
   
-  // Get child courts linked to current court (only if this is a parent)
+  // Check if this court is a multi-court parent
+  const isCurrentCourtMultiParent = currentCourt?.is_multi_court || false;
+  
+  // Determine the effective parent ID for multi-court display
+  // If current court is a parent, use its ID. If it's a child, use its parent_court_id
+  const effectiveParentId = useMemo(() => {
+    if (!currentCourt) return id || null;
+    if (currentCourt.is_multi_court) return currentCourt.id;
+    if (currentCourt.parent_court_id) return currentCourt.parent_court_id;
+    return currentCourt.id;
+  }, [currentCourt, id]);
+  
+  // Get the parent court for display
+  const parentCourt = venueCourts.find(c => c.id === effectiveParentId);
+  
+  // Check if we should show multi-court config (if current is parent OR has parent)
+  const showMultiCourtConfig = isCurrentCourtMultiParent || (currentCourt?.parent_court_id != null);
+  
+  // Get child courts linked to parent
   const childCourts = useMemo(() => {
-    if (!id || !isMultiCourtParent) return [];
-    return venueCourts.filter(c => c.parent_court_id === id);
-  }, [venueCourts, id, isMultiCourtParent]);
+    if (!effectiveParentId) return [];
+    return venueCourts.filter(c => c.parent_court_id === effectiveParentId);
+  }, [venueCourts, effectiveParentId]);
 
   // All courts to show in tabs: parent + children
   const tabCourts = useMemo(() => {
-    if (!isMultiCourtParent) return [];
-    const parent = venueCourts.find(c => c.id === id);
+    if (!effectiveParentId) return [];
+    const parent = venueCourts.find(c => c.id === effectiveParentId);
     return parent ? [parent, ...childCourts] : [];
-  }, [venueCourts, id, isMultiCourtParent, childCourts]);
+  }, [venueCourts, effectiveParentId, childCourts]);
 
   // Get selected tab court details
   const selectedTabCourt = useMemo(() => {
+    if (isAddingNewSubCourt) return null;
     if (!selectedTabCourtId) return null;
     return venueCourts.find(c => c.id === selectedTabCourtId) || null;
-  }, [venueCourts, selectedTabCourtId]);
+  }, [venueCourts, selectedTabCourtId, isAddingNewSubCourt]);
 
   const {
     register,
@@ -179,18 +207,19 @@ export default function ManagerCourtFormNew() {
 
   useEffect(() => {
     if (isEditing && id) {
-      fetchCourt();
+      fetchCourt(id);
     }
   }, [id, isEditing]);
 
-  // When editing a multi-court parent, set the selected tab to the current court
+  // When editing, set the selected tab to the current court
   useEffect(() => {
-    if (isEditing && id && isMultiCourtParent) {
+    if (isEditing && id) {
       setSelectedTabCourtId(id);
+      setIsAddingNewSubCourt(false);
     }
-  }, [isEditing, id, isMultiCourtParent]);
+  }, [isEditing, id]);
 
-  const fetchCourt = async () => {
+  const fetchCourt = async (courtId: string) => {
     try {
       const { data, error } = await supabase
         .from("courts")
@@ -198,7 +227,7 @@ export default function ManagerCourtFormNew() {
           *,
           venue:venues(id, name, address, city, suburb, country, owner_id)
         `)
-        .eq("id", id)
+        .eq("id", courtId)
         .single();
 
       if (error) throw error;
@@ -211,6 +240,8 @@ export default function ManagerCourtFormNew() {
 
       setExistingVenueId(data.venue_id);
       setVenueName(data.venue?.name || "");
+      setVenueData(data.venue);
+      setParentCourtId(data.parent_court_id || data.id);
       
       reset({
         name: data.name,
@@ -238,16 +269,64 @@ export default function ManagerCourtFormNew() {
     }
   };
 
-  // Load selected tab court data into form
-  const loadCourtIntoForm = async (courtId: string) => {
-    if (courtId === id) {
-      // Just reload current court data
-      await fetchCourt();
-      return;
-    }
+  // Load selected tab court data into form (for editing existing sub-court)
+  const loadCourtDataIntoForm = async (court: VenueCourt) => {
+    setIsAddingNewSubCourt(false);
+    setSelectedTabCourtId(court.id);
     
-    // Navigate to the selected court's edit page
-    navigate(`/manager/courts/${courtId}/edit`);
+    // Update URL without full navigation to keep state
+    window.history.replaceState(null, '', `/manager/courts/${court.id}/edit`);
+    
+    // Load the court data into the form
+    reset({
+      name: court.name,
+      ground_type: court.ground_type || (surfaceTypesData.length > 0 ? surfaceTypesData[0].name : ""),
+      hourly_rate: Number(court.hourly_rate),
+      is_indoor: court.is_indoor ?? true,
+      is_active: court.is_active ?? true,
+      is_multi_court: court.is_multi_court ?? false,
+      parent_court_id: court.parent_court_id || null,
+      photo_urls: court.photo_urls || (court.photo_url ? [court.photo_url] : []),
+      description: "",
+      rules: court.rules || "",
+      address: venueData?.address || "",
+      city: venueData?.city || "",
+      suburb: venueData?.suburb || "",
+      country: venueData?.country || "New Zealand",
+      payment_timing: (court.payment_timing as any) || "at_booking",
+      payment_hours_before: court.payment_hours_before || 24,
+    });
+  };
+
+  // Start adding a new sub-court - clear form for new entry
+  const handleAddSubCourt = () => {
+    setIsAddingNewSubCourt(true);
+    setSelectedTabCourtId(null);
+    
+    // Clear form with defaults for new sub-court
+    reset({
+      name: `Sub-Court ${childCourts.length + 1}`,
+      ground_type: surfaceTypesData.length > 0 ? surfaceTypesData[0].name : "",
+      hourly_rate: parentCourt?.hourly_rate || 50,
+      is_indoor: true,
+      is_active: true,
+      is_multi_court: false,
+      parent_court_id: effectiveParentId,
+      photo_urls: [],
+      description: "",
+      rules: "",
+      address: venueData?.address || "",
+      city: venueData?.city || "",
+      suburb: venueData?.suburb || "",
+      country: venueData?.country || "New Zealand",
+      payment_timing: "at_booking",
+      payment_hours_before: 24,
+    });
+    
+    toast({ 
+      title: "Add New Sub-Court", 
+      description: "Fill in the details on the left and click Save to create the sub-court."
+    });
   };
 
   const onSubmit = async (data: CourtFormData) => {
@@ -255,6 +334,45 @@ export default function ManagerCourtFormNew() {
     
     setSubmitting(true);
     try {
+      // If adding new sub-court
+      if (isAddingNewSubCourt && existingVenueId && effectiveParentId) {
+        const { data: newCourt, error: courtError } = await supabase
+          .from("courts")
+          .insert([{
+            venue_id: existingVenueId,
+            name: data.name,
+            sport_type: "futsal" as any,
+            ground_type: data.ground_type as any,
+            hourly_rate: data.hourly_rate,
+            is_indoor: data.is_indoor,
+            is_active: data.is_active,
+            is_multi_court: false, // Sub-courts are never multi-court parents
+            parent_court_id: effectiveParentId,
+            photo_urls: data.photo_urls,
+            photo_url: data.photo_urls[0] || null,
+            payment_timing: data.payment_timing as any,
+            payment_hours_before: data.payment_hours_before,
+            rules: data.rules || null,
+          } as any])
+          .select()
+          .single();
+
+        if (courtError) throw courtError;
+        
+        // Refresh courts list
+        await refetchCourts();
+        
+        // Switch to viewing the new court
+        setIsAddingNewSubCourt(false);
+        setSelectedTabCourtId(newCourt.id);
+        
+        // Update URL to the new court
+        window.history.replaceState(null, '', `/manager/courts/${newCourt.id}/edit`);
+        
+        toast({ title: "Sub-court created successfully" });
+        return;
+      }
+      
       if (isEditing && existingVenueId) {
         // Update existing court and venue
         const { error: venueError } = await supabase
@@ -269,6 +387,8 @@ export default function ManagerCourtFormNew() {
 
         if (venueError) throw venueError;
 
+        const courtId = selectedTabCourtId || id;
+        
         const { error: courtError } = await supabase
           .from("courts")
           .update({
@@ -278,14 +398,14 @@ export default function ManagerCourtFormNew() {
             is_indoor: data.is_indoor,
             is_active: data.is_active,
             is_multi_court: data.is_multi_court,
-            parent_court_id: data.is_multi_court ? null : null, // Parents don't have parent_court_id
+            parent_court_id: data.parent_court_id || null,
             photo_urls: data.photo_urls,
-            photo_url: data.photo_urls[0] || null, // Keep backward compatibility
+            photo_url: data.photo_urls[0] || null,
             payment_timing: data.payment_timing as any,
             payment_hours_before: data.payment_hours_before,
             rules: data.rules || null,
           } as any)
-          .eq("id", id);
+          .eq("id", courtId);
 
         if (courtError) throw courtError;
         
@@ -295,7 +415,7 @@ export default function ManagerCourtFormNew() {
         toast({ title: "Court updated successfully" });
       } else {
         // Create new venue and court
-        const { data: venueData, error: venueError } = await supabase
+        const { data: newVenueData, error: venueError } = await supabase
           .from("venues")
           .insert([{
             owner_id: user.id,
@@ -314,9 +434,9 @@ export default function ManagerCourtFormNew() {
         const { error: courtError } = await supabase
           .from("courts")
           .insert([{
-            venue_id: venueData.id,
+            venue_id: newVenueData.id,
             name: data.name,
-            sport_type: "futsal" as any, // Default sport type since we're using ground_type now
+            sport_type: "futsal" as any,
             ground_type: data.ground_type as any,
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
@@ -324,7 +444,7 @@ export default function ManagerCourtFormNew() {
             is_multi_court: data.is_multi_court,
             parent_court_id: null,
             photo_urls: data.photo_urls,
-            photo_url: data.photo_urls[0] || null, // Keep backward compatibility
+            photo_url: data.photo_urls[0] || null,
             payment_timing: data.payment_timing as any,
             payment_hours_before: data.payment_hours_before,
             rules: data.rules || null,
@@ -332,9 +452,8 @@ export default function ManagerCourtFormNew() {
 
         if (courtError) throw courtError;
         toast({ title: "Court created successfully" });
+        navigate("/manager/courts");
       }
-      
-      navigate("/manager/courts");
     } catch (error: any) {
       toast({
         title: "Error",
@@ -346,41 +465,8 @@ export default function ManagerCourtFormNew() {
     }
   };
 
-  const handleAddSubCourt = async () => {
-    if (!existingVenueId || !user || !id) return;
-    
-    try {
-      const { data: newCourt, error } = await supabase
-        .from("courts")
-        .insert([{
-          venue_id: existingVenueId,
-          name: `Sub-Court ${childCourts.length + 1}`,
-          sport_type: "futsal" as any,
-          ground_type: surfaceTypesData.length > 0 ? surfaceTypesData[0].name as any : "turf" as any,
-          hourly_rate: currentCourt?.hourly_rate || 50,
-          is_indoor: true,
-          is_active: true,
-          is_multi_court: false,
-          parent_court_id: id, // Link to current parent
-        } as any])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      await refetchCourts();
-      toast({ title: "Sub-court created", description: "Click on the tab to edit it." });
-      setSelectedTabCourtId(newCourt.id);
-    } catch (err: any) {
-      toast({ 
-        title: "Error creating sub-court", 
-        description: err.message,
-        variant: "destructive" 
-      });
-    }
-  };
-
   const handleDelete = async () => {
+    const courtIdToDelete = selectedTabCourtId || id;
     if (!confirm("Are you sure you want to delete this court?")) {
       return;
     }
@@ -391,9 +477,21 @@ export default function ManagerCourtFormNew() {
       const { error: courtError } = await supabase
         .from("courts")
         .delete()
-        .eq("id", id);
+        .eq("id", courtIdToDelete);
 
       if (courtError) throw courtError;
+
+      // If we deleted a sub-court, stay on the page and switch to parent
+      if (selectedTabCourtId && selectedTabCourtId !== id) {
+        await refetchCourts();
+        setSelectedTabCourtId(id);
+        const parent = venueCourts.find(c => c.id === id);
+        if (parent) {
+          loadCourtDataIntoForm(parent);
+        }
+        toast({ title: "Sub-court deleted successfully" });
+        return;
+      }
 
       // Then delete the venue if it has no other courts
       if (existingVenueId) {
@@ -433,6 +531,196 @@ export default function ManagerCourtFormNew() {
     );
   }
 
+  // Multi-Court Configuration Component
+  const MultiCourtConfiguration = () => (
+    <Card className="bg-[#111a27]/60 border-[#00f2ea]/10">
+      <Collapsible open={multiCourtExpanded} onOpenChange={setMultiCourtExpanded}>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer hover:bg-[#00f2ea]/5 transition-colors">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <LinkIcon className="h-5 w-5 text-[#00f2ea]" />
+                Multi-Court Configuration
+              </CardTitle>
+              {multiCourtExpanded ? (
+                <ChevronUp className="h-5 w-5 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-5 w-5 text-muted-foreground" />
+              )}
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="space-y-4">
+            {/* Is Multi-Court Toggle - Only show for parent courts or when no parent exists */}
+            {(!currentCourt?.parent_court_id) && (
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="is_multi_court">Is Multi-Court Parent</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Enable to add sub-courts to this venue
+                  </p>
+                </div>
+                <Switch
+                  id="is_multi_court"
+                  checked={isMultiCourt}
+                  onCheckedChange={(checked) => {
+                    setValue("is_multi_court", checked);
+                  }}
+                  className="data-[state=checked]:bg-[#00f2ea]"
+                />
+              </div>
+            )}
+
+            {/* Show parent court info if current is a sub-court */}
+            {currentCourt?.parent_court_id && parentCourt && (
+              <div className="p-3 rounded-lg bg-[#00f2ea]/5 border border-[#00f2ea]/20">
+                <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Parent Court</p>
+                <p className="text-[#00f2ea] font-bold">{parentCourt.name}</p>
+              </div>
+            )}
+
+            {/* Tabs for courts - Show when Multi-Court is enabled OR when viewing multi-court family */}
+            {(isMultiCourt || showMultiCourtConfig) && (
+              <div className="space-y-4 pt-4 border-t border-[#00f2ea]/10">
+                {/* Court Tabs */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {tabCourts.map((court, index) => (
+                    <button
+                      key={court.id}
+                      type="button"
+                      onClick={() => loadCourtDataIntoForm(court)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        !isAddingNewSubCourt && selectedTabCourtId === court.id
+                          ? 'bg-[#00f2ea]/20 text-[#00f2ea] border border-[#00f2ea] shadow-[0_0_10px_rgba(0,242,234,0.3)]'
+                          : 'bg-[#0a0f18] text-gray-400 hover:text-white border border-transparent'
+                      }`}
+                    >
+                      {index === 0 ? 'Main Court' : court.name}
+                    </button>
+                  ))}
+                  
+                  {/* New Sub-Court Tab (when adding) */}
+                  {isAddingNewSubCourt && (
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-[#00f2ea]/20 text-[#00f2ea] border border-[#00f2ea] shadow-[0_0_10px_rgba(0,242,234,0.3)]"
+                    >
+                      New Sub-Court
+                    </button>
+                  )}
+                  
+                  {/* Add Sub-Court Button - Only for parent courts */}
+                  {(isMultiCourt || currentCourt?.is_multi_court) && !isAddingNewSubCourt && (
+                    <Button
+                      type="button"
+                      onClick={handleAddSubCourt}
+                      variant="outline"
+                      size="sm"
+                      className="border-[#00f2ea] text-[#00f2ea] hover:bg-[#00f2ea]/10 gap-1"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Sub-Court
+                    </Button>
+                  )}
+                </div>
+
+                {/* Selected Court Preview - for existing sub-courts */}
+                {selectedTabCourt && !isAddingNewSubCourt && selectedTabCourtId !== effectiveParentId && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Court Photo Preview */}
+                    <div className="rounded-xl overflow-hidden aspect-video bg-[#0a0f18]">
+                      {(selectedTabCourt.photo_urls?.[0] || selectedTabCourt.photo_url) ? (
+                        <img 
+                          src={selectedTabCourt.photo_urls?.[0] || selectedTabCourt.photo_url || ""} 
+                          alt={selectedTabCourt.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-600">
+                          <Building2 className="h-12 w-12" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Court Details */}
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Sub-Court Name</p>
+                        <p className="text-[#00f2ea] font-bold text-lg">
+                          {selectedTabCourt.name}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Surface Type</p>
+                        <p className="text-white">
+                          {groundTypeLabels[selectedTabCourt.ground_type || ""] || selectedTabCourt.ground_type || "Unknown"}
+                        </p>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Hourly Rate</p>
+                        <p className="text-white font-bold">
+                          ${selectedTabCourt.hourly_rate} NZD
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Main Court Preview - when parent is selected */}
+                {selectedTabCourtId === effectiveParentId && parentCourt && !isAddingNewSubCourt && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="rounded-xl overflow-hidden aspect-video bg-[#0a0f18]">
+                      {(parentCourt.photo_urls?.[0] || parentCourt.photo_url) ? (
+                        <img 
+                          src={parentCourt.photo_urls?.[0] || parentCourt.photo_url || ""} 
+                          alt={parentCourt.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-600">
+                          <Building2 className="h-12 w-12" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Main Court</p>
+                        <p className="text-[#00f2ea] font-bold text-lg">{parentCourt.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Surface Type</p>
+                        <p className="text-white">
+                          {groundTypeLabels[parentCourt.ground_type || ""] || parentCourt.ground_type || "Unknown"}
+                        </p>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Hourly Rate</p>
+                        <p className="text-white font-bold">${parentCourt.hourly_rate} NZD</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* New Sub-Court Placeholder */}
+                {isAddingNewSubCourt && (
+                  <div className="p-4 rounded-lg bg-[#00f2ea]/5 border border-dashed border-[#00f2ea]/30">
+                    <p className="text-[#00f2ea] font-medium">Creating New Sub-Court</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Fill in the court details on the left and click "Create Sub-Court" to save.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>
+  );
+
   return (
     <ManagerLayout>
       <div className="p-4 md:p-6 space-y-6">
@@ -443,12 +731,17 @@ export default function ManagerCourtFormNew() {
           </Button>
           <div>
             <h1 className="font-display text-2xl font-bold">
-              {isEditing ? "Edit Court" : "Add Court"}
+              {isAddingNewSubCourt ? "Add Sub-Court" : isEditing ? "Edit Court" : "Add Court"}
             </h1>
             <p className="text-muted-foreground">
-              {isEditing ? "Update court details" : "Register a new sports court"}
+              {isAddingNewSubCourt ? "Create a new sub-court" : isEditing ? "Update court details" : "Register a new sports court"}
             </p>
           </div>
+        </div>
+
+        {/* Mobile: Multi-Court Configuration at top */}
+        <div className="lg:hidden">
+          {isEditing && <MultiCourtConfiguration />}
         </div>
 
         {/* Two Column Layout */}
@@ -695,18 +988,23 @@ export default function ManagerCourtFormNew() {
                       Saving...
                     </>
                   ) : (
-                    isEditing ? "Update Court" : "Create Court"
+                    isAddingNewSubCourt ? "Create Sub-Court" : isEditing ? "Update Court" : "Create Court"
                   )}
                 </Button>
                 
-                {isEditing && (
+                {(isEditing || isAddingNewSubCourt) && (
                   <Button
                     type="button"
                     variant="destructive"
-                    onClick={handleDelete}
+                    onClick={isAddingNewSubCourt ? () => {
+                      setIsAddingNewSubCourt(false);
+                      if (parentCourt) loadCourtDataIntoForm(parentCourt);
+                    } : handleDelete}
                     disabled={deleting}
                   >
-                    {deleting ? (
+                    {isAddingNewSubCourt ? (
+                      "Cancel"
+                    ) : deleting ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Trash2 className="h-4 w-4" />
@@ -717,202 +1015,27 @@ export default function ManagerCourtFormNew() {
             </form>
           </div>
 
-          {/* Right Column - Court Info Header + Multi-Court Configuration */}
-          <div className="space-y-6">
+          {/* Right Column - Desktop Multi-Court Configuration */}
+          <div className="hidden lg:block space-y-6">
             {/* Court Details Header - Always visible when editing */}
             {isEditing && venueName && (
               <Card className="bg-[#111a27]/60 border-[#00f2ea]/10">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-gray-400">Court Details</CardTitle>
+                  <CardTitle className="text-sm text-gray-400">Venue</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <h2 className="text-xl font-bold text-white">{venueName}</h2>
-                  <p className="text-gray-500 text-sm mt-1">Main Court Parent</p>
+                  <p className="text-gray-500 text-sm mt-1">
+                    {isAddingNewSubCourt ? "Adding new sub-court" : 
+                     currentCourt?.parent_court_id ? "Sub-Court" : 
+                     isMultiCourt ? "Multi-Court Parent" : "Single Court"}
+                  </p>
                 </CardContent>
               </Card>
             )}
 
-            {/* Multi-Court Configuration - Always visible when editing */}
-            {isEditing && (
-              <Card className="bg-[#111a27]/60 border-[#00f2ea]/10">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <LinkIcon className="h-5 w-5 text-[#00f2ea]" />
-                    Multi-Court Configuration
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Is Multi-Court Toggle */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="is_multi_court">Is Multi-Court Parent</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Enable to add sub-courts to this venue
-                      </p>
-                    </div>
-                    <Switch
-                      id="is_multi_court"
-                      checked={isMultiCourt}
-                      onCheckedChange={(checked) => {
-                        setValue("is_multi_court", checked);
-                      }}
-                      className="data-[state=checked]:bg-[#00f2ea]"
-                    />
-                  </div>
-
-                  {/* Tabs for courts - Only show when Multi-Court is enabled */}
-                  {isMultiCourt && (
-                    <div className="space-y-4 pt-4 border-t border-[#00f2ea]/10">
-                      {/* Court Tabs */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {tabCourts.map((court, index) => (
-                          <button
-                            key={court.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedTabCourtId(court.id);
-                              if (court.id !== id) {
-                                loadCourtIntoForm(court.id);
-                              }
-                            }}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                              (selectedTabCourtId || id) === court.id
-                                ? 'bg-[#00f2ea]/20 text-[#00f2ea] border-b-2 border-[#00f2ea]'
-                                : 'bg-[#0a0f18] text-gray-400 hover:text-white'
-                            }`}
-                          >
-                            {index === 0 ? 'Main Court' : court.name}
-                          </button>
-                        ))}
-                        
-                        {/* Add Sub-Court Button */}
-                        <Button
-                          type="button"
-                          onClick={handleAddSubCourt}
-                          variant="outline"
-                          size="sm"
-                          className="border-[#00f2ea] text-[#00f2ea] hover:bg-[#00f2ea]/10 gap-1"
-                        >
-                          <Plus className="h-4 w-4" />
-                          Add Sub-Court
-                        </Button>
-                      </div>
-
-                      {/* Selected Court Preview */}
-                      {selectedTabCourt && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Court Photo Preview */}
-                          <div className="rounded-xl overflow-hidden aspect-video bg-[#0a0f18]">
-                            {(selectedTabCourt.photo_urls?.[0] || selectedTabCourt.photo_url) ? (
-                              <img 
-                                src={selectedTabCourt.photo_urls?.[0] || selectedTabCourt.photo_url || ""} 
-                                alt={selectedTabCourt.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-600">
-                                <Building2 className="h-12 w-12" />
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Court Details */}
-                          <div className="space-y-3">
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Sub-Court Name</p>
-                              <p className="text-[#00f2ea] font-bold text-lg">
-                                {selectedTabCourt.name} - {groundTypeLabels[selectedTabCourt.ground_type || ""] || selectedTabCourt.ground_type || "Unknown"}
-                              </p>
-                              <p className="text-gray-500 text-xs mt-1 line-clamp-2">
-                                {selectedTabCourt.rules || "No rules set for this court."}
-                              </p>
-                            </div>
-
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Surface Type</p>
-                              <Select
-                                value={selectedTabCourt.ground_type || ""}
-                                disabled
-                              >
-                                <SelectTrigger className="mt-1 bg-[#0a0f18] border-[#00f2ea]/20">
-                                  <SelectValue placeholder="Surface type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {groundTypes.map((type) => (
-                                    <SelectItem key={type} value={type}>
-                                      {groundTypeLabels[type] || type}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Hourly Rate</p>
-                              </div>
-                              <p className="text-white font-bold">
-                                {selectedTabCourt.hourly_rate} NZD
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Main Court Preview - when parent itself is selected */}
-                      {(!selectedTabCourtId || selectedTabCourtId === id) && currentCourt && (
-                        <div className="rounded-xl overflow-hidden">
-                          <div className="aspect-video bg-[#0a0f18] relative">
-                            {(watch("photo_urls")?.[0]) ? (
-                              <img 
-                                src={watch("photo_urls")?.[0]} 
-                                alt={watch("name")}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-600">
-                                <Building2 className="h-12 w-12" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="p-3 bg-[#0a0f18]/80">
-                            <p className="text-[#00f2ea] font-bold">
-                              {watch("name") || "Main Court"} - {groundTypeLabels[watch("ground_type")] || watch("ground_type") || "Surface"}
-                            </p>
-                            <p className="text-gray-500 text-xs mt-1 line-clamp-2">
-                              {watch("rules") || "Court rules will appear here once added."}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Empty state when no courts yet */}
-                      {tabCourts.length === 0 && (
-                        <div className="text-center py-8 text-gray-500">
-                          <p>Enable the toggle above to start adding sub-courts.</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Show linked child courts summary if not multi-court but has children somehow */}
-                  {!isMultiCourt && childCourts.length > 0 && (
-                    <div className="pt-2">
-                      <Label>Linked Sub-Courts</Label>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {childCourts.map((court) => (
-                          <Link key={court.id} to={`/manager/courts/${court.id}/edit`}>
-                            <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
-                              {court.name}
-                            </Badge>
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+            {/* Multi-Court Configuration */}
+            {isEditing && <MultiCourtConfiguration />}
           </div>
         </div>
       </div>
