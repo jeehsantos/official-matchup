@@ -557,32 +557,26 @@ export default function ManagerCourtFormNew() {
         </CollapsibleTrigger>
         <CollapsibleContent>
           <CardContent className="space-y-4">
-            {/* Is Multi-Court Toggle - Visible but conditionally read-only */}
-            {!isAddingNewSubCourt && (
+            {/* Is Multi-Court Toggle - Only show for parent courts and when parent tab is selected */}
+            {(!currentCourt?.parent_court_id) && (!isAddingNewSubCourt && (selectedTabCourtId === effectiveParentId || !selectedTabCourtId)) && (
               <div className="flex items-center justify-between">
                 <div>
-                  <Label 
-                    htmlFor="is_multi_court" 
-                    className={(currentCourt?.parent_court_id || selectedTabCourtId !== effectiveParentId) ? "text-gray-500" : ""}
-                  >
-                    Is Multi-Court Parent
-                  </Label>
+                  <Label htmlFor="is_multi_court">Is Multi-Court Parent</Label>
                   <p className="text-sm text-muted-foreground">
-                    {selectedTabCourtId !== effectiveParentId 
-                      ? "Switch to Main Court to edit multi-court settings" 
-                      : "Enable to add sub-courts to this venue"}
+                    Enable to add sub-courts to this venue
                   </p>
                 </div>
                 <Switch
                   id="is_multi_court"
                   checked={isMultiCourt}
-                  onCheckedChange={(checked) => setValue("is_multi_court", checked)}
-                  // Read-only logic: Disabled if it's a sub-court OR if the current tab isn't the parent
-                  disabled={!!currentCourt?.parent_court_id || (selectedTabCourtId !== effectiveParentId && !!selectedTabCourtId)}
-                  className="data-[state=checked]:bg-[#00f2ea] data-[state=unchecked]:bg-gray-700 opacity-100 disabled:cursor-not-allowed"
+                  onCheckedChange={(checked) => {
+                    setValue("is_multi_court", checked);
+                  }}
+                  className="data-[state=checked]:bg-[#00f2ea]"
                 />
               </div>
             )}
+
             {/* Show parent court info if current is a sub-court */}
             {currentCourt?.parent_court_id && parentCourt && (
               <div className="p-3 rounded-lg bg-[#00f2ea]/5 border border-[#00f2ea]/20">
