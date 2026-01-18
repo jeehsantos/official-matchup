@@ -108,23 +108,22 @@ export function BookingWizard({
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [newGroupName, setNewGroupName] = useState("");
-  const [sessionType, setSessionType] = useState<string>("");
+  const [sessionType, setSessionType] = useState<string>("casual"); // Valid session_type enum value
   
   // Step 3: Payment
   const [paymentType, setPaymentType] = useState<BookingPaymentType>("single");
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch sport categories for dynamic session types - NO FALLBACKS
-  const { data: sportCategories = [], isLoading: loadingSportCategories } = useSportCategories();
+  // Valid session types - matches database enum session_type
+  const validSessionTypes = [
+    { value: "casual", label: "Casual Pickup", icon: "🎮", description: "Relaxed game, all skill levels" },
+    { value: "competitive", label: "Competitive", icon: "🏆", description: "Serious play, similar skill levels" },
+    { value: "training", label: "Training/Practice", icon: "📚", description: "Skill development focus" },
+    { value: "private", label: "Private Session", icon: "🔒", description: "Invited members only" },
+    { value: "tournament", label: "Tournament", icon: "🎯", description: "Official competition" },
+  ];
 
   const isNewGroup = selectedGroupId === "new";
-
-  // Set default session type when sport categories load
-  useEffect(() => {
-    if (sportCategories.length > 0 && !sessionType) {
-      setSessionType(sportCategories[0].name);
-    }
-  }, [sportCategories, sessionType]);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -133,11 +132,11 @@ export function BookingWizard({
       setRulesAccepted(false);
       setSelectedGroupId("");
       setNewGroupName("");
-      setSessionType(sportCategories.length > 0 ? sportCategories[0].name : "");
+      setSessionType("casual"); // Default to valid enum value
       setPaymentType("single");
       fetchUserGroups();
     }
-  }, [open, sportCategories]);
+  }, [open]);
 
   const fetchUserGroups = async () => {
     if (!user) return;
@@ -276,8 +275,8 @@ export function BookingWizard({
 
   const progress = (currentStep / STEPS.length) * 100;
 
-  // Get current session type info from database
-  const currentSessionType = sportCategories.find(c => c.name === sessionType);
+  // Get current session type info
+  const currentSessionType = validSessionTypes.find(c => c.value === sessionType);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -460,44 +459,36 @@ export function BookingWizard({
                 )}
               </div>
 
-              {/* Session Type - Using sport_categories from backend ONLY */}
+              {/* Session Type - Uses valid database enum values */}
               <div className="space-y-3">
                 <Label className="text-sm font-medium">Session Type</Label>
-                {loadingSportCategories ? (
-                  <div className="flex items-center gap-2 text-muted-foreground py-4">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading session types...
-                  </div>
-                ) : sportCategories.length === 0 ? (
-                  <div className="text-sm text-muted-foreground py-4">
-                    No session types available. Please contact support.
-                  </div>
-                ) : (
-                  <Select value={sessionType} onValueChange={setSessionType}>
-                    <SelectTrigger className="w-full h-12">
-                      <SelectValue>
-                        {currentSessionType ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">{currentSessionType.icon || "🎮"}</span>
-                            <span>{currentSessionType.display_name}</span>
+                <Select value={sessionType} onValueChange={setSessionType}>
+                  <SelectTrigger className="w-full h-12">
+                    <SelectValue>
+                      {currentSessionType ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{currentSessionType.icon}</span>
+                          <span>{currentSessionType.label}</span>
+                        </div>
+                      ) : (
+                        <span>Select session type...</span>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border border-border shadow-lg z-50">
+                    {validSessionTypes.map((type) => (
+                      <SelectItem key={type.value} value={type.value} className="py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">{type.icon}</span>
+                          <div>
+                            <span className="font-medium">{type.label}</span>
+                            <p className="text-xs text-muted-foreground">{type.description}</p>
                           </div>
-                        ) : (
-                          <span>Select session type...</span>
-                        )}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover border border-border shadow-lg z-50">
-                      {sportCategories.map((category) => (
-                        <SelectItem key={category.id} value={category.name} className="py-3">
-                          <div className="flex items-center gap-3">
-                            <span className="text-lg">{category.icon || "🎮"}</span>
-                            <span className="font-medium">{category.display_name}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Equipment Rental */}

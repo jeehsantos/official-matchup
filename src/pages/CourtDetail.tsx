@@ -850,34 +850,35 @@ export default function CourtDetail() {
 
             {/* Quick Info with Court Selector */}
             <div className="px-4 lg:px-0">
-              <div className="grid grid-cols-3 gap-3">
-                {/* Court Selector - Glassmorphism styled dropdown */}
-                <div className="relative group bg-[#111a27]/60 backdrop-blur-2xl border border-[#00f2ea]/20 p-4 rounded-2xl shadow-2xl transition-all hover:border-[#00f2ea]/50">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Court Selector - Responsive Glassmorphism styled dropdown */}
+                <div className="relative group bg-[#111a27]/60 backdrop-blur-2xl border border-[#00f2ea]/20 p-3 sm:p-4 rounded-2xl shadow-2xl transition-all hover:border-[#00f2ea]/50 col-span-3 sm:col-span-1">
                   <label className="block text-[10px] uppercase text-gray-400 font-bold tracking-widest mb-1 opacity-70">
                     Select Court
                   </label>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between min-w-0">
                     {venueCourts.length > 0 ? (
                       <>
                         <select 
                           value={selectedCourtId || ""}
                           onChange={(e) => {
                             setSelectedCourtId(e.target.value);
-                            // Reset slots when court changes
+                            // Reset slots and image index when court changes
                             setSelectedSlots([]);
+                            setCurrentImageIndex(0);
                           }}
-                          className="bg-transparent text-[#00f2ea] font-extrabold text-lg outline-none cursor-pointer w-full appearance-none pr-6"
+                          className="bg-transparent text-[#00f2ea] font-bold sm:font-extrabold text-sm sm:text-lg outline-none cursor-pointer w-full appearance-none pr-6 truncate min-w-0"
                         >
                           {venueCourts.map((c) => (
-                            <option key={c.id} value={c.id} className="bg-[#0a0f18] text-white">
+                            <option key={c.id} value={c.id} className="bg-[#0a0f18] text-white text-sm">
                               {c.name}
                             </option>
                           ))}
                         </select>
-                        <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#00f2ea] text-sm">▼</div>
+                        <div className="pointer-events-none absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-[#00f2ea] text-xs sm:text-sm">▼</div>
                       </>
                     ) : (
-                      <span className="text-[#00f2ea] font-extrabold text-lg">{court.name}</span>
+                      <span className="text-[#00f2ea] font-bold sm:font-extrabold text-sm sm:text-lg truncate">{court.name}</span>
                     )}
                   </div>
                 </div>

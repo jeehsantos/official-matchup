@@ -77,23 +77,30 @@ export default function Courts() {
     fetchCourts();
   }, []);
 
+  // Fetch all courts including sub-courts (for filtering by sub-court properties)
+  const [allVenueCourts, setAllVenueCourts] = useState<CourtWithVenue[]>([]);
+  
   const fetchCourts = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch all courts (main + sub) for filtering purposes
+      const { data: allCourts, error: allError } = await supabase
         .from("courts")
         .select(`
           *,
           venues (*)
         `)
-        .eq("is_active", true)
-        .is("parent_court_id", null); // Only show parent courts (hide sub-courts)
+        .eq("is_active", true);
 
-      if (error) throw error;
-
-      setCourts(data as CourtWithVenue[] || []);
+      if (allError) throw allError;
+      
+      setAllVenueCourts(allCourts as CourtWithVenue[] || []);
+      
+      // Only show parent courts in the list
+      const parentCourts = (allCourts as CourtWithVenue[] || []).filter(c => !c.parent_court_id);
+      setCourts(parentCourts);
       
       const uniqueCities = [...new Set(
-        (data as CourtWithVenue[] || [])
+        parentCourts
           .map(c => c.venues?.city)
           .filter(Boolean)
       )] as string[];
@@ -111,11 +118,18 @@ export default function Courts() {
       court.venues?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       court.venues?.city.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesGroundType = selectedGroundType === "all" || court.ground_type === selectedGroundType;
+    // For ground type filter, check if any court at this venue (including sub-courts) matches
+    const venueId = court.venue_id;
+    const venueCourts = allVenueCourts.filter(c => c.venue_id === venueId);
+    const matchesGroundType = selectedGroundType === "all" || 
+      venueCourts.some(c => c.ground_type === selectedGroundType);
+    
+    // For venue type filter, also check sub-courts
     const matchesVenueType = 
       selectedVenueType === "all" ||
-      (selectedVenueType === "indoor" && court.is_indoor) ||
-      (selectedVenueType === "outdoor" && !court.is_indoor);
+      (selectedVenueType === "indoor" && venueCourts.some(c => c.is_indoor)) ||
+      (selectedVenueType === "outdoor" && venueCourts.some(c => !c.is_indoor));
+    
     const matchesCity = selectedCity === "all" || court.venues?.city === selectedCity;
 
     return matchesSearch && matchesGroundType && matchesVenueType && matchesCity;

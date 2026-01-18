@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Trash2, Building2, Plus, Link as LinkIcon, DollarSign, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Building2, Plus, Link as LinkIcon, DollarSign, ChevronDown, ChevronUp, Camera, MapPin, CreditCard, Settings2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
@@ -89,6 +89,12 @@ export default function ManagerCourtFormNew() {
   const [selectedTabCourtId, setSelectedTabCourtId] = useState<string | null>(null);
   const [isAddingNewSubCourt, setIsAddingNewSubCourt] = useState(false);
   const [multiCourtExpanded, setMultiCourtExpanded] = useState(true);
+  
+  // Collapsible section states
+  const [photosExpanded, setPhotosExpanded] = useState(true);
+  const [detailsExpanded, setDetailsExpanded] = useState(true);
+  const [locationExpanded, setLocationExpanded] = useState(true);
+  const [settingsExpanded, setSettingsExpanded] = useState(true);
   
   // The ID of the parent court (for existing edits this is the URL id, for new sub-courts we track it)
   const [parentCourtId, setParentCourtId] = useState<string | null>(null);
@@ -538,13 +544,13 @@ export default function ManagerCourtFormNew() {
 
   // Multi-Court Configuration Component
   const MultiCourtConfiguration = () => (
-    <Card className="bg-[#111a27]/60 border-[#00f2ea]/10">
+    <Card className="bg-card border-border shadow-sm">
       <Collapsible open={multiCourtExpanded} onOpenChange={setMultiCourtExpanded}>
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-[#00f2ea]/5 transition-colors">
+          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <LinkIcon className="h-5 w-5 text-[#00f2ea]" />
+              <CardTitle className="flex items-center gap-2 text-base">
+                <LinkIcon className="h-4 w-4 text-primary" />
                 Multi-Court Configuration
               </CardTitle>
               {multiCourtExpanded ? (
@@ -754,199 +760,249 @@ export default function ManagerCourtFormNew() {
           {/* Left Column - Form */}
           <div className="space-y-6">
             {/* Form */}
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              {/* Photo Upload */}
-              <Card className="bg-[#111a27]/60 border-[#00f2ea]/10">
-                <CardHeader>
-                  <CardTitle>Court Photos</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CourtPhotosUpload
-                    key={isAddingNewSubCourt ? 'new-sub-court' : selectedTabCourtId || id}
-                    currentPhotoUrls={isAddingNewSubCourt ? newSubCourtPhotos : (watch("photo_urls") || [])}
-                    onPhotosChanged={(urls) => {
-                      if (isAddingNewSubCourt) {
-                        setNewSubCourtPhotos(urls);
-                        setValue("photo_urls", urls);
-                      } else {
-                        setValue("photo_urls", urls);
-                      }
-                    }}
-                    maxPhotos={4}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card className="bg-[#111a27]/60 border-[#00f2ea]/10">
-                <CardHeader>
-                  <CardTitle>Court Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="name">Court Name *</Label>
-                    <Input
-                      id="name"
-                      {...register("name")}
-                      placeholder="e.g., Indoor Futsal Court 1"
-                      className="mt-1 bg-[#0a0f18] border-[#00f2ea]/20"
-                    />
-                    {errors.name && (
-                      <p className="text-sm text-destructive mt-1">{errors.name.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <Label htmlFor="ground_type">Surface Type *</Label>
-                    {loadingSurfaceTypes ? (
-                      <div className="flex items-center gap-2 text-muted-foreground py-2 mt-1">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading surface types...
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* Photo Upload - Collapsible */}
+              <Card className="bg-card border-border shadow-sm">
+                <Collapsible open={photosExpanded} onOpenChange={setPhotosExpanded}>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Camera className="h-4 w-4 text-primary" />
+                          Court Photos
+                        </CardTitle>
+                        {photosExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        )}
                       </div>
-                    ) : surfaceTypesData.length === 0 ? (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        No surface types available. Please contact support.
-                      </p>
-                    ) : (
-                      <Select
-                        value={watch("ground_type")}
-                        onValueChange={(value) => setValue("ground_type", value as any)}
-                      >
-                        <SelectTrigger className="mt-1 bg-[#0a0f18] border-[#00f2ea]/20">
-                          <SelectValue placeholder="Select surface type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {groundTypes.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {groundTypeLabels[type] || type}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                    {errors.ground_type && (
-                      <p className="text-sm text-destructive mt-1">{errors.ground_type.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      {...register("description")}
-                      placeholder="Tell players about your court..."
-                      rows={3}
-                      className="mt-1 bg-[#0a0f18] border-[#00f2ea]/20"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="rules">Court Rules & Guidelines</Label>
-                    <Textarea
-                      id="rules"
-                      {...register("rules")}
-                      placeholder="Enter any rules, restrictions, or guidelines for players booking this court..."
-                      rows={4}
-                      className="mt-1 bg-[#0a0f18] border-[#00f2ea]/20"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      These rules will be shown to players before they confirm their booking
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="hourly_rate">Hourly Rate (NZD) *</Label>
-                    <Input
-                      id="hourly_rate"
-                      type="number"
-                      step="0.01"
-                      {...register("hourly_rate", { valueAsNumber: true })}
-                      className="mt-1 bg-[#0a0f18] border-[#00f2ea]/20"
-                    />
-                    {errors.hourly_rate && (
-                      <p className="text-sm text-destructive mt-1">{errors.hourly_rate.message}</p>
-                    )}
-                  </div>
-                </CardContent>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="pt-0">
+                      <CourtPhotosUpload
+                        key={isAddingNewSubCourt ? 'new-sub-court' : selectedTabCourtId || id}
+                        currentPhotoUrls={isAddingNewSubCourt ? newSubCourtPhotos : (watch("photo_urls") || [])}
+                        onPhotosChanged={(urls) => {
+                          if (isAddingNewSubCourt) {
+                            setNewSubCourtPhotos(urls);
+                            setValue("photo_urls", urls);
+                          } else {
+                            setValue("photo_urls", urls);
+                          }
+                        }}
+                        maxPhotos={4}
+                      />
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
               </Card>
 
-              <Card className="bg-[#111a27]/60 border-[#00f2ea]/10">
-                <CardHeader>
-                  <CardTitle>Location</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="country">Country</Label>
-                    <Select
-                      value={watch("country")}
-                      onValueChange={(value) => setValue("country", value)}
-                    >
-                      <SelectTrigger className="mt-1 bg-[#0a0f18] border-[#00f2ea]/20">
-                        <SelectValue placeholder="Select country" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="New Zealand">New Zealand</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+              {/* Court Details - Collapsible */}
+              <Card className="bg-card border-border shadow-sm">
+                <Collapsible open={detailsExpanded} onOpenChange={setDetailsExpanded}>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Building2 className="h-4 w-4 text-primary" />
+                          Court Details
+                        </CardTitle>
+                        {detailsExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-4 pt-0">
+                      <div>
+                        <Label htmlFor="name">Court Name *</Label>
+                        <Input
+                          id="name"
+                          {...register("name")}
+                          placeholder="e.g., Indoor Futsal Court 1"
+                          className="mt-1"
+                        />
+                        {errors.name && (
+                          <p className="text-sm text-destructive mt-1">{errors.name.message}</p>
+                        )}
+                      </div>
 
-                  <div>
-                    <Label htmlFor="city">City *</Label>
-                    <Select
-                      value={watch("city")}
-                      onValueChange={(value) => {
-                        setValue("city", value);
-                        setValue("suburb", ""); // Reset suburb when city changes
-                      }}
-                    >
-                      <SelectTrigger className="mt-1 bg-[#0a0f18] border-[#00f2ea]/20">
-                        <SelectValue placeholder="Select city" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {nzCities.map((city) => (
-                          <SelectItem key={city} value={city}>
-                            {city}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.city && (
-                      <p className="text-sm text-destructive mt-1">{errors.city.message}</p>
-                    )}
-                  </div>
+                      <div>
+                        <Label htmlFor="ground_type">Surface Type *</Label>
+                        {loadingSurfaceTypes ? (
+                          <div className="flex items-center gap-2 text-muted-foreground py-2 mt-1">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading surface types...
+                          </div>
+                        ) : surfaceTypesData.length === 0 ? (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            No surface types available. Please contact support.
+                          </p>
+                        ) : (
+                          <Select
+                            value={watch("ground_type")}
+                            onValueChange={(value) => setValue("ground_type", value as any)}
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue placeholder="Select surface type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {groundTypes.map((type) => (
+                                <SelectItem key={type} value={type}>
+                                  {groundTypeLabels[type] || type}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {errors.ground_type && (
+                          <p className="text-sm text-destructive mt-1">{errors.ground_type.message}</p>
+                        )}
+                      </div>
 
-                  <div>
-                    <Label htmlFor="suburb">Suburb</Label>
-                    <Select
-                      value={watch("suburb") || ""}
-                      onValueChange={(value) => setValue("suburb", value)}
-                      disabled={!selectedCity || availableSuburbs.length === 0}
-                    >
-                      <SelectTrigger className="mt-1 bg-[#0a0f18] border-[#00f2ea]/20">
-                        <SelectValue placeholder={selectedCity ? "Select suburb" : "Select a city first"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableSuburbs.map((suburb) => (
-                          <SelectItem key={suburb} value={suburb}>
-                            {suburb}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      <div>
+                        <Label htmlFor="description">Description</Label>
+                        <Textarea
+                          id="description"
+                          {...register("description")}
+                          placeholder="Tell players about your court..."
+                          rows={3}
+                          className="mt-1"
+                        />
+                      </div>
 
-                  <div>
-                    <Label htmlFor="address">Street Address *</Label>
-                    <Input
-                      id="address"
-                      {...register("address")}
-                      placeholder="e.g., 123 Sports Lane"
-                      className="mt-1 bg-[#0a0f18] border-[#00f2ea]/20"
-                    />
-                    {errors.address && (
-                      <p className="text-sm text-destructive mt-1">{errors.address.message}</p>
-                    )}
-                  </div>
-                </CardContent>
+                      <div>
+                        <Label htmlFor="rules">Court Rules & Guidelines</Label>
+                        <Textarea
+                          id="rules"
+                          {...register("rules")}
+                          placeholder="Enter any rules, restrictions, or guidelines for players booking this court..."
+                          rows={4}
+                          className="mt-1"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          These rules will be shown to players before they confirm their booking
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="hourly_rate">Hourly Rate (NZD) *</Label>
+                        <Input
+                          id="hourly_rate"
+                          type="number"
+                          step="0.01"
+                          {...register("hourly_rate", { valueAsNumber: true })}
+                          className="mt-1"
+                        />
+                        {errors.hourly_rate && (
+                          <p className="text-sm text-destructive mt-1">{errors.hourly_rate.message}</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+
+              {/* Location - Collapsible */}
+              <Card className="bg-card border-border shadow-sm">
+                <Collapsible open={locationExpanded} onOpenChange={setLocationExpanded}>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <MapPin className="h-4 w-4 text-primary" />
+                          Location
+                        </CardTitle>
+                        {locationExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-4 pt-0">
+                      <div>
+                        <Label htmlFor="country">Country</Label>
+                        <Select
+                          value={watch("country")}
+                          onValueChange={(value) => setValue("country", value)}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select country" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="New Zealand">New Zealand</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="city">City *</Label>
+                        <Select
+                          value={watch("city")}
+                          onValueChange={(value) => {
+                            setValue("city", value);
+                            setValue("suburb", ""); // Reset suburb when city changes
+                          }}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select city" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {nzCities.map((city) => (
+                              <SelectItem key={city} value={city}>
+                                {city}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {errors.city && (
+                          <p className="text-sm text-destructive mt-1">{errors.city.message}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="suburb">Suburb</Label>
+                        <Select
+                          value={watch("suburb") || ""}
+                          onValueChange={(value) => setValue("suburb", value)}
+                          disabled={!selectedCity || availableSuburbs.length === 0}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder={selectedCity ? "Select suburb" : "Select a city first"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableSuburbs.map((suburb) => (
+                              <SelectItem key={suburb} value={suburb}>
+                                {suburb}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="address">Street Address *</Label>
+                        <Input
+                          id="address"
+                          {...register("address")}
+                          placeholder="e.g., 123 Sports Lane"
+                          className="mt-1"
+                        />
+                        {errors.address && (
+                          <p className="text-sm text-destructive mt-1">{errors.address.message}</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
               </Card>
 
               {/* Payment Settings */}
@@ -957,39 +1013,56 @@ export default function ManagerCourtFormNew() {
                 onPaymentHoursChange={(hours) => setValue("payment_hours_before", hours)}
               />
 
-              <Card className="bg-[#111a27]/60 border-[#00f2ea]/10">
-                <CardHeader>
-                  <CardTitle>Settings</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="is_indoor">Indoor Court</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Is this an indoor facility?
-                      </p>
-                    </div>
-                    <Switch
-                      id="is_indoor"
-                      checked={watch("is_indoor")}
-                      onCheckedChange={(checked) => setValue("is_indoor", checked)}
-                    />
-                  </div>
+              {/* Settings - Collapsible */}
+              <Card className="bg-card border-border shadow-sm">
+                <Collapsible open={settingsExpanded} onOpenChange={setSettingsExpanded}>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Settings2 className="h-4 w-4 text-primary" />
+                          Settings
+                        </CardTitle>
+                        {settingsExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-4 pt-0">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="is_indoor">Indoor Court</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Is this an indoor facility?
+                          </p>
+                        </div>
+                        <Switch
+                          id="is_indoor"
+                          checked={watch("is_indoor")}
+                          onCheckedChange={(checked) => setValue("is_indoor", checked)}
+                        />
+                      </div>
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="is_active">Active</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Inactive courts won't be available for booking
-                      </p>
-                    </div>
-                    <Switch
-                      id="is_active"
-                      checked={watch("is_active")}
-                      onCheckedChange={(checked) => setValue("is_active", checked)}
-                    />
-                  </div>
-                </CardContent>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="is_active">Active</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Inactive courts won't be available for booking
+                          </p>
+                        </div>
+                        <Switch
+                          id="is_active"
+                          checked={watch("is_active")}
+                          onCheckedChange={(checked) => setValue("is_active", checked)}
+                        />
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
               </Card>
 
               {/* Actions */}
