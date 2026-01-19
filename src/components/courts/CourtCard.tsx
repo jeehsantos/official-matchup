@@ -75,7 +75,7 @@ export function CourtCard({ court, onHover, isHighlighted }: CourtCardProps) {
 
           {/* Indoor Badge */}
           {court.is_indoor && (
-            <Badge variant="secondary" className="absolute top-3 left-24 bg-card/90 backdrop-blur-sm">
+            <Badge variant="secondary" className="absolute top-3 left-4 bg-card/90 backdrop-blur-sm">
               Indoor
             </Badge>
           )}
