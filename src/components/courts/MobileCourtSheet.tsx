@@ -23,14 +23,16 @@ export function MobileCourtSheet({
   highlightedCourtId,
   onHighlight,
 }: MobileCourtSheetProps) {
-  const [snap, setSnap] = useState<number | string | null>(0.12);
+  const [snap, setSnap] = useState<number | string | null>(0.15);
 
+  // Calculate safe snap points - minimum visible, half, and max (below search header ~80px from top)
+  // We use fixed pixel values for smaller screens to ensure visibility
   return (
     <DrawerPrimitive.Root 
       open={true} 
       modal={false}
       dismissible={false}
-      snapPoints={[0.12, 0.5, 1]}
+      snapPoints={["120px", 0.5, 0.85]}
       activeSnapPoint={snap}
       setActiveSnapPoint={setSnap}
     >
@@ -41,25 +43,26 @@ export function MobileCourtSheet({
           style={{ 
             zIndex: 40,
             bottom: '64px',
-            height: 'calc(100dvh - 64px)',
-            maxHeight: 'calc(100dvh - 64px)',
+            // Max height stops below the search header (leaves ~80px for search + margin)
+            height: 'calc(100dvh - 64px - 80px)',
+            maxHeight: 'calc(100dvh - 64px - 80px)',
           }}
         >
           {/* Drag handle area - larger touch target */}
           <div 
-            className="flex flex-col items-center pt-4 pb-3 cursor-grab active:cursor-grabbing"
+            className="flex flex-col items-center pt-3 pb-2 cursor-grab active:cursor-grabbing shrink-0"
             style={{ touchAction: 'none' }}
           >
-            <div className="h-1.5 w-10 rounded-full bg-muted-foreground/50 mb-3" />
-            <p className="text-base font-semibold text-foreground">
+            <div className="h-1.5 w-12 rounded-full bg-muted-foreground/40 mb-2" />
+            <p className="text-sm font-semibold text-foreground">
               {courts.length >= 100 ? `Over ${Math.floor(courts.length / 100) * 100}` : courts.length} court{courts.length !== 1 ? "s" : ""}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Drag up to explore</p>
+            <p className="text-xs text-muted-foreground">Drag up to explore</p>
           </div>
 
           {/* Scrollable cards list */}
-          <div className="flex-1 overflow-y-auto overscroll-contain">
-            <div className="p-4 space-y-4 pb-20">
+          <div className="flex-1 overflow-y-auto overscroll-contain min-h-0">
+            <div className="p-4 space-y-4 pb-6">
               {loading ? (
                 // Loading skeleton
                 Array.from({ length: 3 }).map((_, i) => (
@@ -74,7 +77,7 @@ export function MobileCourtSheet({
                   <p className="text-muted-foreground">No courts found</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   {courts.map((court) => (
                     <CourtCard
                       key={court.id}

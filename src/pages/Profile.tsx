@@ -146,15 +146,19 @@ export default function Profile() {
 
     setSaving(true);
     try {
+      // Use upsert to handle cases where profile might not exist
       const { error } = await supabase
         .from("profiles")
-        .update({
+        .upsert({
+          user_id: user.id,
           full_name: profileData.full_name,
           phone: profileData.phone,
           city: profileData.city,
           preferred_sports: profileData.preferred_sports,
-        })
-        .eq("user_id", user.id);
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id',
+        });
 
       if (error) throw error;
 

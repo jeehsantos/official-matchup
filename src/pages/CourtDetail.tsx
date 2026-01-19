@@ -470,10 +470,9 @@ export default function CourtDetail() {
     groupId: string;
     isNewGroup: boolean;
     paymentType: "single" | "split";
-    sessionType: string;
     equipment: SelectedEquipment[];
   }) => {
-    const { groupId, isNewGroup, paymentType, sessionType, equipment } = data;
+    const { groupId, isNewGroup, paymentType, equipment } = data;
     // Update selected equipment from wizard
     setSelectedEquipment(equipment);
     if (selectedSlots.length === 0 || !court || !user || !selectedDate) return;
@@ -501,7 +500,6 @@ export default function CourtDetail() {
       const totalPrice = courtPrice + equipmentTotal;
 
       // Create a session for this booking
-      // Note: session_type is a database enum, so we cast to 'any' to allow dynamic values from sport_categories
       const { data: session, error: sessionError } = await supabase
         .from("sessions")
         .insert({
@@ -516,7 +514,6 @@ export default function CourtDetail() {
           payment_deadline: paymentDeadline.toISOString(),
           state: "protected",
           payment_type: paymentType,
-          session_type: sessionType as any,
         })
         .select()
         .single();

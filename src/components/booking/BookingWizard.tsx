@@ -55,7 +55,6 @@ interface BookingWizardProps {
     groupId: string;
     isNewGroup: boolean;
     paymentType: BookingPaymentType;
-    sessionType: string;
     equipment: SelectedEquipment[];
   }) => void;
   sportType: SportType;
@@ -108,20 +107,12 @@ export function BookingWizard({
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [newGroupName, setNewGroupName] = useState("");
-  const [sessionType, setSessionType] = useState<string>("casual"); // Valid session_type enum value
-  
   // Step 3: Payment
   const [paymentType, setPaymentType] = useState<BookingPaymentType>("single");
   const [submitting, setSubmitting] = useState(false);
-
-  // Valid session types - matches database enum session_type
-  const validSessionTypes = [
-    { value: "casual", label: "Casual Pickup", icon: "🎮", description: "Relaxed game, all skill levels" },
-    { value: "competitive", label: "Competitive", icon: "🏆", description: "Serious play, similar skill levels" },
-    { value: "training", label: "Training/Practice", icon: "📚", description: "Skill development focus" },
-    { value: "private", label: "Private Session", icon: "🔒", description: "Invited members only" },
-    { value: "tournament", label: "Tournament", icon: "🎯", description: "Official competition" },
-  ];
+  
+  // Fetch sport categories from database
+  const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
 
   const isNewGroup = selectedGroupId === "new";
 
@@ -132,7 +123,6 @@ export function BookingWizard({
       setRulesAccepted(false);
       setSelectedGroupId("");
       setNewGroupName("");
-      setSessionType("casual"); // Default to valid enum value
       setPaymentType("single");
       fetchUserGroups();
     }
@@ -229,7 +219,6 @@ export function BookingWizard({
           groupId: data.id,
           isNewGroup: true,
           paymentType,
-          sessionType,
           equipment: selectedEquipment,
         });
       } else {
@@ -237,7 +226,6 @@ export function BookingWizard({
           groupId: selectedGroupId,
           isNewGroup: false,
           paymentType,
-          sessionType,
           equipment: selectedEquipment,
         });
       }
@@ -274,9 +262,6 @@ export function BookingWizard({
   const totalPrice = courtPrice + equipmentTotal;
 
   const progress = (currentStep / STEPS.length) * 100;
-
-  // Get current session type info
-  const currentSessionType = validSessionTypes.find(c => c.value === sessionType);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -459,36 +444,15 @@ export function BookingWizard({
                 )}
               </div>
 
-              {/* Session Type - Uses valid database enum values */}
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">Session Type</Label>
-                <Select value={sessionType} onValueChange={setSessionType}>
-                  <SelectTrigger className="w-full h-12">
-                    <SelectValue>
-                      {currentSessionType ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{currentSessionType.icon}</span>
-                          <span>{currentSessionType.label}</span>
-                        </div>
-                      ) : (
-                        <span>Select session type...</span>
-                      )}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border border-border shadow-lg z-50">
-                    {validSessionTypes.map((type) => (
-                      <SelectItem key={type.value} value={type.value} className="py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">{type.icon}</span>
-                          <div>
-                            <span className="font-medium">{type.label}</span>
-                            <p className="text-xs text-muted-foreground">{type.description}</p>
-                          </div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Sport Type Info - Display only, based on court's sport */}
+              <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                <div className="flex items-center gap-3">
+                  <SportIcon sport={sportType} className="h-8 w-8" />
+                  <div>
+                    <p className="font-medium">{getSportLabel(sportType)}</p>
+                    <p className="text-xs text-muted-foreground">Session sport type</p>
+                  </div>
+                </div>
               </div>
 
               {/* Equipment Rental */}
