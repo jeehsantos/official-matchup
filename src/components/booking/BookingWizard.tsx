@@ -277,15 +277,15 @@ export function BookingWizard({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto p-0">
+      <DialogContent className="w-[calc(100vw-32px)] max-w-md sm:max-w-lg max-h-[85dvh] overflow-y-auto p-0">
         {/* Header with progress */}
-        <div className="sticky top-0 z-10 bg-background border-b border-border p-4">
-          <DialogHeader className="mb-4">
-            <DialogTitle className="text-xl">Book {courtName}</DialogTitle>
+        <div className="sticky top-0 z-10 bg-background border-b border-border p-3 sm:p-4">
+          <DialogHeader className="mb-3 sm:mb-4">
+            <DialogTitle className="text-lg sm:text-xl truncate pr-6">Book {courtName}</DialogTitle>
           </DialogHeader>
           
           {/* Progress bar */}
-          <Progress value={progress} className="h-2 mb-3" />
+          <Progress value={progress} className="h-1.5 sm:h-2 mb-2 sm:mb-3" />
           
           {/* Step indicators */}
           <div className="flex justify-between">
@@ -297,7 +297,7 @@ export function BookingWizard({
               return (
                 <div 
                   key={step.id}
-                  className={`flex items-center gap-2 text-sm ${
+                  className={`flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm ${
                     isActive 
                       ? "text-primary font-medium" 
                       : isCompleted 
@@ -305,7 +305,7 @@ export function BookingWizard({
                         : "text-muted-foreground"
                   }`}
                 >
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                  <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center shrink-0 ${
                     isActive 
                       ? "bg-primary text-primary-foreground" 
                       : isCompleted 
@@ -313,9 +313,9 @@ export function BookingWizard({
                         : "bg-muted text-muted-foreground"
                   }`}>
                     {isCompleted ? (
-                      <CheckCircle2 className="h-4 w-4" />
+                      <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" />
                     ) : (
-                      <Icon className="h-3.5 w-3.5" />
+                      <Icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                     )}
                   </div>
                   <span className="hidden sm:inline">{step.title}</span>
@@ -325,33 +325,33 @@ export function BookingWizard({
           </div>
         </div>
 
-        <div className="p-4 space-y-5">
+        <div className="p-3 sm:p-4 space-y-4 sm:space-y-5">
           {/* Venue Summary - Always visible */}
-          <div className="rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <SportIcon sport={sportType} className="h-10 w-10" />
-              <div>
-                <h3 className="font-semibold text-lg">{courtName}</h3>
-                <p className="text-sm text-muted-foreground">{venueName}</p>
+          <div className="rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 p-3 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+              <SportIcon sport={sportType} className="h-8 w-8 sm:h-10 sm:w-10 shrink-0" />
+              <div className="min-w-0">
+                <h3 className="font-semibold text-base sm:text-lg truncate">{courtName}</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">{venueName}</p>
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span>{formatDate(slotDate)}</span>
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs sm:text-sm">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-muted-foreground">
+                <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="truncate">{formatDate(slotDate)}</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Clock className="h-4 w-4" />
-                <span>{formatTime(startTime)} - {formatTime(endTime)}</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 text-muted-foreground">
+                <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="truncate">{formatTime(startTime)} - {formatTime(endTime)}</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <MapPin className="h-4 w-4" />
-                <span>{city}</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="truncate">{city}</span>
               </div>
-              <div className="flex items-center gap-2 font-semibold text-primary">
-                <DollarSign className="h-4 w-4" />
-                <span className="text-lg">${totalPrice.toFixed(2)}</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 font-semibold text-primary">
+                <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="text-base sm:text-lg">${totalPrice.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -572,23 +572,23 @@ export function BookingWizard({
         </div>
 
         {/* Footer with navigation */}
-        <div className="sticky bottom-0 bg-background border-t border-border p-4 flex gap-3">
+        <div className="sticky bottom-0 bg-background border-t border-border p-3 sm:p-4 flex gap-2 sm:gap-3">
           {currentStep > 1 ? (
             <Button
               variant="outline"
               onClick={handleBack}
               disabled={submitting}
-              className="flex-1 h-12"
+              className="flex-1 h-10 sm:h-12 text-sm sm:text-base"
             >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Back
+              <ChevronLeft className="h-4 w-4 mr-1 shrink-0" />
+              <span>Back</span>
             </Button>
           ) : (
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={submitting}
-              className="flex-1 h-12"
+              className="flex-1 h-10 sm:h-12 text-sm sm:text-base"
             >
               Cancel
             </Button>
@@ -597,27 +597,27 @@ export function BookingWizard({
           {currentStep < 3 ? (
             <Button
               onClick={handleNext}
-              className="flex-1 h-12"
+              className="flex-1 h-10 sm:h-12 text-sm sm:text-base"
               disabled={currentStep === 1 && !rulesAccepted}
             >
-              Continue
-              <ChevronRight className="h-4 w-4 ml-1" />
+              <span>Continue</span>
+              <ChevronRight className="h-4 w-4 ml-1 shrink-0" />
             </Button>
           ) : (
             <Button
               onClick={handleConfirm}
               disabled={submitting || !rulesAccepted}
-              className="flex-1 h-12"
+              className="flex-1 h-10 sm:h-12 text-sm sm:text-base"
             >
               {submitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Processing...
+                  <Loader2 className="h-4 w-4 animate-spin mr-1.5 shrink-0" />
+                  <span className="truncate">Processing...</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Confirm Booking
+                  <CheckCircle2 className="h-4 w-4 mr-1.5 shrink-0" />
+                  <span className="truncate">Confirm</span>
                 </>
               )}
             </Button>
