@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Sun, Sunset, Moon, Clock } from "lucide-react";
+import { useMemo } from "react";
 
 interface TimeSlot {
   start_time: string;
@@ -11,6 +12,7 @@ interface TimeSlotPickerProps {
   selectedSlots: string[];
   onToggle: (time: string) => void;
   intervalMinutes: number;
+  selectedDate?: Date;
 }
 
 // Convert time string to minutes for comparison
@@ -29,13 +31,29 @@ export function TimeSlotPicker({
   selectedSlots,
   onToggle,
   intervalMinutes,
+  selectedDate,
 }: TimeSlotPickerProps) {
+  // Filter out past slots if the selected date is today
+  const filteredSlots = useMemo(() => {
+    if (!selectedDate) return slots;
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const selected = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    
+    // If selected date is not today, show all slots
+    if (selected.getTime() !== today.getTime()) return slots;
+    
+    // Filter out past slots for today
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    return slots.filter(slot => timeToMinutes(slot.start_time) > currentMinutes);
+  }, [slots, selectedDate]);
   // Group slots by time of day
-  const morningSlots = slots.filter((s) => getHour(s.start_time) < 12);
-  const afternoonSlots = slots.filter(
+  const morningSlots = filteredSlots.filter((s) => getHour(s.start_time) < 12);
+  const afternoonSlots = filteredSlots.filter(
     (s) => getHour(s.start_time) >= 12 && getHour(s.start_time) < 17
   );
-  const eveningSlots = slots.filter((s) => getHour(s.start_time) >= 17);
+  const eveningSlots = filteredSlots.filter((s) => getHour(s.start_time) >= 17);
 
   // Check if a slot is in the selected range (for visual continuity)
   const isSlotInRange = (slotTime: string): boolean => {
@@ -122,11 +140,11 @@ export function TimeSlotPicker({
     );
   };
 
-  if (slots.length === 0) {
+  if (filteredSlots.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
         <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p>No available slots for this date</p>
+        <p>{slots.length > 0 ? "No more available slots for today" : "No available slots for this date"}</p>
       </div>
     );
   }

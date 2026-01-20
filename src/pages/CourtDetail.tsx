@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
@@ -387,6 +387,22 @@ export default function CourtDetail() {
     return selectedEquipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0);
   };
 
+  // Filter out past time slots for today - memoized for performance
+  const filteredSlots = useMemo(() => {
+    if (!availabilityData?.slots || !selectedDate) return [];
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const selected = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    
+    // If selected date is not today, show all slots
+    if (selected.getTime() !== today.getTime()) return availabilityData.slots;
+    
+    // Filter out past slots for today
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    return availabilityData.slots.filter(slot => timeToMinutes(slot.start_time) > currentMinutes);
+  }, [availabilityData?.slots, selectedDate]);
+
   const handleBookSlot = async () => {
     if (!user) {
       // Store current path for redirect after auth
@@ -409,7 +425,7 @@ export default function CourtDetail() {
 
     if (selectedSlots.length === 0 || !court || !selectedDate) return;
 
-    // Check profile completeness
+    // Check profile completeness - use cached profile if available
     const { data: profile } = await supabase
       .from("profiles")
       .select("*")
@@ -424,46 +440,8 @@ export default function CourtDetail() {
       return;
     }
 
-    const totalDuration = getTotalDuration();
-    const startTime = getStartTime();
-    const bookingCourtId = selectedCourtId || court.id;
-
-    // Validate booking with backend before proceeding
-    try {
-      const { data: validationResult, error: validationError } = await supabase.functions.invoke("validate-booking", {
-        body: {
-          venueId: court.venue_id,
-          courtId: bookingCourtId,
-          date: format(selectedDate, "yyyy-MM-dd"),
-          startTime,
-          durationMinutes: totalDuration,
-        },
-      });
-
-      if (validationError) throw validationError;
-
-      if (!validationResult.valid) {
-        toast({
-          title: "Booking unavailable",
-          description: validationResult.error || "This slot is no longer available.",
-          variant: "destructive",
-        });
-        // Refresh availability
-        if (court.venues) {
-          fetchAvailability(court.venues.id, court.id, selectedDate);
-        }
-        return;
-      }
-
-      // Validation passed, open group selection modal
-      setShowGroupModal(true);
-    } catch (error: any) {
-      toast({
-        title: "Validation failed",
-        description: error.message || "Could not validate booking. Please try again.",
-        variant: "destructive",
-      });
-    }
+    // Open wizard immediately - validation happens inside the wizard for better UX
+    setShowGroupModal(true);
   };
 
   const handleBookingConfirm = async (data: {
@@ -1006,8 +984,14 @@ export default function CourtDetail() {
                     </p>
                     
                     {/* Time slot grid */}
+                    {filteredSlots.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>{availabilityData.slots.length > 0 ? "No more available slots for today" : "No available slots for this date"}</p>
+                      </div>
+                    ) : (
                     <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-                      {availabilityData.slots.map((slot) => {
+                      {filteredSlots.map((slot) => {
                         const slotTime = slot.start_time.slice(0, 5);
                         const isSelected = selectedSlots.includes(slotTime);
                         const availableCourts = slot.available_courts || [];
@@ -1038,6 +1022,7 @@ export default function CourtDetail() {
                         );
                       })}
                     </div>
+                    )}
 
                     {/* Selected slots summary */}
                     {selectedSlots.length > 0 && (
