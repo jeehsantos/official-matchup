@@ -1,6 +1,7 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
+import { GuestBottomNav } from "./GuestBottomNav";
 import { Header } from "./Header";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -41,13 +42,15 @@ export function MobileLayout({
 }: MobileLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
     navigate("/", { replace: true });
   };
+
+  const isLoggedIn = !!user;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -114,8 +117,10 @@ export function MobileLayout({
         </div>
       </main>
 
-      {/* Mobile Bottom Nav */}
-      {showBottomNav && <BottomNav />}
+      {/* Mobile Bottom Nav - Show different nav based on auth state */}
+      {showBottomNav && (
+        isLoggedIn ? <BottomNav /> : <GuestBottomNav />
+      )}
     </div>
   );
 }
