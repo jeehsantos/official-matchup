@@ -277,7 +277,7 @@ export function BookingWizard({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-32px)] max-w-md sm:max-w-lg max-h-[85dvh] overflow-y-auto p-0">
+      <DialogContent className="w-[calc(100vw-16px)] sm:w-[calc(100vw-32px)] max-w-md sm:max-w-lg h-[calc(100dvh-32px)] sm:h-auto sm:max-h-[85dvh] flex flex-col p-0 gap-0">
         {/* Header with progress */}
         <div className="sticky top-0 z-10 bg-background border-b border-border p-3 sm:p-4">
           <DialogHeader className="mb-3 sm:mb-4">
@@ -325,7 +325,7 @@ export function BookingWizard({
           </div>
         </div>
 
-        <div className="p-3 sm:p-4 space-y-4 sm:space-y-5">
+        <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-4 space-y-4 sm:space-y-5">
           {/* Venue Summary - Always visible */}
           <div className="rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 p-3 sm:p-4">
             <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
@@ -571,43 +571,46 @@ export function BookingWizard({
           )}
         </div>
 
-        {/* Footer with navigation */}
-        <div className="sticky bottom-0 bg-background border-t border-border p-3 sm:p-4 flex gap-2 sm:gap-3">
+        {/* Footer with navigation - always visible */}
+        <div 
+          className="shrink-0 bg-background border-t border-border p-3 sm:p-4 flex gap-2 sm:gap-3"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+        >
           {currentStep > 1 ? (
             <Button
               variant="outline"
               onClick={handleBack}
               disabled={submitting}
-              className="flex-1 h-10 sm:h-12 text-sm sm:text-base"
+              className="flex-1 h-11 sm:h-12 text-sm sm:text-base min-w-0"
             >
               <ChevronLeft className="h-4 w-4 mr-1 shrink-0" />
-              <span>Back</span>
+              <span className="truncate">Back</span>
             </Button>
           ) : (
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={submitting}
-              className="flex-1 h-10 sm:h-12 text-sm sm:text-base"
+              className="flex-1 h-11 sm:h-12 text-sm sm:text-base min-w-0"
             >
-              Cancel
+              <span className="truncate">Cancel</span>
             </Button>
           )}
           
           {currentStep < 3 ? (
             <Button
               onClick={handleNext}
-              className="flex-1 h-10 sm:h-12 text-sm sm:text-base"
+              className="flex-1 h-11 sm:h-12 text-sm sm:text-base min-w-0"
               disabled={currentStep === 1 && !rulesAccepted}
             >
-              <span>Continue</span>
+              <span className="truncate">Continue</span>
               <ChevronRight className="h-4 w-4 ml-1 shrink-0" />
             </Button>
           ) : (
             <Button
               onClick={handleConfirm}
               disabled={submitting || !rulesAccepted}
-              className="flex-1 h-10 sm:h-12 text-sm sm:text-base"
+              className="flex-1 h-11 sm:h-12 text-sm sm:text-base min-w-0"
             >
               {submitting ? (
                 <>

@@ -101,11 +101,16 @@ export function MobileCourtSheet({
             <p className="text-xs text-muted-foreground">Drag up to explore</p>
           </div>
 
-          {/* Scrollable cards list */}
+          {/* Scrollable cards list with improved gesture handling */}
           <div 
             ref={scrollContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto overscroll-contain min-h-0"
+            className="flex-1 overflow-y-auto min-h-0"
+            style={{
+              WebkitOverflowScrolling: 'touch',
+              overscrollBehaviorY: 'contain',
+              touchAction: 'pan-y',
+            }}
           >
             <div className={cn("p-4 space-y-4", showPaginationControls ? "pb-28" : "pb-6")}>
               {loading ? (
