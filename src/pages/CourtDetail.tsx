@@ -856,6 +856,7 @@ export default function CourtDetail() {
                     ) : (
                       <span className="text-[#00f2ea] font-bold sm:font-extrabold text-sm sm:text-lg truncate">{court.name}</span>
                     )}
+                  <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest">court name</div>
                   </div>
                 </div>
                 
