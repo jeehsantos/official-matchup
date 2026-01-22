@@ -21,6 +21,7 @@ interface MobileCourtSheetProps {
 }
 
 const ITEMS_PER_PAGE = 14;
+const BOTTOM_NAV_HEIGHT = 64; // h-16 = 64px footer nav height
 
 export function MobileCourtSheet({
   courts,
@@ -112,7 +113,14 @@ export function MobileCourtSheet({
               touchAction: 'pan-y',
             }}
           >
-            <div className={cn("p-4 space-y-4", showPaginationControls ? "pb-28" : "pb-6")}>
+            <div 
+              className="p-4 space-y-4"
+              style={{
+                paddingBottom: showPaginationControls 
+                  ? 'calc(160px + env(safe-area-inset-bottom, 0px))' 
+                  : 'calc(96px + env(safe-area-inset-bottom, 0px))'
+              }}
+            >
               {loading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="animate-pulse">
@@ -140,14 +148,17 @@ export function MobileCourtSheet({
             </div>
           </div>
 
-          {/* Pagination controls */}
+          {/* Pagination controls - positioned above footer nav */}
           {showPaginationControls && (
             <div 
               className={cn(
-                "absolute bottom-0 left-0 right-0 flex items-center justify-center gap-6 py-4 px-6 bg-gradient-to-t from-background via-background to-transparent transition-all duration-300",
+                "absolute left-0 right-0 flex items-center justify-center gap-6 py-4 px-6 bg-gradient-to-t from-background via-background to-transparent transition-all duration-300",
                 showPagination ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
               )}
-              style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+              style={{ 
+                bottom: `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom, 0px))`,
+                paddingBottom: '1rem'
+              }}
             >
               <Button
                 variant="outline"
