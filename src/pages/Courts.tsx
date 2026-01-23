@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
+import { usePaginationThreshold } from "@/hooks/usePaginationThreshold";
 import type { Database } from "@/integrations/supabase/types";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
@@ -28,11 +29,10 @@ interface CourtWithVenue extends Court {
   venues: Venue | null;
 }
 
-const ITEMS_PER_PAGE = 9;
-
 export default function Courts() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
+  const itemsPerPage = usePaginationThreshold();
   const [courts, setCourts] = useState<CourtWithVenue[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -136,10 +136,10 @@ export default function Courts() {
   });
 
   // Pagination (desktop only)
-  const totalPages = Math.ceil(filteredCourts.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredCourts.length / itemsPerPage);
   const paginatedCourts = filteredCourts.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
   );
 
   // Reset page when filters change
@@ -458,7 +458,7 @@ export default function Courts() {
                   totalPages={totalPages}
                   onPageChange={handlePageChange}
                   totalItems={filteredCourts.length}
-                  itemsPerPage={ITEMS_PER_PAGE}
+                  itemsPerPage={itemsPerPage}
                   isVisible={showPagination}
                 />
               </>

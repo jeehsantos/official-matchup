@@ -22,6 +22,7 @@ interface MobileCourtSheetProps {
 
 const ITEMS_PER_PAGE = 14;
 const BOTTOM_NAV_HEIGHT = 64; // h-16 = 64px footer nav height
+const PAGINATION_CONTROLS_HEIGHT = 80; // Approximate height of pagination controls
 
 export function MobileCourtSheet({
   courts,
@@ -117,7 +118,7 @@ export function MobileCourtSheet({
               className="p-4 space-y-4"
               style={{
                 paddingBottom: showPaginationControls 
-                  ? 'calc(160px + env(safe-area-inset-bottom, 0px))' 
+                  ? `calc(${PAGINATION_CONTROLS_HEIGHT + 80}px + env(safe-area-inset-bottom, 0px))` 
                   : 'calc(96px + env(safe-area-inset-bottom, 0px))'
               }}
             >
@@ -156,8 +157,7 @@ export function MobileCourtSheet({
                 showPagination ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
               )}
               style={{ 
-                bottom: `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom, 0px))`,
-                paddingBottom: '1rem'
+                bottom: `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom, 0px) + 8px)`,
               }}
             >
               <Button
