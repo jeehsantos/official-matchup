@@ -3,17 +3,20 @@ import { MapPin, Calendar, Clock, DollarSign } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { SessionBadge } from "@/components/ui/session-badge";
 import { PlayerCount } from "@/components/ui/player-count";
-import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
+import { SportIcon } from "@/components/ui/sport-icon";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
+import type { Database } from "@/integrations/supabase/types";
 
 type SessionState = "protected" | "rescue" | "released";
 type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "hockey" | "other";
+type SportCategory = Database["public"]["Tables"]["sport_categories"]["Row"];
 
 interface GameCardProps {
   id: string;
   groupName: string;
   sport: SportType;
+  sportCategory?: SportCategory;
   courtName: string;
   venueName: string;
   date: Date;
@@ -30,6 +33,7 @@ export function GameCard({
   id,
   groupName,
   sport,
+  sportCategory,
   courtName,
   venueName,
   date,
@@ -41,6 +45,9 @@ export function GameCard({
   state,
   isPaid = false,
 }: GameCardProps) {
+  // Use sport category display name if available, otherwise fallback to "Sport TBD"
+  const sportDisplayName = sportCategory?.display_name || "Sport TBD";
+  
   return (
     <Link to={`/games/${id}`}>
       <Card className="overflow-hidden hover:shadow-card-hover transition-shadow duration-200 h-full">
@@ -48,13 +55,17 @@ export function GameCard({
           {/* Header */}
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <SportIcon sport={sport} />
+              <SportIcon 
+                sport={sport} 
+                icon={sportCategory?.icon}
+                label={sportDisplayName}
+              />
               <div>
                 <h3 className="font-display font-semibold text-base">
                   {groupName}
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  {getSportLabel(sport)}
+                  {sportDisplayName}
                 </p>
               </div>
             </div>

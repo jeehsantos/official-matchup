@@ -8,18 +8,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Calendar, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { format, isBefore, startOfDay } from "date-fns";
+import { isBefore, startOfDay } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
+import { getSportCategoriesMap } from "@/lib/sport-category-utils";
 
-type Session = Database["public"]["Tables"]["sessions"]["Row"];
-type Group = Database["public"]["Tables"]["groups"]["Row"];
-type Court = Database["public"]["Tables"]["courts"]["Row"];
-type Venue = Database["public"]["Tables"]["venues"]["Row"];
+type SportCategory = Database["public"]["Tables"]["sport_categories"]["Row"];
 
 interface GameData {
   id: string;
   groupName: string;
   sport: Database["public"]["Enums"]["sport_type"];
+  sportCategory?: SportCategory;
   courtName: string;
   venueName: string;
   date: Date;
@@ -56,13 +55,16 @@ export default function Games() {
 
     setLoading(true);
     try {
+      // Fetch sport categories map for enrichment
+      const sportCategoriesMap = await getSportCategoriesMap();
+
       // Fetch sessions where user is a player or organizer
       const { data: playerSessions } = await supabase
         .from("session_players")
         .select("session_id")
         .eq("user_id", user.id);
 
-      const playerSessionIds = playerSessions?.map(p => p.session_id) || [];
+      const playerSessionIds = playerSessions?.map((p) => p.session_id) || [];
 
       // Fetch groups where user is organizer
       const { data: organizerGroups } = await supabase
@@ -70,7 +72,7 @@ export default function Games() {
         .select("id")
         .eq("organizer_id", user.id);
 
-      const organizerGroupIds = organizerGroups?.map(g => g.id) || [];
+      const organizerGroupIds = organizerGroups?.map((g) => g.id) || [];
 
       // Fetch all sessions for these groups or where user is a player
       let query = supabase
@@ -106,7 +108,7 @@ export default function Games() {
 
       // Fetch player counts for each session
       const sessionsWithCounts = await Promise.all(
-        (sessions || []).map(async (session) => {
+        (sessions || []).map(async (session: any) => {
           const { count } = await supabase
             .from("session_players")
             .select("*", { count: "exact", head: true })
@@ -120,13 +122,19 @@ export default function Games() {
             .eq("user_id", user.id)
             .maybeSingle();
 
-          const group = session.groups as Group;
-          const court = session.courts as (Court & { venues: Venue }) | null;
+          const group = session.groups;
+          const court = session.courts;
+          
+          // Enrich with sport category data
+          const sportCategory = group?.sport_type 
+            ? sportCategoriesMap.get(group.sport_type) 
+            : undefined;
 
           return {
             id: session.id,
             groupName: group?.name || "Unknown Group",
             sport: group?.sport_type || "other",
+            sportCategory,
             courtName: court?.name || "TBD",
             venueName: court?.venues?.name || "TBD",
             date: new Date(session.session_date),

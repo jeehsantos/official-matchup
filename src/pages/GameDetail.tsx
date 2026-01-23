@@ -8,17 +8,17 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SessionBadge } from "@/components/ui/session-badge";
 import { PlayerCount } from "@/components/ui/player-count";
-import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
+import { SportIcon } from "@/components/ui/sport-icon";
 import { SessionChat } from "@/components/chat/SessionChat";
 import { EditPlayerLimits } from "@/components/session/EditPlayerLimits";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { checkProfileComplete } from "@/lib/profile-utils";
-import { getSessionTypeInfo } from "@/components/session/SessionTypeDropdown";
 import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
 import { UseCreditsModal } from "@/components/payment/UseCreditsModal";
 import { useUserCredits } from "@/hooks/useUserCredits";
+import { getSportCategory } from "@/lib/sport-category-utils";
 import {
   Dialog,
   DialogContent,
@@ -67,6 +67,7 @@ type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type SessionPlayer = Database["public"]["Tables"]["session_players"]["Row"];
 type SessionState = "protected" | "rescue" | "released";
 type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "other";
+type SportCategory = Database["public"]["Tables"]["sport_categories"]["Row"];
 
 interface PlayerWithProfile extends SessionPlayer {
   profile?: Profile;
@@ -77,6 +78,7 @@ interface PlayerWithProfile extends SessionPlayer {
 interface GameData {
   session: Session;
   group: Group;
+  sportCategory?: SportCategory;
   court?: Court & { venues?: Venue };
   players: PlayerWithProfile[];
   waitingList: PlayerWithProfile[];
@@ -145,6 +147,11 @@ export default function GameDetail() {
 
       if (groupError) throw groupError;
 
+      // Fetch sport category for the group's sport type
+      const sportCategory = groupData?.sport_type 
+        ? await getSportCategory(groupData.sport_type)
+        : null;
+
       // Fetch players with profiles
       const { data: playersData } = await supabase
         .from("session_players")
@@ -200,6 +207,7 @@ export default function GameDetail() {
       setGameData({
         session: sessionData,
         group: groupData,
+        sportCategory: sportCategory || undefined,
         court: sessionData.courts as (Court & { venues?: Venue }) | undefined,
         players: confirmedPlayers,
         waitingList: waitingList,
@@ -598,7 +606,10 @@ export default function GameDetail() {
     );
   }
 
-  const { session, group, court, players, waitingList, courtManagerId, courtManagerProfile } = gameData;
+  const { session, group, sportCategory, court, players, waitingList, courtManagerId, courtManagerProfile } = gameData;
+  
+  // Use sport category display name if available, otherwise fallback to "Sport TBD"
+  const sportDisplayName = sportCategory?.display_name || "Sport TBD";
   
   // Helper function to get Google Maps URL - using simpler format for better browser compatibility
 const getGoogleMapsUrl = (address: string): string => {
@@ -650,13 +661,7 @@ const getGoogleMapsUrl = (address: string): string => {
                   <SportIcon sport={group.sport_type as SportType} size="lg" />
                   <div>
                     <h2 className="font-display text-xl lg:text-2xl font-bold">{group.name}</h2>
-                    <p className="text-muted-foreground">{getSportLabel(group.sport_type as SportType)}</p>
-                    {/* Session Type Badge */}
-                    {session.session_type && (
-                      <Badge variant="outline" className="mt-2">
-                        {getSessionTypeInfo(session.session_type as any).emoji} {getSessionTypeInfo(session.session_type as any).label}
-                      </Badge>
-                    )}
+                    <p className="text-muted-foreground">{sportDisplayName}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
