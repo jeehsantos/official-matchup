@@ -28,7 +28,7 @@ serve(async (req) => {
     }
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2025-08-27.basil",
+      apiVersion: "2024-12-18.acacia",
     });
 
     let paymentSuccessful = false;
@@ -108,10 +108,25 @@ serve(async (req) => {
         .eq("booked_by_session_id", actualSessionId);
     }
 
+    // Update session_players to confirmed after successful payment
+    const { error: playerUpdateError } = await supabaseClient
+      .from("session_players")
+      .update({ 
+        is_confirmed: true, 
+        confirmed_at: new Date().toISOString() 
+      })
+      .eq("session_id", actualSessionId)
+      .eq("user_id", actualUserId);
+
+    if (playerUpdateError) {
+      console.error("Error updating session player:", playerUpdateError);
+    }
+
     console.log("Payment verified and recorded:", {
       sessionId: actualSessionId,
       userId: actualUserId,
       amount: amountPaid,
+      playerConfirmed: !playerUpdateError,
     });
 
     return new Response(JSON.stringify({ 

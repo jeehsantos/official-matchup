@@ -53,14 +53,14 @@ serve(async (req) => {
     }
     const user = userData.user;
 
-    // Fetch session details with court and group info
-    const { data: session, error: sessionError } = await supabaseClient
+    // Fetch session details with court and group info using admin client (bypasses RLS)
+    const { data: session, error: sessionError } = await supabaseAdmin
       .from("sessions")
       .select(`
         *,
         courts (
           *,
-          venues (owner_id)
+          venues (owner_id, stripe_account_id)
         ),
         groups (name, organizer_id)
       `)
@@ -68,8 +68,12 @@ serve(async (req) => {
       .single();
 
     if (sessionError || !session) {
+      console.error("Session fetch error:", sessionError);
       throw new Error("Session not found");
     }
+
+    // Get connected account for Stripe Connect
+    const connectedAccountId = (session.courts as any)?.venues?.stripe_account_id;
 
     // Calculate payment amount
     let amountCents: number;
@@ -171,9 +175,8 @@ serve(async (req) => {
       customerId = customers.data[0].id;
     }
 
-    // Create checkout session with application fee
-    const origin = requestOrigin || req.headers.get("origin") || "https://trlsnfxhsoqapnhjauph.lovableproject.com";
-    const successUrl = `${origin}/payment-success?session_id=${sessionId}&type=${paymentType}&credits_applied=${creditsToApply / 100}`;
+    // Create checkout session with application fee and Stripe Connect
+    const origin = requestOrigin || req.headers.get("origin") || "https://sportarenaxp.lovable.app";
     const cancelUrl = returnUrl ? `${origin}${returnUrl}` : `${origin}/games/${sessionId}`;
 
     // Adjust description if partial credits applied
@@ -181,7 +184,8 @@ serve(async (req) => {
       ? `${description} (After $${(creditsToApply / 100).toFixed(2)} credits)`
       : description;
 
-    const checkoutSession = await stripe.checkout.sessions.create({
+    // Build checkout session config
+    const checkoutConfig: Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
       line_items: [
@@ -198,7 +202,6 @@ serve(async (req) => {
         },
       ],
       mode: "payment",
-      success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: {
         session_id: sessionId,
@@ -208,14 +211,38 @@ serve(async (req) => {
         credits_applied: (creditsToApply / 100).toString(),
         total_amount: amountDollars.toString(),
       },
-      payment_intent_data: {
+    };
+
+    // Add payment_intent_data with Stripe Connect destination if venue has connected account
+    if (connectedAccountId) {
+      checkoutConfig.payment_intent_data = {
+        application_fee_amount: PLATFORM_FEE_CENTS,
+        transfer_data: {
+          destination: connectedAccountId,
+        },
         metadata: {
           session_id: sessionId,
           user_id: user.id,
           credits_applied: (creditsToApply / 100).toString(),
         },
-      },
-    });
+      };
+      console.log("Using Stripe Connect destination:", connectedAccountId);
+    } else {
+      // No connected account - platform receives full payment
+      checkoutConfig.payment_intent_data = {
+        metadata: {
+          session_id: sessionId,
+          user_id: user.id,
+          credits_applied: (creditsToApply / 100).toString(),
+        },
+      };
+      console.log("No Stripe Connect account - platform receives full payment");
+    }
+
+    // Add success_url with checkout session ID placeholder
+    checkoutConfig.success_url = `${origin}/payment-success?session_id=${sessionId}&type=${paymentType}&credits_applied=${creditsToApply / 100}&checkout_session_id={CHECKOUT_SESSION_ID}`;
+
+    const checkoutSession = await stripe.checkout.sessions.create(checkoutConfig);
 
     console.log("Checkout session created:", checkoutSession.id, "Credits to apply:", creditsToApply / 100);
 
