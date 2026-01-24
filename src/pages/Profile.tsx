@@ -37,6 +37,7 @@ import {
   EyeOff,
   CheckCircle2,
   XCircle,
+  Archive,
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -479,6 +480,23 @@ export default function Profile() {
                 </p>
               </CollapsibleContent>
             </Collapsible>
+
+            {/* Archived Sessions - Simple Link */}
+            <button 
+              onClick={() => navigate("/archived-sessions")}
+              className="w-full flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors border-b border-border"
+            >
+              <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+                <Archive className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-medium text-sm">Archived Sessions</p>
+                <p className="text-xs text-muted-foreground">
+                  View sessions older than 2 years
+                </p>
+              </div>
+              <ChevronDown className="h-5 w-5 text-muted-foreground rotate-[-90deg]" />
+            </button>
 
             {/* Privacy & Security */}
             <Collapsible 

@@ -6,7 +6,8 @@ import {
   Layers, 
   Activity,
   ArrowLeft,
-  Shield
+  Shield,
+  Archive
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -26,6 +27,12 @@ function AdminDashboardContent() {
       description: "Manage court surface types (Grass, Turf, Clay, etc.)",
       icon: Layers,
       href: "/admin/surfaces",
+    },
+    {
+      title: "Data Archiving",
+      description: "Monitor and manage data archiving and cleanup tasks",
+      icon: Archive,
+      href: "/admin/archiving",
     },
   ];
 

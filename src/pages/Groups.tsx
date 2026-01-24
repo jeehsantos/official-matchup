@@ -40,74 +40,22 @@ export default function Groups() {
     }
   }, [user, authLoading, navigate]);
 
-  // Optimized query with single database call using aggregation
+  // Optimized query using database function (eliminates N+1 queries)
   const { data: myGroups = [], isLoading: loading } = useQuery<GroupWithMemberCount[]>({
     queryKey: ["my-groups", user?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      // Fetch groups where user is organizer
-      const { data: organizerGroups, error: organizerError } = await supabase
-        .from("groups")
-        .select("*")
-        .eq("organizer_id", user.id)
-        .eq("is_active", true);
+      // Use optimized database function that gets everything in one query
+      const { data, error } = await supabase
+        .rpc("get_user_groups_with_counts", { p_user_id: user.id });
 
-      if (organizerError) throw organizerError;
-
-      // Fetch groups where user is a member
-      const { data: membershipData, error: memberError } = await supabase
-        .from("group_members")
-        .select("group_id")
-        .eq("user_id", user.id);
-
-      if (memberError) throw memberError;
-
-      const memberGroupIds = membershipData?.map(m => m.group_id) || [];
-      
-      let memberGroups: Group[] = [];
-      if (memberGroupIds.length > 0) {
-        const { data, error } = await supabase
-          .from("groups")
-          .select("*")
-          .in("id", memberGroupIds)
-          .neq("organizer_id", user.id)
-          .eq("is_active", true);
-        
-        if (error) throw error;
-        memberGroups = data || [];
+      if (error) {
+        console.error("Error fetching user groups:", error);
+        return [];
       }
 
-      // Combine and deduplicate
-      const allGroups = [...(organizerGroups || []), ...memberGroups];
-      const uniqueGroups = allGroups.filter((group, index, self) =>
-        index === self.findIndex(g => g.id === group.id)
-      );
-
-      // Fetch member counts in a single query using aggregation
-      const groupIds = uniqueGroups.map(g => g.id);
-      
-      if (groupIds.length === 0) return [];
-
-      const { data: memberCounts, error: countError } = await supabase
-        .from("group_members")
-        .select("group_id")
-        .in("group_id", groupIds);
-
-      if (countError) throw countError;
-
-      // Count members per group
-      const countsMap = new Map<string, number>();
-      memberCounts?.forEach(member => {
-        const currentCount = countsMap.get(member.group_id) || 0;
-        countsMap.set(member.group_id, currentCount + 1);
-      });
-
-      // Add counts to groups (+1 for organizer)
-      return uniqueGroups.map(group => ({
-        ...group,
-        memberCount: (countsMap.get(group.id) || 0) + 1,
-      }));
+      return (data || []) as GroupWithMemberCount[];
     },
     enabled: !!user,
     staleTime: 1000 * 60 * 3, // 3 minutes
