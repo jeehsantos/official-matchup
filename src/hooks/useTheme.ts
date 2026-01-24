@@ -4,15 +4,15 @@ type Theme = 'light' | 'dark';
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
-    // Check localStorage first
+    // Always check localStorage first and use it if available
     const stored = localStorage.getItem('theme') as Theme | null;
     if (stored) return stored;
     
-    // Check system preference
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-    return 'light';
+    // Only use system preference if no stored preference exists
+    // Then immediately save it to prevent future changes
+    const systemPreference = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    localStorage.setItem('theme', systemPreference);
+    return systemPreference;
   });
 
   useEffect(() => {
@@ -24,6 +24,7 @@ export function useTheme() {
       root.classList.remove('dark');
     }
     
+    // Always persist theme choice
     localStorage.setItem('theme', theme);
   }, [theme]);
 

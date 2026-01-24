@@ -62,7 +62,8 @@ export default function Auth() {
 
   useEffect(() => {
     // Only redirect if we have a user AND role loaded (not during sign out)
-    if (!isLoading && user && userRole) {
+    // AND we're not already being redirected from logout
+    if (!isLoading && user && userRole && !window.location.pathname.includes('/auth')) {
       // Check for stored redirect path from before auth
       const redirectPath = localStorage.getItem('redirectAfterAuth');
       if (redirectPath) {

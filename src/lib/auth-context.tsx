@@ -174,12 +174,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    // Reset state immediately before signing out to prevent loading spinner
+    // Reset state immediately before signing out
     setUser(null);
     setSession(null);
     setUserRole(null);
-    setRoleLoaded(true); // Keep true to prevent loading state
+    setRoleLoaded(true);
+    
     await supabase.auth.signOut();
+    
+    // Navigate to home page after sign out
+    window.location.href = '/';
   };
 
   const resetPassword = async (email: string) => {
