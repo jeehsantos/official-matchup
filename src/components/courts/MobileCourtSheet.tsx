@@ -32,7 +32,7 @@ export function MobileCourtSheet({
 }: MobileCourtSheetProps) {
   const [snap, setSnap] = useState<number | string | null>(0.15);
   const [currentPage, setCurrentPage] = useState(1);
-  const [showPagination, setShowPagination] = useState(false);
+  const [showPagination, setShowPagination] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const totalPages = useMemo(() => Math.ceil(courts.length / ITEMS_PER_PAGE), [courts.length]);
@@ -48,9 +48,10 @@ export function MobileCourtSheet({
     const scrollHeight = target.scrollHeight;
     const clientHeight = target.clientHeight;
     
-    // Show pagination when scrolled more than 80% or at bottom
+    // Always show pagination when there are multiple pages
+    // Hide only when drawer is at minimum snap point
     const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
-    setShowPagination(scrollPercentage > 0.8 || scrollTop > 100);
+    setShowPagination(scrollPercentage > 0.5 || scrollTop > 50);
   }, []);
 
   const handlePrevPage = useCallback(() => {
@@ -153,8 +154,8 @@ export function MobileCourtSheet({
           {showPaginationControls && (
             <div 
               className={cn(
-                "absolute left-0 right-0 flex items-center justify-center gap-6 py-4 px-6 bg-gradient-to-t from-background via-background to-transparent transition-all duration-300",
-                showPagination ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+                "absolute left-0 right-0 flex items-center justify-center gap-6 py-4 px-6 bg-gradient-to-t from-background via-background to-transparent transition-opacity duration-300",
+                showPagination ? "opacity-100" : "opacity-0 pointer-events-none"
               )}
               style={{ 
                 bottom: `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom, 0px) + 8px)`,
