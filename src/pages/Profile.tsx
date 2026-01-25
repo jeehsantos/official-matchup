@@ -72,7 +72,7 @@ export default function Profile() {
   const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
   
   // Fetch user credits
-  const { credits, isLoading: loadingCredits } = useUserCredits();
+  const { balance: credits, loading: loadingCredits } = useUserCredits();
   
   // Password change state
   const [passwordData, setPasswordData] = useState({

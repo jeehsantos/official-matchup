@@ -33,6 +33,8 @@ import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAl
 import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/EquipmentSelector";
 import { checkProfileComplete } from "@/lib/profile-utils";
 import { useVenueEquipment } from "@/hooks/useVenueEquipment";
+import { useUserCredits } from "@/hooks/useUserCredits";
+import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
 import {
   Dialog,
   DialogContent,
@@ -98,6 +100,11 @@ export default function CourtDetail() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showProfileAlert, setShowProfileAlert] = useState(false);
   const [profileMissingFields, setProfileMissingFields] = useState<string[]>([]);
+  const [showCreditsModal, setShowCreditsModal] = useState(false);
+  const [pendingPaymentSessionId, setPendingPaymentSessionId] = useState<string | null>(null);
+  
+  // Fetch user credits
+  const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
   
@@ -582,39 +589,20 @@ export default function CourtDetail() {
       if (court.payment_timing === "at_booking") {
         toast({
           title: isNewGroup ? "Group created!" : "Booking created!",
-          description: "Redirecting to payment...",
+          description: credits > 0 ? "Choose your payment method..." : "Redirecting to payment...",
         });
 
-        try {
-          const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-payment", {
-            body: {
-              sessionId: session.id,
-              paymentType: "at_booking",
-              returnUrl: `/courts/${court.id}`,
-              origin: window.location.origin,
-            },
-          });
+        // Store session ID for payment processing
+        setPendingPaymentSessionId(session.id);
 
-          if (paymentError) throw paymentError;
-
-          if (paymentData?.url) {
-            const isInIframe = window.self !== window.top;
-            if (isInIframe) {
-              const opened = window.open(paymentData.url, "_blank", "noopener,noreferrer");
-              if (!opened) window.location.href = paymentData.url;
-            } else {
-              window.location.href = paymentData.url;
-            }
-            return;
-          }
-        } catch (paymentErr) {
-          console.error("Error initiating payment:", paymentErr);
-          toast({
-            title: "Payment redirect failed",
-            description: "Your booking is saved. Please make payment from the game details page.",
-            variant: "destructive",
-          });
+        // Check if user has credits and show modal
+        if (credits > 0 && !loadingCredits) {
+          setShowCreditsModal(true);
+          return;
         }
+
+        // No credits available, proceed directly with card payment
+        await processCourtPayment(session.id, false);
       } else {
         toast({
           title: isNewGroup ? "Group created & court booked!" : "Court booked!",
@@ -636,6 +624,130 @@ export default function CourtDetail() {
       });
     } finally {
       setBooking(false);
+    }
+  };
+
+  const handleSelectPaymentMethod = async (
+    method: "credits" | "payment",
+    creditsToUse?: number
+  ) => {
+    if (!pendingPaymentSessionId || !court) return;
+    
+    setBooking(true);
+    try {
+      if (method === "credits") {
+        // Calculate total cost
+        const equipmentTotal = selectedEquipment.reduce(
+          (sum, item) => sum + item.quantity * item.pricePerUnit,
+          0
+        );
+        const totalCost = court.hourly_rate + equipmentTotal;
+
+        // If credits cover the full amount, process with credits only
+        if (credits >= totalCost) {
+          const { data, error } = await supabase.functions.invoke("create-payment", {
+            body: {
+              sessionId: pendingPaymentSessionId,
+              paymentType: "at_booking",
+              returnUrl: `/courts/${court.id}`,
+              origin: window.location.origin,
+              useCredits: true,
+              creditsAmount: creditsToUse,
+            },
+          });
+
+          if (error) throw error;
+
+          if (data?.success) {
+            // Payment completed with credits only
+            toast({
+              title: "Payment Complete",
+              description: data.message || "Payment completed using your credits.",
+            });
+            setShowCreditsModal(false);
+            setPendingPaymentSessionId(null);
+            refetchCredits();
+            
+            // Update UI
+            setSelectedSlots([]);
+            setSelectedEquipment([]);
+            if (court.venues) {
+              fetchAvailability(court.venues.id, court.id, selectedDate);
+            }
+            return;
+          }
+        }
+
+        // Partial credits - proceed to Stripe with credits applied
+        await processCourtPayment(pendingPaymentSessionId, true, creditsToUse);
+      } else {
+        // Pay with card only
+        await processCourtPayment(pendingPaymentSessionId, false);
+      }
+    } catch (error) {
+      console.error("Error processing payment:", error);
+      toast({
+        title: "Payment Error",
+        description: "Failed to process payment. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBooking(false);
+    }
+  };
+
+  const processCourtPayment = async (sessionId: string, useCredits: boolean, creditsAmount?: number) => {
+    if (!court) return;
+
+    try {
+      const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-payment", {
+        body: {
+          sessionId,
+          paymentType: "at_booking",
+          returnUrl: `/courts/${court.id}`,
+          origin: window.location.origin,
+          useCredits,
+          creditsAmount,
+        },
+      });
+
+      if (paymentError) throw paymentError;
+
+      if (paymentData?.url) {
+        setShowCreditsModal(false);
+        setPendingPaymentSessionId(null);
+        const isInIframe = window.self !== window.top;
+        if (isInIframe) {
+          const opened = window.open(paymentData.url, "_blank", "noopener,noreferrer");
+          if (!opened) window.location.href = paymentData.url;
+        } else {
+          window.location.href = paymentData.url;
+        }
+        return;
+      } else if (paymentData?.success) {
+        // Payment completed with credits only
+        toast({
+          title: "Payment Complete",
+          description: paymentData.message || "Payment completed successfully.",
+        });
+        setShowCreditsModal(false);
+        setPendingPaymentSessionId(null);
+        refetchCredits();
+        
+        // Update UI
+        setSelectedSlots([]);
+        setSelectedEquipment([]);
+        if (court.venues) {
+          fetchAvailability(court.venues.id, court.id, selectedDate);
+        }
+      }
+    } catch (paymentErr) {
+      console.error("Error initiating payment:", paymentErr);
+      toast({
+        title: "Payment redirect failed",
+        description: "Your booking is saved. Please make payment from the game details page.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1289,6 +1401,18 @@ export default function CourtDetail() {
             />
           </DialogContent>
         </Dialog>
+
+        {/* Credits Payment Modal */}
+        {court && (
+          <PaymentMethodDialog
+            open={showCreditsModal}
+            onOpenChange={setShowCreditsModal}
+            userCredits={credits}
+            sessionCost={court.hourly_rate + selectedEquipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0)}
+            onSelectPaymentMethod={handleSelectPaymentMethod}
+            isLoading={booking}
+          />
+        )}
       </div>
     </Layout>
   );

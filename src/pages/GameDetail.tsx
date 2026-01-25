@@ -16,7 +16,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { checkProfileComplete } from "@/lib/profile-utils";
 import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
-import { UseCreditsModal } from "@/components/payment/UseCreditsModal";
+import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { getSportCategory } from "@/lib/sport-category-utils";
 import {
@@ -99,7 +99,7 @@ export default function GameDetail() {
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   
   // Fetch user credits
-  const { credits, isLoading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -417,44 +417,53 @@ export default function GameDetail() {
     await processCardPayment(false);
   };
 
-  const handleUseCredits = async () => {
+  const handleSelectPaymentMethod = async (
+    method: "credits" | "payment",
+    creditsToUse?: number
+  ) => {
     if (!gameData || !id || !user) return;
     
     setActionLoading(true);
     try {
       const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
       
-      // If credits cover the full amount, process with credits
-      if (credits >= pricePerPlayer) {
-        const { data, error } = await supabase.functions.invoke("create-payment", {
-          body: {
-            sessionId: id,
-            paymentType: "before_session",
-            returnUrl: `/games/${id}`,
-            origin: window.location.origin,
-            useCredits: true,
-          },
-        });
-
-        if (error) throw error;
-
-        if (data?.success) {
-          // Payment completed with credits only
-          toast({
-            title: "Payment Complete",
-            description: data.message || "Payment completed using your credits.",
+      if (method === "credits") {
+        // If credits cover the full amount, process with credits only
+        if (credits >= pricePerPlayer) {
+          const { data, error } = await supabase.functions.invoke("create-payment", {
+            body: {
+              sessionId: id,
+              paymentType: "before_session",
+              returnUrl: `/games/${id}`,
+              origin: window.location.origin,
+              useCredits: true,
+              creditsAmount: creditsToUse,
+            },
           });
-          setShowCreditsModal(false);
-          refetchCredits();
-          fetchGameData();
-          return;
-        }
-      }
 
-      // Partial credits or need Stripe checkout
-      await processCardPayment(true);
+          if (error) throw error;
+
+          if (data?.success) {
+            // Payment completed with credits only
+            toast({
+              title: "Payment Complete",
+              description: data.message || "Payment completed using your credits.",
+            });
+            setShowCreditsModal(false);
+            refetchCredits();
+            fetchGameData();
+            return;
+          }
+        }
+
+        // Partial credits - proceed to Stripe with credits applied
+        await processCardPayment(true, creditsToUse);
+      } else {
+        // Pay with card only
+        await processCardPayment(false);
+      }
     } catch (error) {
-      console.error("Error using credits:", error);
+      console.error("Error processing payment:", error);
       toast({
         title: "Payment Error",
         description: "Failed to process payment. Please try again.",
@@ -465,7 +474,7 @@ export default function GameDetail() {
     }
   };
 
-  const processCardPayment = async (useCredits: boolean) => {
+  const processCardPayment = async (useCredits: boolean, creditsAmount?: number) => {
     if (!gameData || !id || !user) return;
 
     setActionLoading(true);
@@ -477,6 +486,7 @@ export default function GameDetail() {
           returnUrl: `/games/${id}`,
           origin: window.location.origin,
           useCredits,
+          creditsAmount,
         },
       });
 
@@ -1221,13 +1231,12 @@ const getGoogleMapsUrl = (address: string): string => {
         </Dialog>
 
         {/* Credits Payment Modal */}
-        <UseCreditsModal
+        <PaymentMethodDialog
           open={showCreditsModal}
           onOpenChange={setShowCreditsModal}
-          credits={credits}
-          paymentAmount={pricePerPlayer}
-          onUseCredits={handleUseCredits}
-          onPayWithCard={() => processCardPayment(false)}
+          userCredits={credits}
+          sessionCost={pricePerPlayer}
+          onSelectPaymentMethod={handleSelectPaymentMethod}
           isLoading={actionLoading}
         />
       </div>

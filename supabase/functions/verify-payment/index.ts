@@ -122,6 +122,34 @@ serve(async (req) => {
       console.error("Error updating session player:", playerUpdateError);
     }
 
+    // Trigger payment transfer to venue owner after confirmation
+    if (!playerUpdateError) {
+      try {
+        const transferResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/transfer-payment`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            sessionId: actualSessionId,
+            userId: actualUserId,
+          }),
+        });
+
+        const transferResult = await transferResponse.json();
+        if (!transferResult.success) {
+          console.error("Payment transfer failed:", transferResult.error);
+          // Don't fail the payment verification - transfer can be retried
+        } else {
+          console.log("Payment transferred to venue owner:", transferResult);
+        }
+      } catch (transferError) {
+        console.error("Error calling transfer-payment function:", transferError);
+        // Don't fail the payment verification - transfer can be retried
+      }
+    }
+
     console.log("Payment verified and recorded:", {
       sessionId: actualSessionId,
       userId: actualUserId,

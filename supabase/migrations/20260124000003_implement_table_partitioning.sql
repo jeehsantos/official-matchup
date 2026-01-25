@@ -1,0 +1,14 @@
+-- Performance Optimization: Implement Table Partitioning
+-- This migration sets up partitioning for tables that will grow very large
+-- NOTE: This is a FUTURE migration - apply when you have significant data volume
+
+-- ============================================================================
+-- IMPORTANT: READ BEFORE APPLYING
+-- ============================================================================
+-- This migration implements table partitioning for scalability.
+-- Only apply this when:
+-- 1. court_availability table has > 50,000 rows
+-- 2. sessions table has > 10,000 rows
+-- 3. You're experiencing slow queries on these tables
+--
+-- Partition

@@ -61,13 +61,18 @@ serve(async (req) => {
       .select("*")
       .eq("session_id", sessionId)
       .eq("user_id", userId)
-      .eq("status", "completed")
+      .in("status", ["completed", "transferred"])
       .single();
 
     let creditsAdded = 0;
 
     if (payment) {
-      // Convert paid amount to credits
+      // Check if payment was already transferred to venue owner
+      if (payment.status === "transferred" && payment.transferred_at) {
+        throw new Error("Cannot cancel - payment has already been transferred to venue owner");
+      }
+
+      // Convert paid amount to credits (only the cash portion, not credits used)
       const amountToCredit = Number(payment.amount) - Number(payment.paid_with_credits || 0);
       
       if (amountToCredit > 0) {
@@ -77,7 +82,7 @@ serve(async (req) => {
           {
             p_user_id: userId,
             p_amount: amountToCredit,
-            p_reason: "cancellation_refund",
+            p_reason: "Session cancellation",
             p_session_id: sessionId,
             p_payment_id: payment.id,
           }
@@ -89,13 +94,26 @@ serve(async (req) => {
         }
 
         creditsAdded = amountToCredit;
-
-        // Update payment status to indicate it was refunded as credits
-        await supabaseAdmin
-          .from("payments")
-          .update({ status: "refunded" })
-          .eq("id", payment.id);
       }
+
+      // Update payment status to indicate it was cancelled/refunded
+      // This prevents any future transfer attempts
+      // Use 'refunded' for payments with cash, 'cancelled' for credit-only payments
+      const newStatus = amountToCredit > 0 ? "refunded" : "cancelled";
+      const { error: updateError } = await supabaseAdmin
+        .from("payments")
+        .update({ 
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.id);
+
+      if (updateError) {
+        console.error("Error updating payment status:", updateError);
+        throw new Error("Failed to update payment status");
+      }
+
+      console.log(`Payment ${payment.id} status updated to '${newStatus}'`);
     }
 
     // Remove player from session

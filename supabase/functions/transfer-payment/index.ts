@@ -1,0 +1,234 @@
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@18.5.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+// Platform fee: $1.50 fixed
+const PLATFORM_FEE = 1.50;
+
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const supabaseAdmin = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  );
+
+  try {
+    const { paymentId, sessionId, userId } = await req.json();
+
+    if (!paymentId && (!sessionId || !userId)) {
+      throw new Error("Payment ID or (Session ID and User ID) is required");
+    }
+
+    // Fetch payment record
+    let payment;
+    if (paymentId) {
+      const { data, error } = await supabaseAdmin
+        .from("payments")
+        .select("*")
+        .eq("id", paymentId)
+        .single();
+      
+      if (error || !data) {
+        throw new Error("Payment not found");
+      }
+      payment = data;
+    } else {
+      const { data, error } = await supabaseAdmin
+        .from("payments")
+        .select("*")
+        .eq("session_id", sessionId)
+        .eq("user_id", userId)
+        .single();
+      
+      if (error || !data) {
+        throw new Error("Payment not found");
+      }
+      payment = data;
+    }
+
+    // Check if payment is in correct status
+    if (payment.status !== "completed") {
+      // Provide specific error messages for different statuses
+      if (payment.status === "refunded" || payment.status === "cancelled") {
+        throw new Error(`Cannot transfer payment - it has been ${payment.status}`);
+      }
+      throw new Error(`Payment status is ${payment.status}, expected 'completed'`);
+    }
+
+    // Check if already transferred
+    if (payment.transferred_at) {
+      console.log("Payment already transferred:", payment.id);
+      return new Response(JSON.stringify({ 
+        success: true,
+        alreadyTransferred: true,
+        message: "Payment was already transferred",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // Check player confirmation status
+    const { data: sessionPlayer, error: playerError } = await supabaseAdmin
+      .from("session_players")
+      .select("is_confirmed, confirmed_at")
+      .eq("session_id", payment.session_id)
+      .eq("user_id", payment.user_id)
+      .single();
+
+    if (playerError || !sessionPlayer) {
+      throw new Error("Session player record not found");
+    }
+
+    if (!sessionPlayer.is_confirmed) {
+      throw new Error("Player has not confirmed participation. Transfer blocked.");
+    }
+
+    // Fetch session and venue details
+    const { data: session, error: sessionError } = await supabaseAdmin
+      .from("sessions")
+      .select(`
+        *,
+        courts (
+          *,
+          venues (
+            id,
+            owner_id,
+            stripe_account_id,
+            name
+          )
+        )
+      `)
+      .eq("id", payment.session_id)
+      .single();
+
+    if (sessionError || !session) {
+      throw new Error("Session not found");
+    }
+
+    const venue = (session.courts as any)?.venues;
+    const connectedAccountId = venue?.stripe_account_id;
+
+    if (!connectedAccountId) {
+      console.log("No Stripe Connect account for venue:", venue?.id);
+      // Mark as transferred even without Stripe account (platform keeps payment)
+      await supabaseAdmin
+        .from("payments")
+        .update({
+          status: "transferred",
+          transferred_at: new Date().toISOString(),
+          transfer_amount: 0, // No transfer made
+        })
+        .eq("id", payment.id);
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        noConnectedAccount: true,
+        message: "No connected account. Payment retained by platform.",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // Calculate transfer amount (payment amount minus platform fee and credits used)
+    const paidWithCredits = Number(payment.paid_with_credits || 0);
+    const cashPaid = Number(payment.amount) - paidWithCredits;
+    const transferAmount = Math.max(0, cashPaid - PLATFORM_FEE);
+
+    // Only transfer if there's a positive amount
+    if (transferAmount <= 0) {
+      console.log("No amount to transfer after fees:", transferAmount);
+      await supabaseAdmin
+        .from("payments")
+        .update({
+          status: "transferred",
+          transferred_at: new Date().toISOString(),
+          transfer_amount: 0,
+        })
+        .eq("id", payment.id);
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        noTransferNeeded: true,
+        message: "No amount to transfer after platform fees.",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // Initialize Stripe
+    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+      apiVersion: "2024-12-18.acacia",
+    });
+
+    // Create transfer to connected account
+    const transfer = await stripe.transfers.create({
+      amount: Math.round(transferAmount * 100), // Convert to cents
+      currency: "nzd",
+      destination: connectedAccountId,
+      description: `Payment for session ${payment.session_id}`,
+      metadata: {
+        payment_id: payment.id,
+        session_id: payment.session_id,
+        user_id: payment.user_id,
+        venue_id: venue.id,
+        venue_name: venue.name,
+      },
+    });
+
+    // Update payment record with transfer details
+    const { error: updateError } = await supabaseAdmin
+      .from("payments")
+      .update({
+        status: "transferred",
+        transferred_at: new Date().toISOString(),
+        stripe_transfer_id: transfer.id,
+        transfer_amount: transferAmount,
+      })
+      .eq("id", payment.id);
+
+    if (updateError) {
+      console.error("Error updating payment record:", updateError);
+      throw new Error("Failed to update payment record after transfer");
+    }
+
+    console.log("Payment transferred successfully:", {
+      paymentId: payment.id,
+      transferId: transfer.id,
+      amount: transferAmount,
+      destination: connectedAccountId,
+      venueName: venue.name,
+    });
+
+    return new Response(JSON.stringify({ 
+      success: true,
+      transferId: transfer.id,
+      transferAmount: transferAmount,
+      message: `Payment of $${transferAmount.toFixed(2)} transferred to venue owner.`,
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Error transferring payment:", errorMessage);
+    return new Response(JSON.stringify({ 
+      error: errorMessage,
+      success: false,
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
+});
