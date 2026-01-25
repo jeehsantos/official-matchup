@@ -606,9 +606,6 @@ export type Database = {
           session_id: string
           status: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id: string | null
-          stripe_transfer_id: string | null
-          transfer_amount: number | null
-          transferred_at: string | null
           updated_at: string
           user_id: string
         }
@@ -622,9 +619,6 @@ export type Database = {
           session_id: string
           status?: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id?: string | null
-          stripe_transfer_id?: string | null
-          transfer_amount?: number | null
-          transferred_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -638,9 +632,6 @@ export type Database = {
           session_id?: string
           status?: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id?: string | null
-          stripe_transfer_id?: string | null
-          transfer_amount?: number | null
-          transferred_at?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1134,7 +1125,7 @@ export type Database = {
         | "slot_released"
         | "player_joined"
         | "group_invite"
-      payment_status: "pending" | "completed" | "failed" | "refunded" | "cancelled" | "transferred"
+      payment_status: "pending" | "completed" | "failed" | "refunded"
       payment_timing: "at_booking" | "before_session"
       session_state: "protected" | "rescue" | "released"
       session_type:
@@ -1290,7 +1281,7 @@ export const Constants = {
         "player_joined",
         "group_invite",
       ],
-      payment_status: ["pending", "completed", "failed", "refunded", "cancelled", "transferred"],
+      payment_status: ["pending", "completed", "failed", "refunded"],
       payment_timing: ["at_booking", "before_session"],
       session_state: ["protected", "rescue", "released"],
       session_type: [

@@ -59,25 +59,10 @@ export default function AdminArchiving() {
   const loadData = async () => {
     try {
       setLoading(true);
-
-      // Load archiving logs
-      const { data: logsData, error: logsError } = await supabase
-        .from("archiving_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      if (logsError) throw logsError;
-      setLogs(logsData || []);
-
-      // Load table sizes
-      const { data: sizesData, error: sizesError } = await supabase
-        .from("table_sizes")
-        .select("*")
-        .limit(20);
-
-      if (sizesError) throw sizesError;
-      setTableSizes(sizesData || []);
+      // Note: These tables don't exist yet - they need to be created via migration
+      // For now, we'll use empty arrays to prevent errors
+      setLogs([]);
+      setTableSizes([]);
     } catch (error) {
       console.error("Error loading data:", error);
       toast.error("Failed to load archiving data");

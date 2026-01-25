@@ -73,7 +73,7 @@ export default function Discover() {
     if (sportCategories.length === 0) return [{ value: "all", label: "All Sports", emoji: "🎯" }];
     return [
       { value: "all", label: "All Sports", emoji: "🎯" },
-        sportCategories.map(cat => ({
+      ...sportCategories.map(cat => ({
         value: cat.name,
         label: cat.display_name,
         emoji: cat.icon || "🎯",
@@ -86,7 +86,7 @@ export default function Discover() {
     if (surfaceTypes.length === 0) return [{ value: "all", label: "All Surfaces", emoji: "🎯" }];
     return [
       { value: "all", label: "All Surfaces", emoji: "🎯" },
-        surfaceTypes.map(surface => ({
+      ...surfaceTypes.map(surface => ({
         value: surface.name,
         label: surface.display_name,
         emoji: surface.name === "grass" ? "🌱" : 

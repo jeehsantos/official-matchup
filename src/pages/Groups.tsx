@@ -40,22 +40,73 @@ export default function Groups() {
     }
   }, [user, authLoading, navigate]);
 
-  // Optimized query using database function (eliminates N+1 queries)
+  // Fetch groups the user organizes or is a member of
   const { data: myGroups = [], isLoading: loading } = useQuery<GroupWithMemberCount[]>({
     queryKey: ["my-groups", user?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      // Use optimized database function that gets everything in one query
-      const { data, error } = await supabase
-        .rpc("get_user_groups_with_counts", { p_user_id: user.id });
+      // Fetch groups where user is organizer
+      const { data: organizerGroups, error: orgError } = await supabase
+        .from("groups")
+        .select("*")
+        .eq("organizer_id", user.id)
+        .eq("is_active", true);
 
-      if (error) {
-        console.error("Error fetching user groups:", error);
+      if (orgError) {
+        console.error("Error fetching organizer groups:", orgError);
         return [];
       }
 
-      return (data || []) as GroupWithMemberCount[];
+      // Fetch groups where user is a member
+      const { data: memberships, error: memError } = await supabase
+        .from("group_members")
+        .select("group_id")
+        .eq("user_id", user.id);
+
+      if (memError) {
+        console.error("Error fetching memberships:", memError);
+      }
+
+      const memberGroupIds = (memberships || []).map(m => m.group_id);
+      
+      let memberGroups: typeof organizerGroups = [];
+      if (memberGroupIds.length > 0) {
+        const { data: mGroups, error: mErr } = await supabase
+          .from("groups")
+          .select("*")
+          .in("id", memberGroupIds)
+          .eq("is_active", true);
+        
+        if (!mErr) {
+          memberGroups = mGroups || [];
+        }
+      }
+
+      // Combine and deduplicate
+      const allGroupsMap = new Map<string, typeof organizerGroups[0]>();
+      [...(organizerGroups || []), ...(memberGroups || [])].forEach(g => {
+        allGroupsMap.set(g.id, g);
+      });
+      
+      const allGroups = Array.from(allGroupsMap.values());
+
+      // Fetch member counts for all groups
+      const groupsWithCounts: GroupWithMemberCount[] = await Promise.all(
+        allGroups.map(async (group) => {
+          const { count } = await supabase
+            .from("group_members")
+            .select("*", { count: "exact", head: true })
+            .eq("group_id", group.id);
+          
+          return {
+            ...group,
+            memberCount: (count || 0) + 1, // +1 for organizer
+          };
+        })
+      );
+
+      return groupsWithCounts;
     },
     enabled: !!user,
     staleTime: 1000 * 60 * 3, // 3 minutes
