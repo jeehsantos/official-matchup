@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import { useState, useRef, useMemo, useCallback } from "react";
 import { Drawer as DrawerPrimitive } from "vaul";
 import { CourtCard } from "./CourtCard";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ interface MobileCourtSheetProps {
 
 const ITEMS_PER_PAGE = 14;
 const BOTTOM_NAV_HEIGHT = 64; // h-16 = 64px footer nav height
+const PAGINATION_HEIGHT = 92; // py-4 (32px) + button height (40px)
 
 export function MobileCourtSheet({
   courts,
@@ -41,14 +42,14 @@ export function MobileCourtSheet({
 
   const handlePrevPage = useCallback(() => {
     if (currentPage > 1) {
-      setCurrentPage((prev) => prev - 1);
+      setCurrentPage((prev: number) => prev - 1);
       scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [currentPage]);
 
   const handleNextPage = useCallback(() => {
     if (currentPage < totalPages) {
-      setCurrentPage((prev) => prev + 1);
+      setCurrentPage((prev: number) => prev + 1);
       scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [currentPage, totalPages]);
@@ -56,8 +57,8 @@ export function MobileCourtSheet({
   const hasPrevPage = currentPage > 1;
   const hasNextPage = currentPage < totalPages;
   
-  // Calculate proper bottom padding
-  const contentBottomPadding = BOTTOM_NAV_HEIGHT;
+  // Calculate proper bottom padding: bottom nav + pagination controls (if present)
+  const contentBottomPadding = BOTTOM_NAV_HEIGHT + (totalPages > 1 ? PAGINATION_HEIGHT : 0);
 
   return (
     <DrawerPrimitive.Root 
