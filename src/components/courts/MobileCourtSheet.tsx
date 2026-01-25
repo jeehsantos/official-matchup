@@ -141,8 +141,8 @@ export function MobileCourtSheet({
           {/* Pagination controls - Fixed at bottom, inside drawer */}
           {showPaginationControls && (
             <div 
-              id = "nextPageBRDS"
-              className="shrink-0 flex items-center justify-center gap-6 py-3 px-6 bg-background border-t border-border"
+              id = "nextPageCourt"
+              className="shrink-0 flex items-center justify-center gap-6 py-3 px-6 bg-background border-t border-border mb-[350px] md:mb-0"
               style={{ 
                 zIndex: 10,
               }}
