@@ -35,6 +35,7 @@ import { checkProfileComplete } from "@/lib/profile-utils";
 import { useVenueEquipment } from "@/hooks/useVenueEquipment";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
+import { PaymentTimingChoice } from "@/components/booking/PaymentTimingChoice";
 import {
   Dialog,
   DialogContent,
@@ -101,7 +102,9 @@ export default function CourtDetail() {
   const [showProfileAlert, setShowProfileAlert] = useState(false);
   const [profileMissingFields, setProfileMissingFields] = useState<string[]>([]);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
+  const [showPaymentTimingChoice, setShowPaymentTimingChoice] = useState(false);
   const [pendingPaymentSessionId, setPendingPaymentSessionId] = useState<string | null>(null);
+  const [pendingPaymentAmount, setPendingPaymentAmount] = useState<number>(0);
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
@@ -587,22 +590,18 @@ export default function CourtDetail() {
 
       // Check if court requires payment at booking
       if (court.payment_timing === "at_booking") {
+        // Store session ID and amount for payment processing
+        setPendingPaymentSessionId(session.id);
+        setPendingPaymentAmount(totalPrice);
+
         toast({
-          title: isNewGroup ? "Group created!" : "Booking created!",
-          description: credits > 0 ? "Choose your payment method..." : "Redirecting to payment...",
+          title: isNewGroup ? "Group created!" : "Booking reserved!",
+          description: "Choose when to complete your payment...",
         });
 
-        // Store session ID for payment processing
-        setPendingPaymentSessionId(session.id);
-
-        // Check if user has credits and show modal
-        if (credits > 0 && !loadingCredits) {
-          setShowCreditsModal(true);
-          return;
-        }
-
-        // No credits available, proceed directly with card payment
-        await processCourtPayment(session.id, false);
+        // Show pay now/later choice dialog
+        setShowPaymentTimingChoice(true);
+        return;
       } else {
         toast({
           title: isNewGroup ? "Group created & court booked!" : "Court booked!",
@@ -689,6 +688,48 @@ export default function CourtDetail() {
       toast({
         title: "Payment Error",
         description: "Failed to process payment. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBooking(false);
+    }
+  };
+
+  // Handler for pay now/later choice
+  const handlePaymentTimingChoice = async (choice: "now" | "later") => {
+    if (!pendingPaymentSessionId || !court) return;
+
+    setBooking(true);
+    try {
+      if (choice === "now") {
+        // User chose to pay now - check for credits first
+        if (credits > 0 && !loadingCredits) {
+          setShowPaymentTimingChoice(false);
+          setShowCreditsModal(true);
+        } else {
+          // No credits, proceed directly to Stripe
+          setShowPaymentTimingChoice(false);
+          await processCourtPayment(pendingPaymentSessionId, false);
+        }
+      } else {
+        // User chose to pay later - booking is already created with pending status
+        setShowPaymentTimingChoice(false);
+        setPendingPaymentSessionId(null);
+        setPendingPaymentAmount(0);
+        
+        toast({
+          title: "Booking Reserved!",
+          description: "Your court is reserved. Complete payment from the game details page before the session starts.",
+        });
+        
+        // Navigate to the game details page
+        navigate(`/games`);
+      }
+    } catch (error) {
+      console.error("Error processing payment choice:", error);
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -1413,6 +1454,15 @@ export default function CourtDetail() {
             isLoading={booking}
           />
         )}
+
+        {/* Pay Now/Later Choice Modal */}
+        <PaymentTimingChoice
+          open={showPaymentTimingChoice}
+          onOpenChange={setShowPaymentTimingChoice}
+          onChoice={handlePaymentTimingChoice}
+          isLoading={booking}
+          totalAmount={pendingPaymentAmount}
+        />
       </div>
     </Layout>
   );

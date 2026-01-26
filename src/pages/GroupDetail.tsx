@@ -112,7 +112,12 @@ export default function GroupDetail() {
       setMembers(membersWithProfiles);
       setIsMember(membersWithProfiles.some(m => m.user_id === user.id) || groupData.organizer_id === user.id);
 
-      // Fetch sessions
+      // Fetch sessions - filter to show only upcoming sessions (not started yet)
+      // and exclude sessions that ended more than 12 hours ago
+      const now = new Date();
+      const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+      const today = now.toISOString().split("T")[0];
+      
       const { data: sessionsData } = await supabase
         .from("sessions")
         .select(`
@@ -124,11 +129,21 @@ export default function GroupDetail() {
         `)
         .eq("group_id", id)
         .eq("is_cancelled", false)
-        .gte("session_date", new Date().toISOString().split("T")[0])
+        .gte("session_date", twelveHoursAgo.toISOString().split("T")[0])
         .order("session_date", { ascending: true });
+      
+      // Filter sessions client-side for more precise time-based filtering
+      const filteredSessions = (sessionsData || []).filter((session) => {
+        const sessionStart = new Date(`${session.session_date}T${session.start_time}`);
+        const sessionEnd = new Date(sessionStart.getTime() + session.duration_minutes * 60 * 1000);
+        const sessionEndPlus12h = new Date(sessionEnd.getTime() + 12 * 60 * 60 * 1000);
+        
+        // Show session if: it hasn't ended + 12 hours yet
+        return now < sessionEndPlus12h;
+      });
 
       const sessionsWithCounts = await Promise.all(
-        (sessionsData || []).map(async (session) => {
+        filteredSessions.map(async (session) => {
           const { count } = await supabase
             .from("session_players")
             .select("*", { count: "exact", head: true })
