@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Calendar, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { isBefore, startOfDay } from "date-fns";
+import { isBefore, parseISO, addHours } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import { getSportCategoriesMap } from "@/lib/sport-category-utils";
 
@@ -23,6 +23,7 @@ interface GameData {
   venueName: string;
   date: Date;
   time: string;
+  endTime: string;
   price: number;
   currentPlayers: number;
   minPlayers: number;
@@ -31,12 +32,26 @@ interface GameData {
   isPaid: boolean;
 }
 
+// Helper to check if a session is in the past (date + time has passed)
+const isSessionPast = (sessionDate: string, startTime: string): boolean => {
+  const now = new Date();
+  const sessionDateTime = parseISO(`${sessionDate}T${startTime}`);
+  return isBefore(sessionDateTime, now);
+};
+
+// Helper to check if session end time has passed (for filtering past games)
+const isSessionCompleted = (sessionDate: string, startTime: string, durationMinutes: number): boolean => {
+  const now = new Date();
+  const sessionStart = parseISO(`${sessionDate}T${startTime}`);
+  const sessionEnd = new Date(sessionStart.getTime() + durationMinutes * 60 * 1000);
+  return isBefore(sessionEnd, now);
+};
+
 export default function Games() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [upcomingGames, setUpcomingGames] = useState<GameData[]>([]);
-  const [pastGames, setPastGames] = useState<GameData[]>([]);
+  const [allGames, setAllGames] = useState<(GameData & { durationMinutes: number })[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -96,8 +111,7 @@ export default function Games() {
         query = query.in("id", playerSessionIds);
       } else {
         // No sessions
-        setUpcomingGames([]);
-        setPastGames([]);
+        setAllGames([]);
         setLoading(false);
         return;
       }
@@ -130,6 +144,13 @@ export default function Games() {
             ? sportCategoriesMap.get(group.sport_type) 
             : undefined;
 
+          // Calculate end time
+          const [hours, minutes] = session.start_time.split(":").map(Number);
+          const endMinutes = hours * 60 + minutes + session.duration_minutes;
+          const endHours = Math.floor(endMinutes / 60) % 24;
+          const endMins = endMinutes % 60;
+          const endTime = `${String(endHours).padStart(2, "0")}:${String(endMins).padStart(2, "0")}`;
+
           return {
             id: session.id,
             groupName: group?.name || "Unknown Group",
@@ -139,30 +160,48 @@ export default function Games() {
             venueName: court?.venues?.name || "TBD",
             date: new Date(session.session_date),
             time: session.start_time.slice(0, 5),
+            endTime,
             price: session.court_price / (session.min_players || 1),
             currentPlayers: count || 0,
             minPlayers: session.min_players,
             maxPlayers: session.max_players,
             state: session.state,
             isPaid: payment?.status === "completed",
-          } as GameData;
+            durationMinutes: session.duration_minutes,
+          };
         })
       );
 
-      const today = startOfDay(new Date());
-      const upcoming = sessionsWithCounts.filter(
-        (g) => !isBefore(g.date, today)
-      );
-      const past = sessionsWithCounts.filter((g) => isBefore(g.date, today));
-
-      setUpcomingGames(upcoming);
-      setPastGames(past);
+      setAllGames(sessionsWithCounts);
     } catch (error) {
       console.error("Error fetching games:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Memoized filtering: Upcoming = not yet started, Past = already started/completed
+  const { upcomingGames, pastGames } = useMemo(() => {
+    const upcoming: GameData[] = [];
+    const past: GameData[] = [];
+
+    allGames.forEach((game) => {
+      const sessionDateStr = game.date.toISOString().split("T")[0];
+      
+      // Check if the session start time has passed
+      if (isSessionPast(sessionDateStr, game.time)) {
+        past.push(game);
+      } else {
+        upcoming.push(game);
+      }
+    });
+
+    // Sort upcoming by date ascending, past by date descending
+    upcoming.sort((a, b) => a.date.getTime() - b.date.getTime());
+    past.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    return { upcomingGames: upcoming, pastGames: past };
+  }, [allGames]);
 
   if (authLoading) {
     return (

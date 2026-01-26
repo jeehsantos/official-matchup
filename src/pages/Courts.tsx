@@ -416,7 +416,7 @@ export default function Courts() {
         {/* Left Panel - Court List */}
         <div 
           ref={scrollContainerRef}
-          className="w-full lg:w-[55%] xl:w-[60%] overflow-y-auto"
+          className="w-full lg:w-[55%] xl:w-[60%] overflow-y-auto lg:scrollbar-hide"
         >
           <div className="p-4 lg:p-6 space-y-4">
             {/* Header */}
