@@ -1,17 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { ManagerLayout } from "@/components/layout/ManagerLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SportIcon } from "@/components/ui/sport-icon";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { 
   ArrowLeft,
   Plus,
@@ -19,8 +12,7 @@ import {
   Trash2,
   Users,
   DollarSign,
-  Loader2,
-  Search
+  Loader2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -39,10 +31,6 @@ export default function ManagerCourts() {
   const [venue, setVenue] = useState<Venue | null>(null);
   const [courts, setCourts] = useState<Court[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sportFilter, setSportFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
-  const [locationFilter, setLocationFilter] = useState<"all" | "indoor" | "outdoor">("all");
 
   useEffect(() => {
     if (venueId && user) {
@@ -104,36 +92,6 @@ export default function ManagerCourts() {
     }
   };
 
-  // Get unique sport types from courts
-  const sportTypes = useMemo(() => {
-    const uniqueSports = [...new Set(courts.map(c => c.sport_type).filter(Boolean))] as string[];
-    return uniqueSports.sort();
-  }, [courts]);
-
-  // Filter courts based on search and filters
-  const filteredCourts = useMemo(() => {
-    return courts.filter(court => {
-      const matchesSearch = 
-        court.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        court.sport_type?.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesSport = 
-        sportFilter === "all" || court.sport_type === sportFilter;
-      
-      const matchesStatus = 
-        statusFilter === "all" ||
-        (statusFilter === "active" && court.is_active) ||
-        (statusFilter === "inactive" && !court.is_active);
-      
-      const matchesLocation = 
-        locationFilter === "all" ||
-        (locationFilter === "indoor" && court.is_indoor) ||
-        (locationFilter === "outdoor" && !court.is_indoor);
-
-      return matchesSearch && matchesSport && matchesStatus && matchesLocation;
-    });
-  }, [courts, searchQuery, sportFilter, statusFilter, locationFilter]);
-
   if (loading) {
     return (
       <ManagerLayout>
@@ -148,141 +106,20 @@ export default function ManagerCourts() {
     <ManagerLayout>
       <div className="p-4 md:p-6 space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/manager/venues")}>
-              <ArrowLeft className="h-5 w-5" />
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/manager/venues")}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="flex-1">
+            <h1 className="font-display text-2xl font-bold">{venue?.name}</h1>
+            <p className="text-muted-foreground">Manage courts at this venue</p>
+          </div>
+          <Link to={`/manager/venues/${venueId}/courts/new`}>
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add Court
             </Button>
-            <div className="flex-1">
-              <h1 className="font-display text-2xl font-bold">{venue?.name}</h1>
-              <p className="text-muted-foreground">
-                {filteredCourts.length} court{filteredCourts.length !== 1 ? "s" : ""} found
-              </p>
-            </div>
-            <Link to={`/manager/venues/${venueId}/courts/new`}>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add Court
-              </Button>
-            </Link>
-          </div>
-
-          {/* Search and Filters */}
-          <div className="space-y-3">
-            {/* Search Bar */}
-            <div className="relative">
-              <div className="flex items-center gap-3 bg-card border border-border rounded-lg px-4 py-2.5 shadow-sm hover:shadow-md transition-shadow">
-                <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Search courts by name or sport type..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
-                />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery("")}
-                    className="h-5 w-5 rounded-full bg-muted flex items-center justify-center hover:bg-muted-foreground/20 transition-colors"
-                  >
-                    <span className="text-xs text-muted-foreground">✕</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Filter Dropdowns */}
-            <div className="flex flex-wrap gap-2">
-              {/* Sport Type Filter */}
-              {sportTypes.length > 0 && (
-                <Select value={sportFilter} onValueChange={setSportFilter}>
-                  <SelectTrigger className="w-[160px] h-9">
-                    <SelectValue>
-                      <span className="text-sm capitalize">
-                        {sportFilter === "all" ? "All Sports" : sportFilter}
-                      </span>
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border border-border shadow-lg">
-                    <SelectItem value="all">All Sports</SelectItem>
-                    {sportTypes.map((sport) => (
-                      <SelectItem key={sport} value={sport} className="capitalize">
-                        {sport}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-
-              {/* Status Filter */}
-              <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as "all" | "active" | "inactive")}>
-                <SelectTrigger className="w-[140px] h-9">
-                  <SelectValue>
-                    <div className="flex items-center gap-2">
-                      <span>{statusFilter === "all" ? "📋" : statusFilter === "active" ? "✅" : "⏸️"}</span>
-                      <span className="text-sm">
-                        {statusFilter === "all" ? "All Status" : statusFilter === "active" ? "Active" : "Inactive"}
-                      </span>
-                    </div>
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="bg-popover border border-border shadow-lg">
-                  <SelectItem value="all">
-                    <div className="flex items-center gap-2">
-                      <span>📋</span>
-                      <span>All Status</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="active">
-                    <div className="flex items-center gap-2">
-                      <span>✅</span>
-                      <span>Active</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="inactive">
-                    <div className="flex items-center gap-2">
-                      <span>⏸️</span>
-                      <span>Inactive</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Location Filter */}
-              <Select value={locationFilter} onValueChange={(val) => setLocationFilter(val as "all" | "indoor" | "outdoor")}>
-                <SelectTrigger className="w-[140px] h-9">
-                  <SelectValue>
-                    <div className="flex items-center gap-2">
-                      <span>{locationFilter === "all" ? "🏟️" : locationFilter === "indoor" ? "🏠" : "🌤️"}</span>
-                      <span className="text-sm capitalize">
-                        {locationFilter === "all" ? "All Locations" : locationFilter}
-                      </span>
-                    </div>
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="bg-popover border border-border shadow-lg">
-                  <SelectItem value="all">
-                    <div className="flex items-center gap-2">
-                      <span>🏟️</span>
-                      <span>All Locations</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="indoor">
-                    <div className="flex items-center gap-2">
-                      <span>🏠</span>
-                      <span>Indoor</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="outdoor">
-                    <div className="flex items-center gap-2">
-                      <span>🌤️</span>
-                      <span>Outdoor</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          </Link>
         </div>
 
         {/* Courts List */}
@@ -301,32 +138,9 @@ export default function ManagerCourts() {
               </Link>
             </CardContent>
           </Card>
-        ) : filteredCourts.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                🏟️
-              </div>
-              <h3 className="font-semibold text-lg mb-2">No courts found</h3>
-              <p className="text-muted-foreground mb-4">
-                Try adjusting your search or filters.
-              </p>
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setSearchQuery("");
-                  setSportFilter("all");
-                  setStatusFilter("all");
-                  setLocationFilter("all");
-                }}
-              >
-                Clear Filters
-              </Button>
-            </CardContent>
-          </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredCourts.map((court) => (
+            {courts.map((court) => (
               <Card key={court.id}>
                 <div className="aspect-video bg-muted relative">
                   {court.photo_url ? (

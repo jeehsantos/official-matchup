@@ -8,6 +8,8 @@ import {
   Building2, 
   Plus,
   MapPin,
+  Phone,
+  Mail,
   Edit,
   ChevronRight,
   Loader2
@@ -53,9 +55,7 @@ export default function ManagerVenues() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-2xl font-bold">Venues</h1>
-            <p className="text-muted-foreground">
-              Manage your sports venues
-            </p>
+            <p className="text-muted-foreground">Manage your sports venues</p>
           </div>
           <Link to="/manager/venues/new">
             <Button className="gap-2">

@@ -16,7 +16,6 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { format } from "date-fns";
-import { EarningsAnalytics } from "@/components/manager/EarningsAnalytics";
 
 export default function ManagerDashboard() {
   const { user } = useAuth();
@@ -143,7 +142,7 @@ export default function ManagerDashboard() {
             <h1 className="font-display text-2xl font-bold">Dashboard</h1>
             <p className="text-muted-foreground">Manage your venues and bookings</p>
           </div>
-          <Link to="/manager/venues/new">
+          <Link to="/manager/courts/new">
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
               Add Venue
@@ -177,12 +176,12 @@ export default function ManagerDashboard() {
                 <div className="text-center py-8">
                   <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground mb-4">No venues yet</p>
-                  <Link to="/manager/venues/new">
+                  <Link to="/manager/courts/new">
                     <Button>Add Your First Venue</Button>
                   </Link>
                 </div>
               ) : (
-                <Link to="/manager/venues">
+                <Link to="/manager/courts">
                   <Button variant="outline" className="w-full justify-between">
                     Manage Venues
                     <ArrowRight className="h-4 w-4" />
@@ -201,7 +200,7 @@ export default function ManagerDashboard() {
                 <div className="text-center py-8">
                   <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground mb-4">Add venues first</p>
-                  <Link to="/manager/venues/new">
+                  <Link to="/manager/courts/new">
                     <Button variant="outline">Add Venue</Button>
                   </Link>
                 </div>
@@ -257,9 +256,6 @@ export default function ManagerDashboard() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Earnings Analytics Section */}
-        {user && <EarningsAnalytics userId={user.id} />}
       </div>
     </ManagerLayout>
   );
