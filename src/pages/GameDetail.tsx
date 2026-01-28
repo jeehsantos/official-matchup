@@ -663,25 +663,66 @@ const getGoogleMapsUrl = (address: string): string => {
         </div>
 
         <div className="p-4 space-y-4 max-w-4xl mx-auto lg:p-6 lg:space-y-6 pb-24">
-          {/* Game Header Card */}
-          <Card>
-            <CardContent className="p-4 lg:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <SportIcon sport={group.sport_type as SportType} size="lg" />
-                  <div>
-                    <h2 className="font-display text-xl lg:text-2xl font-bold">{group.name}</h2>
-                    <p className="text-muted-foreground">{sportDisplayName}</p>
+          {/* Game Header Card with Court Photo */}
+          <Card className="overflow-hidden">
+            {/* Court Photo Header */}
+            {court?.photo_url && (
+              <div className="relative w-full h-48 sm:h-56 lg:h-64">
+                <img 
+                  src={court.photo_url} 
+                  alt={court.name || "Court"} 
+                  className="w-full h-full object-cover"
+                  loading="eager"
+                />
+                {/* Overlay with court info */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
+                  <div className="flex items-center gap-3 text-white">
+                    <SportIcon sport={group.sport_type as SportType} size="lg" className="drop-shadow-lg" />
+                    <div>
+                      <h2 className="font-display text-lg sm:text-xl font-bold drop-shadow-md">
+                        {court.name || group.name}
+                      </h2>
+                      <p className="text-sm text-white/90 drop-shadow-md">{sportDisplayName}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <SessionBadge state={session.state as SessionState} />
-                  {isGamePast && (
-                    <Badge variant="secondary">Completed</Badge>
+                  {isRescueActive ? (
+                    <Badge className="bg-warning/90 text-warning-foreground border-0 drop-shadow-lg">
+                      Rescue Mode
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-success/90 text-success-foreground border-0 drop-shadow-lg">
+                      Booked
+                    </Badge>
                   )}
                 </div>
               </div>
-            </CardContent>
+            )}
+            
+            {/* Fallback if no photo */}
+            {!court?.photo_url && (
+              <CardContent className="p-4 lg:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <SportIcon sport={group.sport_type as SportType} size="lg" />
+                    <div>
+                      <h2 className="font-display text-xl lg:text-2xl font-bold">{group.name}</h2>
+                      <p className="text-muted-foreground">{sportDisplayName}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isRescueActive ? (
+                      <Badge className="bg-warning text-warning-foreground">Rescue Mode</Badge>
+                    ) : (
+                      <Badge className="bg-success text-success-foreground">Booked</Badge>
+                    )}
+                    {isGamePast && (
+                      <Badge variant="secondary">Completed</Badge>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            )}
           </Card>
 
           {/* Organizer Rescue Controls */}
