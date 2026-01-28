@@ -681,6 +681,120 @@ export type Database = {
         }
         Relationships: []
       }
+      quick_challenge_players: {
+        Row: {
+          challenge_id: string
+          id: string
+          joined_at: string
+          paid_at: string | null
+          payment_status: string
+          slot_position: number
+          stripe_session_id: string | null
+          team: string
+          user_id: string
+        }
+        Insert: {
+          challenge_id: string
+          id?: string
+          joined_at?: string
+          paid_at?: string | null
+          payment_status?: string
+          slot_position: number
+          stripe_session_id?: string | null
+          team: string
+          user_id: string
+        }
+        Update: {
+          challenge_id?: string
+          id?: string
+          joined_at?: string
+          paid_at?: string | null
+          payment_status?: string
+          slot_position?: number
+          stripe_session_id?: string | null
+          team?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_challenge_players_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "quick_challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quick_challenges: {
+        Row: {
+          court_id: string | null
+          created_at: string
+          created_by: string
+          game_mode: string
+          id: string
+          price_per_player: number
+          scheduled_date: string | null
+          scheduled_time: string | null
+          sport_category_id: string
+          status: string
+          total_slots: number
+          updated_at: string
+          venue_id: string | null
+        }
+        Insert: {
+          court_id?: string | null
+          created_at?: string
+          created_by: string
+          game_mode: string
+          id?: string
+          price_per_player?: number
+          scheduled_date?: string | null
+          scheduled_time?: string | null
+          sport_category_id: string
+          status?: string
+          total_slots: number
+          updated_at?: string
+          venue_id?: string | null
+        }
+        Update: {
+          court_id?: string | null
+          created_at?: string
+          created_by?: string
+          game_mode?: string
+          id?: string
+          price_per_player?: number
+          scheduled_date?: string | null
+          scheduled_time?: string | null
+          sport_category_id?: string
+          status?: string
+          total_slots?: number
+          updated_at?: string
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_challenges_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quick_challenges_sport_category_id_fkey"
+            columns: ["sport_category_id"]
+            isOneToOne: false
+            referencedRelation: "sport_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quick_challenges_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_players: {
         Row: {
           confirmed_at: string | null

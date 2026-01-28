@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { GameCard } from "@/components/cards/GameCard";
-import { GroupCard } from "@/components/cards/GroupCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,10 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Search, AlertTriangle, Users } from "lucide-react";
+import { Loader2, Search, AlertTriangle, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSportCategories } from "@/hooks/useSportCategories";
 import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
+import { QuickGameModal } from "@/components/quick-challenge/QuickGameModal";
+import { QuickChallengeCard } from "@/components/quick-challenge/QuickChallengeCard";
+import { useQuickChallenges, useJoinChallenge } from "@/hooks/useQuickChallenges";
 
 type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "other";
 
@@ -37,32 +39,26 @@ interface RescueGame {
   state: "rescue";
 }
 
-interface PublicGroup {
-  id: string;
-  name: string;
-  sport: SportType;
-  city: string;
-  memberCount: number;
-  schedule: string;
-  isPublic: boolean;
-  weeklyPrice: number;
-}
-
-const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
 export default function Discover() {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<string>(
-    searchParams.get("filter") === "groups" ? "groups" : "rescue"
+    searchParams.get("filter") === "quickgames" ? "quickgames" : "rescue"
   );
   const [selectedSport, setSelectedSport] = useState("all");
   const [selectedCourtType, setSelectedCourtType] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [rescueGames, setRescueGames] = useState<RescueGame[]>([]);
-  const [publicGroups, setPublicGroups] = useState<PublicGroup[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [quickGameModalOpen, setQuickGameModalOpen] = useState(false);
+
+  // Quick Challenges hooks
+  const { data: quickChallenges = [], isLoading: loadingChallenges } = useQuickChallenges({
+    sportCategoryId: selectedSport !== "all" ? selectedSport : undefined,
+    status: "open",
+  });
+  const joinChallenge = useJoinChallenge();
   
   // Fetch dynamic categories from database - NO FALLBACKS
   const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
@@ -191,37 +187,7 @@ export default function Discover() {
 
       setRescueGames(rescueGamesData);
 
-      // Fetch public groups
-      const { data: groups } = await supabase
-        .from("groups")
-        .select("*")
-        .eq("is_public", true)
-        .eq("is_active", true);
-
-      const publicGroupsData: PublicGroup[] = await Promise.all(
-        (groups || []).map(async (group) => {
-          const { count } = await supabase
-            .from("group_members")
-            .select("*", { count: "exact", head: true })
-            .eq("group_id", group.id);
-
-          const dayName = dayNames[group.default_day_of_week];
-          const time = group.default_start_time.slice(0, 5);
-
-          return {
-            id: group.id,
-            name: group.name,
-            sport: group.sport_type as SportType,
-            city: group.city,
-            memberCount: count || 0,
-            schedule: `${dayName}s at ${time}`,
-            isPublic: true,
-            weeklyPrice: group.weekly_court_price / group.min_players,
-          };
-        })
-      );
-
-      setPublicGroups(publicGroupsData);
+      // Quick challenges are fetched separately via useQuickChallenges hook
     } catch (error) {
       console.error("Error fetching discover data:", error);
     } finally {
@@ -241,17 +207,27 @@ export default function Discover() {
     });
   }, [rescueGames, selectedSport, searchQuery]);
 
-  // Filter public groups based on sport and search
-  const filteredGroups = useMemo(() => {
-    return publicGroups.filter((group) => {
-      const matchesSport = selectedSport === "all" || group.sport === selectedSport;
-      const matchesSearch = searchQuery === "" || 
-        group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        group.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        group.sport.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSport && matchesSearch;
+  // Filter quick challenges based on search
+  const filteredChallenges = useMemo(() => {
+    if (!searchQuery) return quickChallenges;
+    return quickChallenges.filter((challenge) => {
+      const sportName = challenge.sport_categories?.display_name?.toLowerCase() || "";
+      const venueName = challenge.venues?.name?.toLowerCase() || "";
+      return sportName.includes(searchQuery.toLowerCase()) ||
+             venueName.includes(searchQuery.toLowerCase());
     });
-  }, [publicGroups, selectedSport, searchQuery]);
+  }, [quickChallenges, searchQuery]);
+
+  // Handle joining a challenge slot
+  const handleJoinSlot = (challengeId: string, team: "left" | "right", slotPosition: number) => {
+    joinChallenge.mutate({ challengeId, team, slotPosition });
+  };
+
+  // Handle payment for a challenge
+  const handlePayment = (challengeId: string) => {
+    // TODO: Integrate with Stripe checkout
+    console.log("Payment for challenge:", challengeId);
+  };
 
   if (isLoading) {
     return (
@@ -266,22 +242,32 @@ export default function Discover() {
   return (
     <MobileLayout>
       <div className="px-4 py-4 space-y-4 max-w-6xl mx-auto lg:px-6">
-        {/* Header */}
-        <div>
-          <h1 className="font-display text-2xl lg:text-3xl font-bold">Find Games</h1>
-          <p className="text-muted-foreground text-sm">
-            Join rescue games or discover public groups
-          </p>
+        {/* Header with Quick Game Button */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-2xl lg:text-3xl font-bold">Find Games</h1>
+            <p className="text-muted-foreground text-sm">
+              Join rescue games or quick challenges
+            </p>
+          </div>
+          <Button
+            onClick={() => setQuickGameModalOpen(true)}
+            className="shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+          >
+            <Zap className="h-4 w-4" />
+            <span className="hidden sm:inline">Quick Game</span>
+            <span className="sm:hidden">Quick</span>
+          </Button>
         </div>
 
         {/* Info Banner */}
-        <Card className="bg-warning/10 border-warning/20">
+        <Card className="bg-primary/10 border-primary/20">
           <CardContent className="p-4 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+            <Zap className="h-5 w-5 text-primary shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-sm">Rescue Games Need You!</p>
+              <p className="font-medium text-sm">Quick Challenges</p>
               <p className="text-sm text-muted-foreground">
-                These games are short on players. Join now and help save the game!
+                Find players for instant matches or join rescue games that need extra players!
               </p>
             </div>
           </CardContent>
@@ -371,9 +357,14 @@ export default function Discover() {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="groups" className="gap-2">
-              <Users className="h-4 w-4" />
-              Public Groups
+            <TabsTrigger value="quickgames" className="gap-2">
+              <Zap className="h-4 w-4" />
+              Quick Games
+              {filteredChallenges.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 bg-primary text-primary-foreground rounded-full text-xs font-bold">
+                  {filteredChallenges.length}
+                </span>
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -412,41 +403,72 @@ export default function Discover() {
             )}
           </TabsContent>
 
-          <TabsContent value="groups" className="mt-4">
-            {loadingData ? (
+          <TabsContent value="quickgames" className="mt-4">
+            {loadingChallenges ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ) : filteredGroups.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredGroups.map((group) => (
-                  <GroupCard key={group.id} {...group} />
+            ) : filteredChallenges.length > 0 ? (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {filteredChallenges.map((challenge) => (
+                  <QuickChallengeCard
+                    key={challenge.id}
+                    challenge={{
+                      id: challenge.id,
+                      sportCategoryId: challenge.sport_category_id,
+                      sportName: challenge.sport_categories?.display_name,
+                      sportIcon: challenge.sport_categories?.icon || "🎯",
+                      gameMode: challenge.game_mode,
+                      status: challenge.status,
+                      venueName: challenge.venues?.name,
+                      venueAddress: challenge.venues?.address,
+                      scheduledDate: challenge.scheduled_date || undefined,
+                      scheduledTime: challenge.scheduled_time || undefined,
+                      pricePerPlayer: challenge.price_per_player,
+                      totalSlots: challenge.total_slots,
+                      players: (challenge.quick_challenge_players || []).map(p => ({
+                        id: p.id,
+                        userId: p.user_id,
+                        name: p.profiles?.full_name || "Player",
+                        avatarUrl: p.profiles?.avatar_url,
+                        nationalityCode: null,
+                        paymentStatus: p.payment_status as "pending" | "paid" | "refunded",
+                        team: p.team as "left" | "right",
+                        slotPosition: p.slot_position,
+                      })),
+                    }}
+                    currentUserId={user?.id}
+                    onJoinSlot={handleJoinSlot}
+                    onPayment={handlePayment}
+                  />
                 ))}
               </div>
             ) : (
               <div className="text-center py-12 text-muted-foreground">
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                  <Users className="h-8 w-8 opacity-50" />
+                  <Zap className="h-8 w-8 opacity-50" />
                 </div>
-                <p className="font-medium">No groups found</p>
+                <p className="font-medium">No quick games yet</p>
                 <p className="text-sm mt-1">
-                  {selectedSport !== "all" 
-                    ? `Try selecting a different sport or clear filters`
-                    : "Check back later for new groups"}
+                  Be the first to create a quick challenge!
                 </p>
-                {selectedSport !== "all" && (
-                  <Button 
-                    variant="outline" 
-                    className="mt-4"
-                    onClick={() => setSelectedSport("all")}
-                  >
-                    Clear Filters
-                  </Button>
-                )}
+                <Button 
+                  className="mt-4 gap-2"
+                  onClick={() => setQuickGameModalOpen(true)}
+                >
+                  <Zap className="h-4 w-4" />
+                  Create Quick Game
+                </Button>
               </div>
             )}
           </TabsContent>
         </Tabs>
+
+        {/* Quick Game Modal */}
+        <QuickGameModal 
+          open={quickGameModalOpen} 
+          onOpenChange={setQuickGameModalOpen} 
+        />
       </div>
     </MobileLayout>
   );
