@@ -23,12 +23,15 @@ import {
   Filter,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { format } from "date-fns";
+import { format, isWithinInterval } from "date-fns";
 import { cn } from "@/lib/utils";
+import { DateRange } from "react-day-picker";
 
 interface Booking {
   id: string;
@@ -58,6 +61,12 @@ interface Booking {
       name: string;
       organizer_id: string;
     };
+    players?: Array<{
+      user_id: string;
+      profile?: {
+        full_name: string;
+      };
+    }>;
   } | null;
   profile?: {
     full_name: string;
@@ -85,8 +94,10 @@ export default function ManagerBookings() {
   const [loading, setLoading] = useState(true);
   const [selectedVenue, setSelectedVenue] = useState<string>("all");
   const [selectedCourt, setSelectedCourt] = useState<string>("all");
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<BookingStatus>("active");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   useEffect(() => {
     if (user) {
@@ -159,7 +170,8 @@ export default function ManagerBookings() {
       // Get session details for bookings with sessions
       const sessionIds = (bookingsData || [])
         .filter(b => b.booked_by_session_id)
-        .map(b => b.booked_by_session_id);
+        .map(b => b.booked_by_session_id)
+        .filter((id): id is string => id !== null);
 
       let sessionsMap: Record<string, any> = {};
       if (sessionIds.length > 0) {
@@ -174,6 +186,27 @@ export default function ManagerBookings() {
 
         sessionsData?.forEach(s => {
           sessionsMap[s.id] = s;
+        });
+
+        // Get session players with their profiles
+        const { data: sessionPlayersData } = await supabase
+          .from("session_players")
+          .select(`
+            session_id,
+            user_id,
+            profile:profiles!session_players_user_id_fkey(full_name)
+          `)
+          .in("session_id", sessionIds);
+
+        // Group players by session
+        sessionPlayersData?.forEach(sp => {
+          if (!sessionsMap[sp.session_id].players) {
+            sessionsMap[sp.session_id].players = [];
+          }
+          sessionsMap[sp.session_id].players.push({
+            user_id: sp.user_id,
+            profile: sp.profile
+          });
         });
       }
 
@@ -216,12 +249,18 @@ export default function ManagerBookings() {
     return courts.filter(c => c.venue_id === selectedVenue);
   }, [courts, selectedVenue]);
 
-  // Reset court selection when venue changes
+  // Reset court selection and page when venue changes
   useEffect(() => {
     setSelectedCourt("all");
+    setCurrentPage(1);
   }, [selectedVenue]);
 
-  // Filter bookings based on status, venue, court, and date
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCourt, dateRange, activeTab]);
+
+  // Filter bookings based on status, venue, court, and date range
   const filteredBookings = useMemo(() => {
     return bookings.filter(booking => {
       // Status filter
@@ -248,13 +287,32 @@ export default function ManagerBookings() {
       // Court filter
       const matchesCourt = selectedCourt === "all" || booking.court_id === selectedCourt;
 
-      // Date filter
-      const matchesDate = !selectedDate || 
-        format(new Date(booking.available_date), "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
+      // Date range filter
+      let matchesDateRange = true;
+      if (dateRange?.from) {
+        const bookingDate = new Date(booking.available_date);
+        if (dateRange.to) {
+          matchesDateRange = isWithinInterval(bookingDate, {
+            start: dateRange.from,
+            end: dateRange.to
+          });
+        } else {
+          matchesDateRange = format(bookingDate, "yyyy-MM-dd") === format(dateRange.from, "yyyy-MM-dd");
+        }
+      }
 
-      return matchesStatus && matchesVenue && matchesCourt && matchesDate;
+      return matchesStatus && matchesVenue && matchesCourt && matchesDateRange;
     });
-  }, [bookings, activeTab, selectedVenue, selectedCourt, selectedDate]);
+  }, [bookings, activeTab, selectedVenue, selectedCourt, dateRange]);
+
+  // Paginate filtered bookings
+  const paginatedBookings = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredBookings.slice(startIndex, endIndex);
+  }, [filteredBookings, currentPage]);
+
+  const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
 
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(":");
@@ -265,8 +323,13 @@ export default function ManagerBookings() {
   };
 
   const getStatusBadge = (booking: Booking) => {
+    const isPast = new Date(`${booking.available_date}T${booking.end_time}`) < new Date();
+    
     if (booking.session?.is_cancelled) {
       return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> Cancelled</Badge>;
+    }
+    if (isPast) {
+      return <Badge variant="default" className="gap-1 bg-blue-600"><CheckCircle className="h-3 w-3" /> Completed</Badge>;
     }
     if (booking.payment_status === "paid") {
       return <Badge variant="default" className="gap-1 bg-green-600"><CheckCircle className="h-3 w-3" /> Paid</Badge>;
@@ -275,12 +338,36 @@ export default function ManagerBookings() {
   };
 
   const getBookerName = (booking: Booking) => {
-    if (booking.session?.group?.name) {
-      return booking.session.group.name;
+    // For session bookings, show player names
+    if (booking.session) {
+      const players = booking.session.players || [];
+      if (players.length > 0) {
+        const playerNames = players
+          .map(p => p.profile?.full_name)
+          .filter(Boolean);
+        
+        if (playerNames.length > 0) {
+          if (playerNames.length === 1) {
+            return playerNames[0];
+          } else if (playerNames.length === 2) {
+            return playerNames.join(" & ");
+          } else {
+            return `${playerNames[0]} +${playerNames.length - 1} others`;
+          }
+        }
+      }
+      
+      // Fallback to group name if no players found
+      if (booking.session.group?.name) {
+        return booking.session.group.name;
+      }
     }
+    
+    // For direct bookings
     if (booking.profile?.full_name) {
       return booking.profile.full_name;
     }
+    
     return "Unknown";
   };
 
@@ -382,29 +469,40 @@ export default function ManagerBookings() {
                     <Button
                       variant="outline"
                       className={cn(
-                        "w-full sm:w-[200px] justify-start text-left font-normal",
-                        !selectedDate && "text-muted-foreground"
+                        "w-full sm:w-[240px] justify-start text-left font-normal",
+                        !dateRange && "text-muted-foreground"
                       )}
                     >
                       <Calendar className="mr-2 h-4 w-4" />
-                      {selectedDate ? format(selectedDate, "MMM d, yyyy") : "All Dates"}
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, "MMM d")} - {format(dateRange.to, "MMM d, yyyy")}
+                          </>
+                        ) : (
+                          format(dateRange.from, "MMM d, yyyy")
+                        )
+                      ) : (
+                        "All Dates"
+                      )}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <CalendarComponent
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
+                      mode="range"
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={2}
                       initialFocus
                     />
-                    {selectedDate && (
+                    {dateRange && (
                       <div className="p-3 border-t">
                         <Button
                           variant="outline"
                           className="w-full"
-                          onClick={() => setSelectedDate(undefined)}
+                          onClick={() => setDateRange(undefined)}
                         >
-                          Clear Date
+                          Clear Date Range
                         </Button>
                       </div>
                     )}
@@ -450,9 +548,41 @@ export default function ManagerBookings() {
                     </CardContent>
                   </Card>
                 ) : (
-                  filteredBookings.map(booking => (
-                    <BookingCard key={booking.id} booking={booking} />
-                  ))
+                  <>
+                    {paginatedBookings.map(booking => (
+                      <BookingCard key={booking.id} booking={booking} />
+                    ))}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between pt-4">
+                        <p className="text-sm text-muted-foreground">
+                          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredBookings.length)} of {filteredBookings.length} bookings
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <span className="text-sm">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
@@ -468,9 +598,41 @@ export default function ManagerBookings() {
                     </CardContent>
                   </Card>
                 ) : (
-                  filteredBookings.map(booking => (
-                    <BookingCard key={booking.id} booking={booking} />
-                  ))
+                  <>
+                    {paginatedBookings.map(booking => (
+                      <BookingCard key={booking.id} booking={booking} />
+                    ))}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between pt-4">
+                        <p className="text-sm text-muted-foreground">
+                          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredBookings.length)} of {filteredBookings.length} bookings
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <span className="text-sm">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
@@ -481,14 +643,46 @@ export default function ManagerBookings() {
                       <CheckCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                       <h3 className="font-semibold text-lg mb-2">No completed bookings</h3>
                       <p className="text-muted-foreground">
-                        Completed and paid bookings will appear here.
+                        Completed bookings will appear here.
                       </p>
                     </CardContent>
                   </Card>
                 ) : (
-                  filteredBookings.map(booking => (
-                    <BookingCard key={booking.id} booking={booking} />
-                  ))
+                  <>
+                    {paginatedBookings.map(booking => (
+                      <BookingCard key={booking.id} booking={booking} />
+                    ))}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between pt-4">
+                        <p className="text-sm text-muted-foreground">
+                          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredBookings.length)} of {filteredBookings.length} bookings
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <span className="text-sm">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
             </>
