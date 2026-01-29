@@ -32,12 +32,19 @@ const navItems = [
   { icon: Settings, label: "Settings", path: "/manager/settings" },
 ];
 
-const mobileNavItems = [
+interface MobileNavItem {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  path: string;
+  action?: "signout";
+}
+
+const mobileNavItems: MobileNavItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/manager" },
   { icon: Building2, label: "Venues", path: "/manager/courts" },
   { icon: CreditCard, label: "Bookings", path: "/manager/bookings" },
   { icon: Settings, label: "Settings", path: "/manager/settings" },
-  { icon: LogOut, label: "Sign Out", path: "/signout", action: "signout" as const },
+  { icon: LogOut, label: "Sign Out", path: "/signout", action: "signout" },
 ];
 
 export function ManagerLayout({ children }: ManagerLayoutProps) {

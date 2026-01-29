@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { CourtCard } from "@/components/courts/CourtCard";
@@ -6,7 +7,8 @@ import { CourtsMap } from "@/components/courts/CourtsMap";
 import { CourtsPagination } from "@/components/courts/CourtsPagination";
 import { MobileCourtSheet } from "@/components/courts/MobileCourtSheet";
 import { MobileCourtFilters } from "@/components/courts/MobileCourtFilters";
-import { Search, MapPin, SlidersHorizontal, Building2, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, MapPin, SlidersHorizontal, Building2, Loader2, Zap, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -32,6 +34,8 @@ interface CourtWithVenue extends Court {
 export default function Courts() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const itemsPerPage = usePaginationThreshold();
   const [courts, setCourts] = useState<CourtWithVenue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +50,27 @@ export default function Courts() {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Check for quick game mode
+  const isQuickGameMode = searchParams.get("quickGame") === "true";
+  const quickGameSport = searchParams.get("sport");
+  
+  // Get quick game config from sessionStorage
+  const quickGameConfig = useMemo(() => {
+    if (!isQuickGameMode) return null;
+    try {
+      const stored = sessionStorage.getItem("quickGameConfig");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, [isQuickGameMode]);
+  
+  // Handle exiting quick game mode
+  const handleExitQuickGame = () => {
+    sessionStorage.removeItem("quickGameConfig");
+    navigate("/courts", { replace: true });
+  };
 
   // Fetch surface types from database - NO FALLBACKS
   const { data: surfaceTypes = [], isLoading: loadingSurfaceTypes } = useSurfaceTypes();
@@ -181,6 +206,40 @@ export default function Courts() {
   ].filter(Boolean).length;
 
   const Layout = user ? MobileLayout : PublicLayout;
+
+  // Quick Game Mode Banner
+  const QuickGameBanner = () => {
+    if (!isQuickGameMode || !quickGameConfig) return null;
+    
+    return (
+      <div className="bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30 rounded-lg p-3 sm:p-4 mb-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+              <Zap className="h-5 w-5 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-semibold text-sm sm:text-base truncate">Quick Challenge Mode</h3>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                {quickGameConfig.sportName} • {quickGameConfig.gameMode} ({quickGameConfig.totalPlayers} players)
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleExitQuickGame}
+            className="shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          Select a court and time slot to create your quick challenge session
+        </p>
+      </div>
+    );
+  };
 
   // Desktop Filter bar component with dropdowns
   const FilterBar = () => (
@@ -344,8 +403,15 @@ export default function Courts() {
             />
           </div>
 
+          {/* Quick Game Banner for mobile */}
+          {isQuickGameMode && quickGameConfig && (
+            <div className="absolute top-20 left-4 right-4 z-[500] pointer-events-auto">
+              <QuickGameBanner />
+            </div>
+          )}
+
           {/* Floating search header - above map */}
-          <div className="absolute top-4 left-4 right-4 z-[500] pointer-events-none">
+          <div className={`absolute ${isQuickGameMode ? "top-44" : "top-4"} left-4 right-4 z-[500] pointer-events-none`}>
             <div className="flex items-center gap-2 bg-background rounded-full px-4 py-3 shadow-lg border border-border pointer-events-auto">
               <Search className="h-4 w-4 text-muted-foreground shrink-0" />
               <input
@@ -419,10 +485,15 @@ export default function Courts() {
           className="w-full lg:w-[55%] xl:w-[60%] overflow-y-auto lg:scrollbar-hide"
         >
           <div className="p-4 lg:p-6 space-y-4">
+            {/* Quick Game Banner */}
+            <QuickGameBanner />
+            
             {/* Header */}
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="font-display text-2xl font-bold">Browse Courts</h1>
+                <h1 className="font-display text-2xl font-bold">
+                  {isQuickGameMode ? "Select a Court" : "Browse Courts"}
+                </h1>
                 <p className="text-muted-foreground text-sm">
                   {filteredCourts.length} court{filteredCourts.length !== 1 ? "s" : ""} available
                 </p>

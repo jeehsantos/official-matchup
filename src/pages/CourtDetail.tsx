@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,8 @@ import {
   AlertCircle,
   Expand,
   FileText,
-  Package
+  Package,
+  Zap
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -29,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, getDay } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import { BookingWizard } from "@/components/booking/BookingWizard";
+import { QuickChallengeWizard } from "@/components/booking/QuickChallengeWizard";
 import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
 import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/EquipmentSelector";
 import { checkProfileComplete } from "@/lib/profile-utils";
@@ -89,6 +91,7 @@ interface AvailabilityResponse {
 export default function CourtDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -99,12 +102,25 @@ export default function CourtDetail() {
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
   const [booking, setBooking] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showQuickChallengeWizard, setShowQuickChallengeWizard] = useState(false);
   const [showProfileAlert, setShowProfileAlert] = useState(false);
   const [profileMissingFields, setProfileMissingFields] = useState<string[]>([]);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [showPaymentTimingChoice, setShowPaymentTimingChoice] = useState(false);
   const [pendingPaymentSessionId, setPendingPaymentSessionId] = useState<string | null>(null);
   const [pendingPaymentAmount, setPendingPaymentAmount] = useState<number>(0);
+  
+  // Quick game mode detection
+  const isQuickGameMode = searchParams.get("quickGame") === "true";
+  const quickGameConfig = useMemo(() => {
+    if (!isQuickGameMode) return null;
+    try {
+      const stored = sessionStorage.getItem("quickGameConfig");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, [isQuickGameMode]);
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
@@ -450,8 +466,13 @@ export default function CourtDetail() {
       return;
     }
 
-    // Open wizard immediately - validation happens inside the wizard for better UX
-    setShowGroupModal(true);
+    // Check if we're in quick game mode
+    if (isQuickGameMode && quickGameConfig) {
+      setShowQuickChallengeWizard(true);
+    } else {
+      // Open normal booking wizard
+      setShowGroupModal(true);
+    }
   };
 
   const handleBookingConfirm = async (data: {
@@ -620,6 +641,125 @@ export default function CourtDetail() {
       toast({
         title: "Booking failed",
         description: error?.message || "There was an error processing your booking. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBooking(false);
+    }
+  };
+
+  // Handle Quick Challenge creation
+  const handleQuickChallengeConfirm = async (data: {
+    paymentType: "single" | "split";
+    equipment: SelectedEquipment[];
+  }) => {
+    const { paymentType, equipment } = data;
+    setSelectedEquipment(equipment);
+    
+    if (selectedSlots.length === 0 || !court || !user || !selectedDate || !quickGameConfig) return;
+
+    setShowQuickChallengeWizard(false);
+    setBooking(true);
+
+    const totalDuration = getTotalDuration();
+    const startTime = getStartTime();
+    const endTime = getEndTime();
+    const bookingCourtId = selectedCourtId || court.id;
+    const selectedCourtData = getSelectedCourt();
+    const courtRate = selectedCourtData?.hourly_rate || court.hourly_rate;
+
+    try {
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+
+      // Calculate price based on duration + equipment
+      const hours = totalDuration / 60;
+      const courtPriceCalc = courtRate * hours;
+      const equipmentTotal = equipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0);
+      const totalPrice = courtPriceCalc + equipmentTotal;
+      const pricePerPlayer = paymentType === "split" 
+        ? Math.ceil((totalPrice / quickGameConfig.totalPlayers) * 100) / 100 
+        : 0;
+
+      // Create quick_challenges record
+      const { data: challenge, error: challengeError } = await supabase
+        .from("quick_challenges")
+        .insert({
+          sport_category_id: quickGameConfig.sportCategoryId,
+          game_mode: quickGameConfig.gameMode,
+          venue_id: court.venue_id,
+          court_id: bookingCourtId,
+          scheduled_date: dateStr,
+          scheduled_time: startTime,
+          total_slots: quickGameConfig.totalPlayers,
+          price_per_player: paymentType === "split" ? pricePerPlayer : 0,
+          status: "open",
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (challengeError) throw challengeError;
+
+      // Create court_availability record to mark the slot as booked
+      const { data: bookingRecord, error: bookingError } = await supabase
+        .from("court_availability")
+        .insert({
+          court_id: bookingCourtId,
+          available_date: dateStr,
+          start_time: startTime,
+          end_time: endTime,
+          is_booked: true,
+          booked_by_user_id: user.id,
+          payment_status: "pending",
+        })
+        .select()
+        .single();
+
+      if (bookingError) throw bookingError;
+
+      // Save equipment selections if any
+      if (equipment.length > 0) {
+        const equipmentInserts = equipment.map(item => ({
+          booking_id: bookingRecord.id,
+          equipment_id: item.equipmentId,
+          quantity: item.quantity,
+          price_at_booking: item.pricePerUnit,
+        }));
+
+        await supabase.from("booking_equipment").insert(equipmentInserts);
+      }
+
+      // Auto-add creator as first player
+      const { error: playerError } = await supabase
+        .from("quick_challenge_players")
+        .insert({
+          challenge_id: challenge.id,
+          user_id: user.id,
+          team: "left",
+          slot_position: 0,
+          payment_status: paymentType === "single" ? "pending" : "pending",
+        });
+
+      if (playerError) {
+        console.error("Error adding creator as player:", playerError);
+      }
+
+      // Clear quick game state
+      sessionStorage.removeItem("quickGameConfig");
+
+      toast({
+        title: "Quick Challenge Created!",
+        description: `Your ${quickGameConfig.gameMode} challenge is now open for players to join.`,
+      });
+
+      // Navigate to discover page with quick games filter
+      navigate("/discover?tab=quickgames");
+
+    } catch (error: any) {
+      console.error("Error creating quick challenge:", error);
+      toast({
+        title: "Failed to create challenge",
+        description: error?.message || "There was an error creating your quick challenge. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -886,6 +1026,28 @@ export default function CourtDetail() {
             Back
           </Button>
         </div>
+
+        {/* Quick Game Mode Banner */}
+        {isQuickGameMode && quickGameConfig && (
+          <div className="px-4 mb-4">
+            <div className="bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30 rounded-lg p-3 sm:p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+                  <Zap className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-sm sm:text-base truncate">Quick Challenge Mode</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                    {quickGameConfig.sportName} • {quickGameConfig.gameMode} ({quickGameConfig.totalPlayers} players)
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Select a date and time slot, then click "Book Now" to create your quick challenge
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Main Content - Two Column Layout on Desktop */}
         <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:px-6">
@@ -1428,6 +1590,31 @@ export default function CourtDetail() {
             selectedEquipment={selectedEquipment}
             onEquipmentChange={setSelectedEquipment}
             paymentTiming={court.payment_timing}
+          />
+        )}
+
+        {/* Quick Challenge Wizard */}
+        {court && selectedSlots.length > 0 && selectedDate && quickGameConfig && (
+          <QuickChallengeWizard
+            open={showQuickChallengeWizard}
+            onOpenChange={setShowQuickChallengeWizard}
+            onConfirm={handleQuickChallengeConfirm}
+            courtPrice={courtPrice}
+            startTime={getStartTime()}
+            endTime={getEndTime()}
+            slotDate={format(selectedDate, "yyyy-MM-dd")}
+            courtName={court.name}
+            venueName={court.venues?.name || ""}
+            venueAddress={court.venues?.address || ""}
+            courtRules={(court as any).rules || null}
+            equipment={venueEquipment}
+            selectedEquipment={selectedEquipment}
+            onEquipmentChange={setSelectedEquipment}
+            paymentTiming={court.payment_timing}
+            sportName={quickGameConfig.sportName}
+            gameMode={quickGameConfig.gameMode}
+            totalPlayers={quickGameConfig.totalPlayers}
+            submitting={booking}
           />
         )}
 
