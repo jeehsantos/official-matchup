@@ -112,13 +112,27 @@ export default function CourtDetail() {
   
   // Quick game mode detection
   const isQuickGameMode = searchParams.get("quickGame") === "true";
-  const quickGameConfig = useMemo(() => {
-    if (!isQuickGameMode) return null;
-    try {
-      const stored = sessionStorage.getItem("quickGameConfig");
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
+  const [quickGameConfig, setQuickGameConfig] = useState<{
+    sportCategoryId: string;
+    sportName: string;
+    sportLabel: string;
+    gameMode: string;
+    totalPlayers: number;
+  } | null>(null);
+  
+  // Load quick game config from sessionStorage when in quick game mode
+  useEffect(() => {
+    if (isQuickGameMode) {
+      try {
+        const stored = sessionStorage.getItem("quickGameConfig");
+        if (stored) {
+          setQuickGameConfig(JSON.parse(stored));
+        }
+      } catch {
+        console.error("Failed to parse quickGameConfig from sessionStorage");
+      }
+    } else {
+      setQuickGameConfig(null);
     }
   }, [isQuickGameMode]);
   
@@ -467,8 +481,18 @@ export default function CourtDetail() {
     }
 
     // Check if we're in quick game mode
-    if (isQuickGameMode && quickGameConfig) {
-      setShowQuickChallengeWizard(true);
+    if (isQuickGameMode) {
+      if (quickGameConfig) {
+        setShowQuickChallengeWizard(true);
+      } else {
+        // Config is missing - show error and redirect to start
+        toast({
+          title: "Session expired",
+          description: "Please start your Quick Challenge again.",
+          variant: "destructive",
+        });
+        navigate("/discover");
+      }
     } else {
       // Open normal booking wizard
       setShowGroupModal(true);
@@ -1569,8 +1593,8 @@ export default function CourtDetail() {
           </div>
         )}
 
-        {/* Booking Wizard */}
-        {court && selectedSlots.length > 0 && selectedDate && (
+        {/* Booking Wizard - only show when NOT in quick game mode */}
+        {court && selectedSlots.length > 0 && selectedDate && !isQuickGameMode && (
           <BookingWizard
             open={showGroupModal}
             onOpenChange={setShowGroupModal}
@@ -1593,8 +1617,8 @@ export default function CourtDetail() {
           />
         )}
 
-        {/* Quick Challenge Wizard */}
-        {court && selectedSlots.length > 0 && selectedDate && quickGameConfig && (
+        {/* Quick Challenge Wizard - only show when in quick game mode */}
+        {court && selectedSlots.length > 0 && selectedDate && isQuickGameMode && quickGameConfig && (
           <QuickChallengeWizard
             open={showQuickChallengeWizard}
             onOpenChange={setShowQuickChallengeWizard}
