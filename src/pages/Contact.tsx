@@ -51,7 +51,7 @@ const faqs = [
     answer: "Released slots from cancelled bookings appear in the public marketplace. Any registered player can book these slots, giving everyone fair access to court time."
   },
   {
-    question: "What fees does MatchUP charge?",
+    question: "What fees does Sport Arena charge?",
     answer: "We charge a small platform fee per player per session to cover payment processing and platform maintenance. Court managers receive the full court booking amount minus payment processing fees."
   },
   {
@@ -110,11 +110,12 @@ export default function Contact() {
       {/* Navigation */}
       <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-display font-bold text-sm">N</span>
-            </div>
-            <span className="font-display font-bold text-lg">MatchUP</span>
+          <Link to="/" className="flex items-center" aria-label="Sport Arena home">
+            <img
+              src="/sportarena-logo.png"
+              alt="Sport Arena logo"
+              className="h-10 w-auto mix-blend-screen"
+            />
           </Link>
           <div className="flex items-center gap-3">
             <Link to="/auth">
@@ -138,30 +139,40 @@ export default function Contact() {
       </div>
 
       {/* Hero */}
-      <section className="pt-8 pb-12 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <h1 className="font-display text-4xl md:text-5xl font-bold mb-6">
-            Contact Us
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl">
-            Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
-          </p>
+      <section className="pt-10 pb-10 px-4">
+        <div className="container mx-auto max-w-5xl">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+            <div>
+              <p className="text-sm uppercase tracking-widest text-muted-foreground">Contact</p>
+              <h1 className="font-display text-4xl md:text-5xl font-bold mt-2">
+                Let’s talk courts
+              </h1>
+            </div>
+            <p className="text-lg text-muted-foreground max-w-xl">
+              Reach out for support, partnerships, or venue onboarding. We reply fast.
+            </p>
+          </div>
         </div>
       </section>
 
       {/* Contact Form & Info */}
       <section className="py-12 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <div className="grid md:grid-cols-2 gap-12">
+        <div className="container mx-auto max-w-5xl">
+          <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-8">
             {/* Form */}
-            <div>
-              <h2 className="font-display text-xl font-semibold mb-6 flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-primary" />
-                Send a Message
-              </h2>
+            <div className="card-elevated p-6 md:p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <MessageSquare className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="font-display text-xl font-semibold">Send a Message</h2>
+                  <p className="text-sm text-muted-foreground">We usually respond within one business day.</p>
+                </div>
+              </div>
               
               {isSubmitted ? (
-                <div className="bg-primary/10 rounded-2xl p-8 text-center">
+                <div className="rounded-2xl border border-primary/20 bg-primary/10 p-8 text-center">
                   <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
                   <h3 className="font-display font-semibold text-lg mb-2">Message Sent!</h3>
                   <p className="text-muted-foreground mb-4">
@@ -242,36 +253,49 @@ export default function Contact() {
             </div>
 
             {/* Contact Info */}
-            <div>
-              <h2 className="font-display text-xl font-semibold mb-6 flex items-center gap-2">
-                <Mail className="h-5 w-5 text-primary" />
-                Get in Touch
-              </h2>
-              
-              <div className="bg-card rounded-2xl p-6 border border-border mb-8">
-                <h3 className="font-semibold mb-2">Email Support</h3>
-                <p className="text-muted-foreground mb-4">
-                  For general inquiries and support
-                </p>
-                <a 
-                  href="mailto:support@MatchUP.co.nz" 
-                  className="text-primary hover:underline"
-                >
-                  support@MatchUP.co.nz
-                </a>
+            <div className="space-y-6">
+              <div className="card-elevated p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Mail className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-lg font-semibold">Get in Touch</h2>
+                    <p className="text-sm text-muted-foreground">Choose the right team to help you.</p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-border bg-background/70 p-4">
+                    <h3 className="font-semibold mb-1">Email Support</h3>
+                    <p className="text-muted-foreground text-sm mb-2">
+                      For general inquiries and support.
+                    </p>
+                    <a 
+                      href="mailto:support@sportarena.co.nz" 
+                      className="text-primary text-sm font-semibold hover:underline"
+                    >
+                      support@sportarena.co.nz
+                    </a>
+                  </div>
+                  <div className="rounded-xl border border-border bg-background/70 p-4">
+                    <h3 className="font-semibold mb-1">Business Inquiries</h3>
+                    <p className="text-muted-foreground text-sm mb-2">
+                      For partnerships and venue onboarding.
+                    </p>
+                    <a 
+                      href="mailto:business@sportarena.co.nz" 
+                      className="text-primary text-sm font-semibold hover:underline"
+                    >
+                      business@sportarena.co.nz
+                    </a>
+                  </div>
+                </div>
               </div>
-              
-              <div className="bg-card rounded-2xl p-6 border border-border">
-                <h3 className="font-semibold mb-2">Business Inquiries</h3>
-                <p className="text-muted-foreground mb-4">
-                  For partnerships and court manager onboarding
+              <div className="card-elevated p-6">
+                <h3 className="font-semibold mb-3">Quick answers</h3>
+                <p className="text-sm text-muted-foreground">
+                  Browse our FAQs below for the fastest support.
                 </p>
-                <a 
-                  href="mailto:business@MatchUP.co.nz" 
-                  className="text-primary hover:underline"
-                >
-                  business@MatchUP.co.nz
-                </a>
               </div>
             </div>
           </div>
@@ -280,10 +304,18 @@ export default function Contact() {
 
       {/* FAQ */}
       <section className="py-12 px-4 bg-muted/30">
-        <div className="container mx-auto max-w-4xl">
-          <h2 className="font-display text-2xl font-bold mb-8 text-center">
-            Frequently Asked Questions
-          </h2>
+        <div className="container mx-auto max-w-5xl">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
+            <div>
+              <p className="text-sm uppercase tracking-widest text-muted-foreground">FAQ</p>
+              <h2 className="font-display text-3xl font-bold mt-2">
+                Frequently asked questions
+              </h2>
+            </div>
+            <p className="text-muted-foreground max-w-md">
+              Still stuck? Send us a message and we’ll help.
+            </p>
+          </div>
           
           <Accordion type="single" collapsible className="w-full">
             {faqs.map((faq, index) => (
@@ -303,18 +335,19 @@ export default function Contact() {
       {/* Footer */}
       <footer className="py-8 px-4 border-t border-border">
         <div className="container mx-auto max-w-4xl flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-display font-bold text-xs">N</span>
-            </div>
-            <span className="font-display font-semibold">MatchUP</span>
+          <div className="flex items-center">
+            <img
+              src="/sportarena-logo.png"
+              alt="Sport Arena logo"
+              className="h-8 w-auto mix-blend-screen"
+            />
           </div>
           <div className="flex gap-6 text-sm text-muted-foreground">
             <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
             <Link to="/about" className="hover:text-foreground transition-colors">About</Link>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} MatchUP
+            © {new Date().getFullYear()} Sport Arena
           </p>
         </div>
       </footer>
