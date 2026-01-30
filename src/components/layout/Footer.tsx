@@ -57,11 +57,12 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12">
           {/* Brand & Mission */}
           <div className="lg:col-span-2">
-            <Link to="/" className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg glow-primary">
-                <span className="text-primary-foreground font-display font-bold text-lg">M</span>
-              </div>
-              <span className="font-display font-bold text-2xl">MatchUP</span>
+            <Link to="/" className="flex items-center mb-4" aria-label="Sport Arena home">
+              <img
+                src="/sportarena-logo.png"
+                alt="Sport Arena logo"
+                className="h-12 w-auto mix-blend-screen"
+              />
             </Link>
             <p className="text-muted-foreground mb-6 max-w-sm">
               The smarter way to book courts and guarantee games. Join thousands of players across New Zealand enjoying hassle-free sports booking.
@@ -75,8 +76,8 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-3">
                 <Mail className="h-4 w-4 text-primary" />
-                <a href="mailto:hello@matchup.nz" className="hover:text-foreground transition-colors">
-                  hello@matchup.nz
+                <a href="mailto:hello@sportarena.nz" className="hover:text-foreground transition-colors">
+                  hello@sportarena.nz
                 </a>
               </div>
               <div className="flex items-center gap-3">
@@ -145,7 +146,7 @@ export function Footer() {
       <div className="border-t border-border">
         <div className="container mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} MatchUP. All rights reserved.
+            © {new Date().getFullYear()} Sport Arena. All rights reserved.
           </p>
           <div className="flex items-center gap-6 text-sm text-muted-foreground">
             <a href="#" className="hover:text-foreground transition-colors">Privacy</a>

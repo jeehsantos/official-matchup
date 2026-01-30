@@ -42,11 +42,12 @@ export function PublicLayout({ children, showBack = false, showFooter = true }: 
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             )}
-            <Link to="/" className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-md">
-                <span className="text-primary-foreground font-display font-bold">M</span>
-              </div>
-              <span className="font-display font-bold text-xl">MatchUP</span>
+            <Link to="/" className="flex items-center" aria-label="Sport Arena home">
+              <img
+                src="/sportarena-logo.png"
+                alt="Sport Arena logo"
+                className="h-10 w-auto mix-blend-screen"
+              />
             </Link>
           </div>
           
