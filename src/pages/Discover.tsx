@@ -44,7 +44,7 @@ export default function Discover() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<string>(
-    searchParams.get("filter") === "quickgames" ? "quickgames" : "rescue"
+    searchParams.get("tab") === "quickgames" ? "quickgames" : "rescue"
   );
   const [selectedSport, setSelectedSport] = useState("all");
   const [selectedCourtType, setSelectedCourtType] = useState("all");
