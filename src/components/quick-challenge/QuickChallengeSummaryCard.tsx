@@ -14,6 +14,7 @@ interface QuickChallengeSummaryCardProps {
     venueAddress?: string;
     scheduledDate?: string;
     scheduledTime?: string;
+    courtImage?: string | null;
     pricePerPlayer: number;
     totalSlots: number;
     playersCount: number;
@@ -64,21 +65,45 @@ export function QuickChallengeSummaryCard({
         isSelected && "border-primary shadow-lg"
       )}
     >
-      <div className="relative h-36 bg-gradient-to-br from-primary/20 via-background to-accent/10">
+      <div className="relative h-40 bg-gradient-to-br from-primary/20 via-background to-accent/10">
+        {challenge.courtImage && (
+          <img
+            src={challenge.courtImage}
+            alt={`${challenge.venueName || "Court"} photo`}
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+        )}
+        <div
+          className={cn(
+            "absolute inset-0",
+            challenge.courtImage
+              ? "bg-gradient-to-t from-slate-900/70 via-slate-900/20 to-transparent"
+              : "bg-transparent"
+          )}
+        />
         <div className="absolute inset-0 p-4 flex items-start justify-between">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="text-xl">{challenge.sportIcon || "🎯"}</span>
-            <span>{challenge.sportName || "Sport"}</span>
+            <span className={cn(challenge.courtImage && "text-white")}>
+              {challenge.sportName || "Sport"}
+            </span>
           </div>
           <Badge
             variant={isOpen ? "default" : "secondary"}
-            className={cn(isOpen && "bg-green-500/20 text-green-600")}
+            className={cn(
+              isOpen && "bg-green-500/20 text-green-600",
+              challenge.courtImage && "border-white/40 text-white"
+            )}
           >
             {isOpen ? "Open" : challenge.status}
           </Badge>
         </div>
-        <div className="absolute bottom-3 left-4 flex items-center gap-2 text-xs text-muted-foreground">
-          <Zap className="h-3.5 w-3.5 text-primary" />
+        <div className={cn(
+          "absolute bottom-3 left-4 flex items-center gap-2 text-xs",
+          challenge.courtImage ? "text-white/90" : "text-muted-foreground"
+        )}>
+          <Zap className={cn("h-3.5 w-3.5", challenge.courtImage ? "text-white" : "text-primary")} />
           <span>Quick Game</span>
         </div>
       </div>
