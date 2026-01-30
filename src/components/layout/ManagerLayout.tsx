@@ -91,11 +91,12 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 glass border-b border-border/50 h-14">
         <div className="flex items-center justify-between h-full px-4">
-          <Link to="/manager" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-display font-bold text-sm">N</span>
-            </div>
-            <span className="font-display font-bold">MatchUP</span>
+          <Link to="/manager" className="flex items-center" aria-label="Sport Arena manager home">
+            <img
+              src="/sportarena-logo.png"
+              alt="Sport Arena logo"
+              className="h-10 w-auto mix-blend-screen"
+            />
           </Link>
           <div className="flex items-center gap-2">
             <ThemeToggle variant="ghost" size="icon" />
@@ -126,12 +127,13 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="h-14 flex items-center px-4 border-b border-border">
-            <Link to="/manager" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-display font-bold text-sm">N</span>
-              </div>
+            <Link to="/manager" className="flex items-center gap-3" aria-label="Sport Arena manager home">
+              <img
+                src="/sportarena-logo.png"
+                alt="Sport Arena logo"
+                className="h-10 w-auto mix-blend-screen"
+              />
               <div>
-                <span className="font-display font-bold">MatchUP</span>
                 <span className="text-xs text-muted-foreground block">Court Manager</span>
               </div>
             </Link>

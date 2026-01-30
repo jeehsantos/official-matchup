@@ -123,7 +123,7 @@ export default function Auth() {
     } else {
       toast({
         title: "Account created!",
-        description: "Welcome to MatchUP. Let's get you started.",
+        description: "Welcome to Sport Arena. Let's get you started.",
       });
       
       // Check for stored redirect path from before auth
@@ -194,14 +194,13 @@ export default function Auth() {
         Back to Home
       </Button>
 
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
-          <span className="text-primary-foreground font-display font-bold text-xl">M</span>
-        </div>
-        <div>
-          <h1 className="font-display font-bold text-2xl">MatchUP</h1>
-          <p className="text-sm text-muted-foreground">Discover. Book. Play.</p>
-        </div>
+      <div className="flex flex-col items-center gap-3 mb-8">
+        <img
+          src="/sportarena-logo.png"
+          alt="Sport Arena logo"
+          className="h-16 w-auto mix-blend-screen"
+        />
+        <p className="text-sm text-muted-foreground">Discover. Book. Play.</p>
       </div>
 
       {showForgotPassword ? (
