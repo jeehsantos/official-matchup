@@ -45,6 +45,12 @@ interface QuickChallenge {
     name: string;
     address: string;
     city: string;
+    photo_url?: string | null;
+  } | null;
+  courts?: {
+    id: string;
+    name: string;
+    photo_url?: string | null;
   } | null;
   quick_challenge_players?: QuickChallengePlayer[];
 }
@@ -63,7 +69,8 @@ export function useQuickChallenges(filters?: {
         .select(`
           *,
           sport_categories (id, name, display_name, icon),
-          venues (id, name, address, city),
+          venues (id, name, address, city, photo_url),
+          courts (id, name, photo_url),
           quick_challenge_players (
             id,
             challenge_id,

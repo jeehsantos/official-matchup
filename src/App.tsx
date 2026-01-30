@@ -18,6 +18,7 @@ import NotFound from "./pages/NotFound";
 import Landing from "./pages/Landing";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
+import QuickGameLobby from "./pages/QuickGameLobby";
 import Courts from "./pages/Courts";
 import CourtDetail from "./pages/CourtDetail";
 import PaymentSuccess from "./pages/PaymentSuccess";
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="/groups/:id" element={<GroupDetail />} />
             <Route path="/join/:code" element={<JoinGroup />} />
             <Route path="/discover" element={<Discover />} />
+            <Route path="/quick-games/:id" element={<QuickGameLobby />} />
             <Route path="/games" element={<Games />} />
             <Route path="/games/:id" element={<GameDetail />} />
             <Route path="/profile" element={<Profile />} />
