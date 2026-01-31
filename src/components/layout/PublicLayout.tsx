@@ -3,11 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Menu } from "lucide-react";
 import { Footer } from "./Footer";
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 interface PublicLayoutProps {
@@ -33,37 +29,24 @@ export function PublicLayout({ children, showBack = false, showFooter = true }: 
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             {showBack && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate(-1)}
-                className="shrink-0"
-              >
+              <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0">
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             )}
             <Link to="/" className="flex items-center" aria-label="Sport Arena home">
-              <img
-                src="/sportarena-logo.png"
-                alt="Sport Arena logo"
-                className="h-10 w-auto mix-blend-screen"
-              />
+              <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-20 w-auto" />
             </Link>
           </div>
-          
+
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
-              <Link 
-                key={link.href}
-                to={link.href} 
-                className="nav-link text-sm font-medium"
-              >
+              <Link key={link.href} to={link.href} className="nav-link text-sm font-medium">
                 {link.label}
               </Link>
             ))}
           </nav>
-          
+
           <div className="flex items-center gap-3">
             <ThemeToggle className="hidden sm:flex" />
             <Link to="/auth" className="hidden sm:block">
@@ -72,7 +55,7 @@ export function PublicLayout({ children, showBack = false, showFooter = true }: 
             <Link to="/auth" className="hidden sm:block">
               <Button className="shadow-lg">Get Started</Button>
             </Link>
-            
+
             {/* Mobile Menu */}
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild className="md:hidden">
@@ -83,9 +66,9 @@ export function PublicLayout({ children, showBack = false, showFooter = true }: 
               <SheetContent side="right" className="w-[280px] sm:w-[320px]">
                 <div className="flex flex-col gap-6 mt-8">
                   {navLinks.map((link) => (
-                    <Link 
+                    <Link
                       key={link.href}
-                      to={link.href} 
+                      to={link.href}
                       className="text-lg font-medium hover:text-primary transition-colors"
                       onClick={() => setMobileMenuOpen(false)}
                     >
@@ -95,7 +78,9 @@ export function PublicLayout({ children, showBack = false, showFooter = true }: 
                   <hr className="border-border" />
                   <ThemeToggle showLabel className="w-full justify-start" variant="outline" />
                   <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="outline" className="w-full">Sign In</Button>
+                    <Button variant="outline" className="w-full">
+                      Sign In
+                    </Button>
                   </Link>
                   <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
                     <Button className="w-full">Get Started</Button>
@@ -108,9 +93,7 @@ export function PublicLayout({ children, showBack = false, showFooter = true }: 
       </header>
 
       {/* Main Content with top padding for fixed header */}
-      <main className="pt-16 flex-1">
-        {children}
-      </main>
+      <main className="pt-16 flex-1">{children}</main>
 
       {/* Footer */}
       {showFooter && <Footer />}
