@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { nzCities } from "@/data/nzLocations";
 import { useToast } from "@/hooks/use-toast";
 import { useSportCategories } from "@/hooks/useSportCategories";
+import { NationalityCombobox } from "@/components/ui/nationality-combobox";
 import {
   Loader2,
   ArrowLeft,
@@ -28,6 +29,7 @@ interface ProfileData {
   full_name: string;
   phone: string;
   city: string;
+  nationality_code: string;
   preferred_sports: string[];
 }
 
@@ -42,6 +44,7 @@ export default function ProfileEdit() {
     full_name: "",
     phone: "",
     city: "",
+    nationality_code: "",
     preferred_sports: [],
   });
   
@@ -79,6 +82,7 @@ export default function ProfileEdit() {
           full_name: data.full_name || "",
           phone: data.phone || "",
           city: data.city || "",
+          nationality_code: data.nationality_code || "",
           preferred_sports: (data.preferred_sports as string[]) || [],
         });
       } else {
@@ -104,6 +108,7 @@ export default function ProfileEdit() {
             full_name: profileData.full_name,
             phone: profileData.phone,
             city: profileData.city,
+            nationality_code: profileData.nationality_code || null,
             preferred_sports: profileData.preferred_sports,
           })
           .eq("user_id", user.id);
@@ -118,6 +123,7 @@ export default function ProfileEdit() {
             full_name: profileData.full_name,
             phone: profileData.phone,
             city: profileData.city,
+            nationality_code: profileData.nationality_code || null,
             preferred_sports: profileData.preferred_sports,
           });
 
@@ -252,6 +258,19 @@ export default function ProfileEdit() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="nationality">Nationality</Label>
+                <NationalityCombobox
+                  value={profileData.nationality_code}
+                  onValueChange={(value) =>
+                    setProfileData((prev) => ({ ...prev, nationality_code: value }))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Your flag will be shown to other players
+                </p>
               </div>
             </CardContent>
           </Card>

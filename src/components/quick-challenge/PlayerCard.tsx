@@ -133,15 +133,6 @@ export function PlayerCard({
         </Badge>
       </div>
 
-      {/* Flag Badge */}
-      {player.nationalityCode && (
-        <div className="absolute top-2 left-2">
-          <span className="text-xl" title={player.nationalityCode}>
-            {getFlagEmoji(player.nationalityCode)}
-          </span>
-        </div>
-      )}
-
       {/* Avatar */}
       <div className="relative mt-4">
         <Avatar className="h-16 w-16 border-2 border-border">
@@ -157,10 +148,17 @@ export function PlayerCard({
         )}
       </div>
 
-      {/* Name */}
-      <h4 className="mt-3 font-semibold text-sm text-center line-clamp-1">
-        {player.name}
-      </h4>
+      {/* Name with Flag */}
+      <div className="mt-3 flex items-center justify-center gap-1.5">
+        <h4 className="font-semibold text-sm text-center line-clamp-1">
+          {player.name}
+        </h4>
+        {player.nationalityCode && (
+          <span className="text-base flex-shrink-0" title={player.nationalityCode}>
+            {getFlagEmoji(player.nationalityCode)}
+          </span>
+        )}
+      </div>
 
       {/* Current User Tag */}
       {isCurrentUser && (

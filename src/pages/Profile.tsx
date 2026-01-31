@@ -47,11 +47,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useSportCategories } from "@/hooks/useSportCategories";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { CreditsDisplay } from "@/components/profile/CreditsDisplay";
+import { NationalityCombobox } from "@/components/ui/nationality-combobox";
 
 interface ProfileData {
   full_name: string;
   phone: string;
   city: string;
+  nationality_code: string;
   preferred_sports: string[];
 }
 
@@ -86,12 +88,14 @@ export default function Profile() {
     full_name: "",
     phone: "",
     city: "",
+    nationality_code: "",
     preferred_sports: [],
   });
   const [originalData, setOriginalData] = useState<ProfileData>({
     full_name: "",
     phone: "",
     city: "",
+    nationality_code: "",
     preferred_sports: [],
   });
 
@@ -113,6 +117,7 @@ export default function Profile() {
       profileData.full_name !== originalData.full_name ||
       profileData.phone !== originalData.phone ||
       profileData.city !== originalData.city ||
+      profileData.nationality_code !== originalData.nationality_code ||
       JSON.stringify(profileData.preferred_sports) !== JSON.stringify(originalData.preferred_sports);
     setHasChanges(changed);
   }, [profileData, originalData]);
@@ -135,6 +140,7 @@ export default function Profile() {
           full_name: data.full_name || "",
           phone: data.phone || "",
           city: data.city || "",
+          nationality_code: data.nationality_code || "",
           preferred_sports: (data.preferred_sports as string[]) || [],
         };
         setProfileData(profileValues);
@@ -160,6 +166,7 @@ export default function Profile() {
           full_name: profileData.full_name,
           phone: profileData.phone,
           city: profileData.city,
+          nationality_code: profileData.nationality_code || null,
           preferred_sports: profileData.preferred_sports,
           updated_at: new Date().toISOString(),
         }, {
@@ -417,6 +424,19 @@ export default function Profile() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="nationality">Nationality</Label>
+                  <NationalityCombobox
+                    value={profileData.nationality_code}
+                    onValueChange={(value) =>
+                      setProfileData((prev) => ({ ...prev, nationality_code: value }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Your flag will be shown to other players
+                  </p>
                 </div>
               </CollapsibleContent>
             </Collapsible>

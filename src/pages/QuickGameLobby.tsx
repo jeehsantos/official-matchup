@@ -92,7 +92,7 @@ export default function QuickGameLobby() {
                 userId: p.user_id,
                 name: p.profiles?.full_name || "Player",
                 avatarUrl: p.profiles?.avatar_url,
-                nationalityCode: null,
+                nationalityCode: p.profiles?.nationality_code || null,
                 paymentStatus: p.payment_status as "pending" | "paid" | "refunded",
                 team: p.team as "left" | "right",
                 slotPosition: p.slot_position,

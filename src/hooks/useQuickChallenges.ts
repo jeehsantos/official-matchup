@@ -18,6 +18,7 @@ interface QuickChallengePlayer {
     full_name: string | null;
     avatar_url: string | null;
     city: string | null;
+    nationality_code: string | null;
   } | null;
 }
 
@@ -109,7 +110,7 @@ export function useQuickChallenges(filters?: {
       if (uniqueUserIds.length > 0) {
         const { data: profiles } = await supabase
           .from("profiles")
-          .select("user_id, full_name, avatar_url, city")
+          .select("user_id, full_name, avatar_url, city, nationality_code")
           .in("user_id", uniqueUserIds);
 
         const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
