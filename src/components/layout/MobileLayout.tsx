@@ -59,11 +59,12 @@ export function MobileLayout({
       <aside className="hidden lg:flex fixed top-0 left-0 z-50 h-full w-64 bg-card border-r border-border flex-col">
         {/* Logo */}
         <div className="h-14 flex items-center px-4 border-b border-border">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-display font-bold text-sm">N</span>
-            </div>
-            <span className="font-display font-bold text-lg">MatchUP</span>
+          <Link to="/" className="flex items-center" aria-label="Sport Arena home">
+            <img
+              src="/sportarena-logo.png"
+              alt="Sport Arena logo"
+              className="h-10 w-auto mix-blend-screen"
+            />
           </Link>
         </div>
 
