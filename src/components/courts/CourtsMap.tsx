@@ -14,6 +14,8 @@ interface CourtsMapProps {
   courts: CourtWithVenue[];
   highlightedCourtId: string | null;
   onMarkerHover?: (courtId: string | null) => void;
+  /** Preserve the current search params when linking to /courts/:id (e.g. ?quickGame=true) */
+  linkSearch?: string;
 }
 
 // Custom price marker icon
@@ -30,7 +32,7 @@ const createPriceIcon = (price: number, isHighlighted: boolean) => {
   });
 };
 
-export function CourtsMap({ courts, highlightedCourtId, onMarkerHover }: CourtsMapProps) {
+export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearch = "" }: CourtsMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -108,10 +110,11 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover }: CourtsM
       const courtName = court.name.replace(/'/g, "\\'");
       const venueName = court.venues?.name?.replace(/'/g, "\\'") || '';
       const cityName = court.venues?.city?.replace(/'/g, "\\'") || '';
+      const courtHref = `/courts/${court.id}${linkSearch || ''}`;
       
       const popupContent = `
         <div style="min-width: 200px;">
-          <a href="/courts/${court.id}" style="display: block; text-decoration: none; color: inherit;">
+          <a href="${courtHref}" style="display: block; text-decoration: none; color: inherit;">
             <img 
               src="${venueImage}" 
               alt="${courtName}"
@@ -161,7 +164,7 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover }: CourtsM
       }
       hasInitializedBoundsRef.current = true;
     }
-  }, [courtsWithPosition, highlightedCourtId]);
+  }, [courtsWithPosition, highlightedCourtId, linkSearch]);
 
   // Update marker icons when highlighted court changes (without recreating markers)
   useEffect(() => {

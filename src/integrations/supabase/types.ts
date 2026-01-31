@@ -652,6 +652,7 @@ export type Database = {
           created_at: string
           full_name: string | null
           id: string
+          nationality_code: string | null
           phone: string | null
           preferred_sports: string[] | null
           updated_at: string
@@ -663,6 +664,7 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
+          nationality_code?: string | null
           phone?: string | null
           preferred_sports?: string[] | null
           updated_at?: string
@@ -674,6 +676,7 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
+          nationality_code?: string | null
           phone?: string | null
           preferred_sports?: string[] | null
           updated_at?: string

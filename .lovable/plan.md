@@ -1,223 +1,186 @@
 
-# Quick Challenge Booking Flow Implementation Plan
 
-## ✅ Implementation Complete
+# Add Nationality Selection and Display Feature
 
-The Quick Challenge flow has been implemented and is now separate from the normal booking process:
+## Overview
 
-1. **ManagerLayout TypeScript Error** - Fixed by adding explicit type annotation to `mobileNavItems`
-2. **QuickChallengeWizard** - Created new 3-step wizard at `src/components/booking/QuickChallengeWizard.tsx`
-3. **CourtDetail Quick Game Detection** - Updated to detect `quickGame` URL param and show appropriate wizard
-4. **Courts Quick Game Banner** - Added banner showing quick game mode is active
+Add a searchable nationality dropdown to the Profile page and display nationality flags next to player names in Quick Challenge lobbies and session views.
 
-## Original Problem Analysis
+## What Will Change
 
-1. **Current Flow Issue**: After selecting sport + game mode in `QuickGameModal`, users are redirected to `/courts?quickGame=true` but the normal booking flow (which creates a Group + Session) is triggered
-2. **Key Difference**: Quick Challenges should NOT create a group - they create a standalone `quick_challenges` record where external players can join
-3. **Build Error**: There's also a TypeScript error in `ManagerLayout.tsx` at line 214 that needs fixing first
+### For You (the Player)
+- **Profile Page**: A new "Nationality" field in Personal Information section
+- **Searchable Dropdown**: Type to quickly find your country from 200+ options
+- **Flag Display**: Your nationality flag will appear as a small rounded image next to your name when other players see you
 
-## Proposed Solution
+### Where Flags Will Appear
+- Quick Game lobby player cards (next to name)
+- Session player lists
+- Any other location where player names are shown
 
-Create a **dedicated Quick Challenge Booking Wizard** that follows a distinct flow from the normal group-based booking.
+---
 
-```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                        QUICK CHALLENGE FLOW                                  │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  1. Player clicks "Quick Game" button on /discover                           │
-│                     ▼                                                        │
-│  2. QuickGameModal: Select Sport Category + Game Mode (1vs1 to 5vs5)        │
-│                     ▼                                                        │
-│  3. Redirect to /courts?quickGame=true&sport=futsal                          │
-│                     ▼                                                        │
-│  4. Player selects a court → Opens CourtDetail                               │
-│                     ▼                                                        │
-│  5. Player selects date + time slot → Clicks "Book"                          │
-│                     ▼                                                        │
-│  6. DETECT quickGame=true → Open QuickChallengeWizard (NOT BookingWizard)   │
-│                     ▼                                                        │
-│  7. Step 1: Terms & Rules (accept court rules)                               │
-│                     ▼                                                        │
-│  8. Step 2: Equipment (optional equipment rental)                            │
-│                     ▼                                                        │
-│  9. Step 3: Payment Choice                                                   │
-│       - Pay full amount (organizer pays everything upfront)                  │
-│       - Split between players (each player pays their share)                 │
-│                     ▼                                                        │
-│  10. Confirm Booking → Creates quick_challenges + court_availability records │
-│                     ▼                                                        │
-│  11. Lobby is available for external players to join at /discover            │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
+## Technical Implementation
 
-## Implementation Steps
+### Phase 1: Database Update
 
-### Phase 1: Fix Build Error
-
-**File**: `src/components/layout/ManagerLayout.tsx`
-
-The issue is at line 214 where TypeScript can't infer the icon type correctly when `action` is `"signout"`. The fix is to add an explicit type annotation to the `mobileNavItems` array.
-
-### Phase 2: Detect Quick Game Mode in CourtDetail
-
-**File**: `src/pages/CourtDetail.tsx`
-
-1. Read `quickGame` parameter from URL
-2. Check `sessionStorage.quickGameConfig` for sport category and game mode
-3. When user clicks "Book", check if in quick game mode:
-   - If YES → Open `QuickChallengeWizard`
-   - If NO → Open existing `BookingWizard`
-
-### Phase 3: Create QuickChallengeWizard Component
-
-**New File**: `src/components/booking/QuickChallengeWizard.tsx`
-
-A 3-step wizard tailored for Quick Challenges:
-
-| Step | Title | Content |
-|------|-------|---------|
-| 1 | Terms & Rules | Display court rules, require acceptance |
-| 2 | Equipment | Optional equipment rental selector |
-| 3 | Payment | Pay Full Amount OR Split Between Players |
-
-**Key Differences from BookingWizard**:
-- NO group selection/creation
-- NO sport category selection (already selected in QuickGameModal)
-- Payment split is per-player based on total_slots
-
-### Phase 4: Quick Challenge Creation Logic
-
-When the user confirms in the wizard:
-
-1. **Create `quick_challenges` record**:
-   - `sport_category_id`: from sessionStorage config
-   - `game_mode`: from sessionStorage config (e.g., "2vs2")
-   - `venue_id`: from court.venue_id
-   - `court_id`: selected court
-   - `scheduled_date`: selected date
-   - `scheduled_time`: selected start time
-   - `price_per_player`: calculated based on total price / total_slots
-   - `total_slots`: from game mode (e.g., 4 for 2vs2)
-   - `status`: "open"
-   - `created_by`: current user
-
-2. **Create `court_availability` record**:
-   - Mark the slot as booked
-   - `booked_by_user_id`: current user
-   - `is_booked`: true
-   - `payment_status`: pending
-
-3. **Auto-add creator as first player**:
-   - Insert into `quick_challenge_players`
-   - `team`: "left"
-   - `slot_position`: 0
-   - `payment_status`: "pending" (or "paid" if paying now)
-
-4. **Handle Payment**:
-   - If "Pay Full Amount": Redirect to Stripe for full court price
-   - If "Split": Each player pays `price_per_player` when joining
-
-### Phase 5: Update Courts.tsx to Handle Filters
-
-**File**: `src/pages/Courts.tsx`
-
-Read the `quickGame` and `sport` query parameters:
-- Display a banner indicating Quick Game mode is active
-- Pre-filter courts by sport if provided
-
-### Phase 6: Clear Quick Game State After Booking
-
-After successful quick challenge creation:
-- Clear `sessionStorage.quickGameConfig`
-- Navigate to `/discover?filter=quickgames` or show the new challenge
-
-## Database Schema Confirmation
-
-The existing `quick_challenges` table schema supports this flow:
+Add `nationality_code` column to the `profiles` table:
 
 | Column | Type | Purpose |
 |--------|------|---------|
-| sport_category_id | UUID | Links to sport_categories |
-| game_mode | TEXT | "1vs1", "2vs2", etc. |
-| venue_id | UUID | Venue where court is located |
-| court_id | UUID | Selected court |
-| scheduled_date | DATE | Booking date |
-| scheduled_time | TIME | Start time |
-| price_per_player | NUMERIC | Cost per player slot |
-| total_slots | INTEGER | Total player positions |
-| created_by | UUID | User who created challenge |
-| status | TEXT | "open", "full", "completed" |
+| nationality_code | TEXT | ISO 3166-1 alpha-2 code (e.g., "NZ", "BR", "US") |
 
-## Technical Details
+The migration will:
+- Add nullable `nationality_code` column
+- No default value (users choose their nationality)
 
-### QuickChallengeWizard Props
+### Phase 2: Create Country Data File
 
+Create a new data file with all countries and their ISO codes:
+
+**File**: `src/data/countries.ts`
+
+Contains:
+- All countries with ISO alpha-2 codes
+- Pre-sorted alphabetically
+- Unicode flag emoji generation from code
+
+Example structure:
 ```typescript
-interface QuickChallengeWizardProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: (data: {
-    paymentType: "single" | "split";
-    equipment: SelectedEquipment[];
-  }) => void;
-  // Court/Venue info
-  courtId: string;
-  courtName: string;
-  courtRules: string | null;
-  venueId: string;
-  venueName: string;
-  venueAddress: string;
-  courtPrice: number;
-  // Slot info
-  slotDate: string;
-  startTime: string;
-  endTime: string;
-  // Quick game config
-  sportCategoryId: string;
-  sportName: string;
-  gameMode: string;
-  totalPlayers: number;
-  // Equipment
-  equipment: Equipment[];
-  selectedEquipment: SelectedEquipment[];
-  onEquipmentChange: (equipment: SelectedEquipment[]) => void;
-  // Payment
-  paymentTiming: "at_booking" | "before_session" | null;
+export interface Country {
+  code: string;      // "NZ"
+  name: string;      // "New Zealand"
+  flag: string;      // "🇳🇿"
 }
+
+export const countries: Country[] = [
+  { code: "AF", name: "Afghanistan", flag: "🇦🇫" },
+  { code: "NZ", name: "New Zealand", flag: "🇳🇿" },
+  // ... 200+ countries
+];
 ```
 
-### Price Calculation for Split Payment
+### Phase 3: Create Nationality Combobox Component
+
+**File**: `src/components/ui/nationality-combobox.tsx`
+
+Features:
+- Searchable dropdown using existing `cmdk` library
+- Type-ahead filtering by country name
+- Shows flag + country name in dropdown options
+- Selected value displays flag + country name
+- Accessible with keyboard navigation
+
+Uses existing components:
+- `Popover` + `PopoverTrigger` + `PopoverContent`
+- `Command` + `CommandInput` + `CommandList` + `CommandItem`
+- `Button` for trigger
+
+### Phase 4: Update Profile Pages
+
+**File**: `src/pages/Profile.tsx` - Personal Information section
+
+Add nationality field after the City dropdown:
+- Label: "Nationality"
+- Component: `NationalityCombobox`
+- Helper text: "Your flag will be shown to other players"
+
+**File**: `src/pages/ProfileEdit.tsx`
+
+Same changes as Profile.tsx for consistency.
+
+### Phase 5: Update Profile Data Handling
+
+Both Profile and ProfileEdit pages:
+- Add `nationality_code` to `ProfileData` interface
+- Include in fetch query
+- Include in save/upsert operations
+
+### Phase 6: Update Player Data Fetching
+
+**File**: `src/hooks/useQuickChallenges.ts`
+
+Update profile select query:
+```typescript
+// Before
+.select("user_id, full_name, avatar_url, city")
+
+// After
+.select("user_id, full_name, avatar_url, city, nationality_code")
+```
+
+Update `QuickChallengePlayer` interface to include:
+```typescript
+profiles?: {
+  full_name: string | null;
+  avatar_url: string | null;
+  city: string | null;
+  nationality_code: string | null;  // NEW
+} | null;
+```
+
+### Phase 7: Pass Nationality to Components
+
+**File**: `src/pages/QuickGameLobby.tsx`
 
 ```typescript
-// Calculate price per player for split payment
-const totalCost = courtPrice + equipmentTotal;
-const pricePerPlayer = Math.ceil((totalCost / totalPlayers) * 100) / 100;
+// Before
+nationalityCode: null,
+
+// After
+nationalityCode: p.profiles?.nationality_code || null,
 ```
 
-### Responsive Design Requirements
+**File**: `src/pages/Discover.tsx`
 
-The wizard will follow the same responsive patterns as `BookingWizard`:
-- Mobile: Full-width dialog with safe area padding
-- Desktop: Centered modal with max-width
-- Touch-friendly buttons (min 44px touch targets)
-- Skeleton loaders for async data
+Same pattern when mapping quick challenge players to card props.
 
-## Files to Create/Modify
+### Phase 8: PlayerCard Already Supports Flags
+
+The `PlayerCard.tsx` component already has:
+- `getFlagEmoji()` function that converts country codes to flag emoji
+- Display logic for the flag next to the player name
+
+Current implementation shows flag in top-left corner. Based on the reference image, we may adjust to show it inline next to the player's name at the bottom of the card instead.
+
+---
+
+## File Changes Summary
 
 | File | Action | Description |
 |------|--------|-------------|
-| `src/components/layout/ManagerLayout.tsx` | Modify | Fix TypeScript build error |
-| `src/components/booking/QuickChallengeWizard.tsx` | Create | New 3-step wizard for quick challenges |
-| `src/pages/CourtDetail.tsx` | Modify | Add quick game mode detection and routing |
-| `src/pages/Courts.tsx` | Modify | Add quick game mode banner and sport filter |
-| `src/components/quick-challenge/QuickGameModal.tsx` | Modify | Minor cleanup if needed |
+| Database Migration | Create | Add `nationality_code` column to profiles |
+| `src/data/countries.ts` | Create | Country list with ISO codes |
+| `src/components/ui/nationality-combobox.tsx` | Create | Searchable country selector |
+| `src/pages/Profile.tsx` | Modify | Add nationality field to Personal Information |
+| `src/pages/ProfileEdit.tsx` | Modify | Add nationality field |
+| `src/hooks/useQuickChallenges.ts` | Modify | Fetch nationality_code from profiles |
+| `src/pages/QuickGameLobby.tsx` | Modify | Pass nationality to player cards |
+| `src/pages/Discover.tsx` | Modify | Pass nationality to player cards |
+| `src/components/quick-challenge/PlayerCard.tsx` | Modify | Adjust flag position to match design |
 
-## Expected Results
+---
 
-1. **Distinct Flow**: Quick Challenge booking is completely separate from group-based booking
-2. **No Group Creation**: Quick Challenges don't create groups, only `quick_challenges` records
-3. **Lobby Visibility**: After creation, the challenge appears in "Quick Games" tab on /discover
-4. **Player Joining**: Other players can join vacant slots and pay their share
-5. **Real-time Updates**: TanStack Query + Supabase Realtime keeps the lobby synced
+## User Experience
+
+1. **Go to Profile** > Open "Personal Information" section
+2. **See new Nationality field** with a searchable dropdown
+3. **Click dropdown** > Type country name (e.g., "Braz...") > Select "Brazil"
+4. **Save changes** > Profile updated
+5. **Join a Quick Challenge** > Your flag (🇧🇷) appears next to your name
+6. **Other players see** your flag when viewing the lobby
+
+---
+
+## Design Details (Based on Reference Image)
+
+The reference image shows:
+- Player name displayed below avatar (e.g., "Rafael N.")
+- Small circular flag shown inline to the right of the name
+- Flag appears as a small rounded badge/circle
+
+The current `PlayerCard.tsx` shows the flag in the top-left corner. I will adjust to:
+- Move flag display to inline with the player name
+- Render flag as a small circular element next to the name
+- Keep the emoji flag approach (works across all devices without images)
+

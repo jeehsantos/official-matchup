@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { CourtCard } from "@/components/courts/CourtCard";
@@ -35,6 +35,7 @@ export default function Courts() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const itemsPerPage = usePaginationThreshold();
   const [courts, setCourts] = useState<CourtWithVenue[]>([]);
@@ -400,6 +401,7 @@ export default function Courts() {
               courts={filteredCourts}
               highlightedCourtId={highlightedCourtId}
               onMarkerHover={setHighlightedCourtId}
+              linkSearch={location.search}
             />
           </div>
 
@@ -548,6 +550,7 @@ export default function Courts() {
               courts={filteredCourts}
               highlightedCourtId={highlightedCourtId}
               onMarkerHover={setHighlightedCourtId}
+              linkSearch={location.search}
             />
           </div>
         </div>
