@@ -1097,6 +1097,7 @@ const getGoogleMapsUrl = (address: string): string => {
                       player.profile?.nationality_code
                     );
                     const flagCode = normalizedNationality?.toLowerCase() ?? null;
+                    const flagUrl = flagCode ? `https://flagcdn.com/w40/${flagCode}.png` : null;
 
                     return (
                       <div
@@ -1115,12 +1116,13 @@ const getGoogleMapsUrl = (address: string): string => {
                               {player.profile?.full_name || "Player"}
                               {player.user_id === user.id && " (You)"}
                             </span>
-                            {flagCode && (
-                              <span
-                                className={`fi fi-${flagCode} inline-flex h-4 w-4 items-center justify-center rounded-full shadow-sm`}
-                                role="img"
-                                aria-label={`Flag of ${normalizedNationality}`}
-                                title={normalizedNationality}
+                            {flagUrl && (
+                              <img
+                                className="h-4 w-4 rounded-full shadow-sm"
+                                src={flagUrl}
+                                alt={`Flag of ${normalizedNationality}`}
+                                title={normalizedNationality ?? undefined}
+                                loading="lazy"
                               />
                             )}
                           </p>
