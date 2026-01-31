@@ -51,6 +51,7 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const hasInitializedBoundsRef = useRef(false);
   const geocodeInFlightRef = useRef<Set<string>>(new Set());
+  const geocodeControllersRef = useRef<Map<string, AbortController>>(new Map());
   const [geocodedPositions, setGeocodedPositions] = useState<Record<string, { lat: number; lng: number }>>({});
 
   useEffect(() => {
@@ -72,17 +73,17 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
 
     if (venuesToGeocode.size === 0) return;
 
-    let isCancelled = false;
-
     const fetchGeocodes = async () => {
       const nextPositions: Record<string, { lat: number; lng: number }> = {};
 
       for (const [venueId, query] of venuesToGeocode.entries()) {
         geocodeInFlightRef.current.add(venueId);
+        const controller = new AbortController();
+        geocodeControllersRef.current.set(venueId, controller);
         try {
           const response = await fetch(
             `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`,
-            { headers: { "Accept-Language": "en" } }
+            { headers: { "Accept-Language": "en" }, signal: controller.signal }
           );
           if (!response.ok) continue;
           const data = await response.json();
@@ -95,13 +96,16 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
             }
           }
         } catch (error) {
-          console.warn("Failed to geocode venue address", error);
+          if (!(error instanceof DOMException && error.name === "AbortError")) {
+            console.warn("Failed to geocode venue address", error);
+          }
         } finally {
           geocodeInFlightRef.current.delete(venueId);
+          geocodeControllersRef.current.delete(venueId);
         }
       }
 
-      if (!isCancelled && Object.keys(nextPositions).length > 0) {
+      if (Object.keys(nextPositions).length > 0) {
         setGeocodedPositions((prev) => ({ ...prev, ...nextPositions }));
       }
     };
@@ -109,7 +113,9 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
     fetchGeocodes();
 
     return () => {
-      isCancelled = true;
+      geocodeControllersRef.current.forEach((controller) => controller.abort());
+      geocodeControllersRef.current.clear();
+      geocodeInFlightRef.current.clear();
     };
   }, [courts, geocodedPositions]);
 
