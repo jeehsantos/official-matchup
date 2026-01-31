@@ -259,7 +259,7 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
       }
       hasInitializedBoundsRef.current = true;
     }
-  }, [courtsWithPosition, highlightedCourtId, linkSearch]);
+  }, [courtsWithPosition, linkSearch]);
 
   // Update marker icons when highlighted court changes (without recreating markers)
   useEffect(() => {
