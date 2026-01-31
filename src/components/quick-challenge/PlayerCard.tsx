@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Check, Loader2, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getFlagEmojiByCode } from "@/data/countries";
 
 interface PlayerCardProps {
   player?: {
