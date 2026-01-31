@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { Heart, ChevronLeft, ChevronRight, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SportIcon } from "@/components/ui/sport-icon";
@@ -22,6 +22,7 @@ interface CourtCardProps {
 export function CourtCard({ court, onHover, isHighlighted }: CourtCardProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   const [imageIndex, setImageIndex] = useState(0);
+  const location = useLocation();
   
   // Get court image
   const getImages = (): string[] => {
@@ -49,9 +50,15 @@ export function CourtCard({ court, onHover, isHighlighted }: CourtCardProps) {
     setImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
   };
 
+  // Preserve query params (e.g. ?quickGame=true) when navigating to court detail.
+  const courtLink = useMemo(
+    () => ({ pathname: `/courts/${court.id}`, search: location.search }),
+    [court.id, location.search]
+  );
+
   return (
     <Link
-      to={`/courts/${court.id}`}
+      to={courtLink}
       className="block group"
       onMouseEnter={() => onHover?.(court.id)}
       onMouseLeave={() => onHover?.(null)}
