@@ -31,11 +31,12 @@ export default function About() {
       {/* Navigation */}
       <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-display font-bold text-sm">N</span>
-            </div>
-            <span className="font-display font-bold text-lg">MatchUP</span>
+          <Link to="/" className="flex items-center" aria-label="Sport Arena home">
+            <img
+              src="/sportarena-logo.png"
+              alt="Sport Arena logo"
+              className="h-10 w-auto mix-blend-screen"
+            />
           </Link>
           <div className="flex items-center gap-3">
             <Link to="/auth">
@@ -59,63 +60,93 @@ export default function About() {
       </div>
 
       {/* Hero */}
-      <section className="pt-8 pb-16 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <h1 className="font-display text-4xl md:text-5xl font-bold mb-6">
-            About MatchUP
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl">
-            We're on a mission to solve the chaos of group sports bookings across New Zealand.
-          </p>
-        </div>
-      </section>
-
-      {/* Story */}
-      <section className="py-16 px-4 bg-muted/30">
-        <div className="container mx-auto max-w-4xl">
-          <h2 className="font-display text-2xl font-bold mb-6">Our Story</h2>
-          <div className="prose prose-lg max-w-none text-muted-foreground">
-            <p className="mb-4">
-              It started with a frustrating WhatsApp group. Every week, the same drama: 
-              "Is everyone still coming?", "Sorry, can't make it", "Who's going to cover the 
-              extra cost?". Games got cancelled. Court fees were split unevenly. Organizers 
-              were exhausted.
-            </p>
-            <p className="mb-4">
-              We knew there had to be a better way. What if payments were collected upfront? 
-              What if cancelled spots could be automatically filled? What if unused court time 
-              could go to players who actually want to play?
-            </p>
-            <p>
-              That's why we built MatchUP. A platform where commitment is guaranteed, 
-              cancellations are handled gracefully, and everyone gets a fair shot at playing 
-              the sports they love.
-            </p>
+      <section className="pt-10 pb-12 px-4">
+        <div className="container mx-auto max-w-5xl">
+          <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
+            <div>
+              <p className="text-sm uppercase tracking-widest text-muted-foreground">Our story</p>
+              <h1 className="font-display text-4xl md:text-5xl font-bold mb-4">
+                Sport Arena is built for real players
+              </h1>
+              <p className="text-lg text-muted-foreground max-w-2xl">
+                We take the chaos out of group bookings so you can focus on the game.
+              </p>
+            </div>
+            <div className="card-elevated p-6 space-y-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Our mission</p>
+                <p className="font-semibold text-lg">Make every game happen.</p>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                From upfront payments to smart rescue mode, we remove last-minute drama
+                and keep courts full.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {["Fair play", "Reliable venues", "Committed teams"].map((item) => (
+                  <span key={item} className="text-xs font-semibold px-3 py-1 rounded-full bg-muted border border-border">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Problem */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <h2 className="font-display text-2xl font-bold mb-6">The Problem We Solve</h2>
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="bg-destructive/10 rounded-2xl p-6 border border-destructive/20">
-              <h3 className="font-semibold text-lg mb-4">For Players & Organizers</h3>
-              <ul className="space-y-3 text-muted-foreground">
-                <li>• Last-minute cancellations ruining games</li>
-                <li>• Chasing payments from teammates</li>
-                <li>• Paying for empty spots on the court</li>
-                <li>• WhatsApp chaos every week</li>
+      {/* Story */}
+      <section className="py-12 px-4 bg-muted/30">
+        <div className="container mx-auto max-w-5xl">
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                title: "The problem",
+                body: "Group chats, no-shows, and uneven payments were cancelling too many games."
+              },
+              {
+                title: "The idea",
+                body: "Collect payments upfront, automate cancellations, and reward consistency."
+              },
+              {
+                title: "The result",
+                body: "Sport Arena: a clean, sporty platform where commitment is guaranteed."
+              },
+            ].map((item) => (
+              <div key={item.title} className="card-elevated p-6">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">{item.title}</p>
+                <p className="mt-3 text-sm text-muted-foreground">{item.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Focus Areas */}
+      <section className="py-12 px-4">
+        <div className="container mx-auto max-w-5xl">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
+            <div>
+              <p className="text-sm uppercase tracking-widest text-muted-foreground">Our focus</p>
+              <h2 className="font-display text-3xl font-bold mt-2">Built for players and venues</h2>
+            </div>
+            <p className="text-muted-foreground max-w-md">
+              Everyone wins when bookings are clear and commitments are honored.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="card-elevated p-6">
+              <h3 className="font-semibold text-lg mb-3">Players & Organizers</h3>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Guaranteed spots with upfront payments</li>
+                <li>• Faster group coordination and reminders</li>
+                <li>• Automatic rescue mode for cancellations</li>
               </ul>
             </div>
-            <div className="bg-destructive/10 rounded-2xl p-6 border border-destructive/20">
-              <h3 className="font-semibold text-lg mb-4">For Court Managers</h3>
-              <ul className="space-y-3 text-muted-foreground">
-                <li>• No-shows leaving courts empty</li>
-                <li>• Uncertain revenue from bookings</li>
-                <li>• Difficulty filling cancelled slots</li>
-                <li>• Managing multiple booking channels</li>
+            <div className="card-elevated p-6">
+              <h3 className="font-semibold text-lg mb-3">Court Managers</h3>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Predictable revenue and fewer no-shows</li>
+                <li>• Centralized venue availability control</li>
+                <li>• Smart visibility to fill courts faster</li>
               </ul>
             </div>
           </div>
@@ -123,12 +154,20 @@ export default function About() {
       </section>
 
       {/* Values */}
-      <section className="py-16 px-4 bg-muted/30">
-        <div className="container mx-auto max-w-4xl">
-          <h2 className="font-display text-2xl font-bold mb-8 text-center">Our Values</h2>
+      <section className="py-12 px-4 bg-muted/30">
+        <div className="container mx-auto max-w-5xl">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
+            <div>
+              <p className="text-sm uppercase tracking-widest text-muted-foreground">Values</p>
+              <h2 className="font-display text-3xl font-bold mt-2">What we stand for</h2>
+            </div>
+            <p className="text-muted-foreground max-w-md">
+              These values keep Sport Arena focused on athletes first.
+            </p>
+          </div>
           <div className="grid sm:grid-cols-2 gap-6">
             {values.map((value) => (
-              <div key={value.title} className="bg-card rounded-2xl p-6 border border-border">
+              <div key={value.title} className="card-elevated p-6">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
                   <value.icon className="h-6 w-6 text-primary" />
                 </div>
@@ -141,14 +180,23 @@ export default function About() {
       </section>
 
       {/* New Zealand Focus */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto max-w-4xl text-center">
-          <h2 className="font-display text-2xl font-bold mb-4">Proudly New Zealand</h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            MatchUP is built for the New Zealand sports community. We understand the local 
-            landscape - from indoor futsal facilities in Auckland to tennis clubs in Wellington. 
-            We're here to make playing sports easier for every Kiwi.
-          </p>
+      <section className="py-12 px-4">
+        <div className="container mx-auto max-w-5xl">
+          <div className="card-elevated p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div>
+              <h2 className="font-display text-2xl font-bold mb-2">Proudly New Zealand</h2>
+              <p className="text-muted-foreground max-w-2xl">
+                We understand local leagues and community venues, from Auckland futsal to Wellington tennis.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {["Auckland", "Wellington", "Christchurch", "Hamilton"].map((city) => (
+                <span key={city} className="text-xs font-semibold px-3 py-1 rounded-full bg-muted border border-border">
+                  {city}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -179,18 +227,19 @@ export default function About() {
       {/* Footer */}
       <footer className="py-8 px-4 border-t border-border">
         <div className="container mx-auto max-w-4xl flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-display font-bold text-xs">N</span>
-            </div>
-            <span className="font-display font-semibold">MatchUP</span>
+          <div className="flex items-center">
+            <img
+              src="/sportarena-logo.png"
+              alt="Sport Arena logo"
+              className="h-8 w-auto mix-blend-screen"
+            />
           </div>
           <div className="flex gap-6 text-sm text-muted-foreground">
             <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
             <Link to="/contact" className="hover:text-foreground transition-colors">Contact</Link>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} MatchUP
+            © {new Date().getFullYear()} Sport Arena
           </p>
         </div>
       </footer>

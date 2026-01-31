@@ -19,8 +19,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSportCategories } from "@/hooks/useSportCategories";
 import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
 import { QuickGameModal } from "@/components/quick-challenge/QuickGameModal";
-import { QuickChallengeCard } from "@/components/quick-challenge/QuickChallengeCard";
-import { useQuickChallenges, useJoinChallenge } from "@/hooks/useQuickChallenges";
+import { QuickChallengeSummaryCard } from "@/components/quick-challenge/QuickChallengeSummaryCard";
+import { useQuickChallenges } from "@/hooks/useQuickChallenges";
 
 type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "other";
 
@@ -58,7 +58,6 @@ export default function Discover() {
     sportCategoryId: selectedSport !== "all" ? selectedSport : undefined,
     status: "open",
   });
-  const joinChallenge = useJoinChallenge();
   
   // Fetch dynamic categories from database - NO FALLBACKS
   const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
@@ -217,17 +216,6 @@ export default function Discover() {
              venueName.includes(searchQuery.toLowerCase());
     });
   }, [quickChallenges, searchQuery]);
-
-  // Handle joining a challenge slot
-  const handleJoinSlot = (challengeId: string, team: "left" | "right", slotPosition: number) => {
-    joinChallenge.mutate({ challengeId, team, slotPosition });
-  };
-
-  // Handle payment for a challenge
-  const handlePayment = (challengeId: string) => {
-    // TODO: Integrate with Stripe checkout
-    console.log("Payment for challenge:", challengeId);
-  };
 
   if (isLoading) {
     return (
@@ -409,39 +397,30 @@ export default function Discover() {
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : filteredChallenges.length > 0 ? (
-              <div className="grid gap-4 lg:grid-cols-2">
-                {filteredChallenges.map((challenge) => (
-                  <QuickChallengeCard
-                    key={challenge.id}
-                    challenge={{
-                      id: challenge.id,
-                      sportCategoryId: challenge.sport_category_id,
-                      sportName: challenge.sport_categories?.display_name,
-                      sportIcon: challenge.sport_categories?.icon || "🎯",
-                      gameMode: challenge.game_mode,
-                      status: challenge.status,
-                      venueName: challenge.venues?.name,
-                      venueAddress: challenge.venues?.address,
-                      scheduledDate: challenge.scheduled_date || undefined,
-                      scheduledTime: challenge.scheduled_time || undefined,
-                      pricePerPlayer: challenge.price_per_player,
-                      totalSlots: challenge.total_slots,
-                      players: (challenge.quick_challenge_players || []).map(p => ({
-                        id: p.id,
-                        userId: p.user_id,
-                        name: p.profiles?.full_name || "Player",
-                        avatarUrl: p.profiles?.avatar_url,
-                        nationalityCode: null,
-                        paymentStatus: p.payment_status as "pending" | "paid" | "refunded",
-                        team: p.team as "left" | "right",
-                        slotPosition: p.slot_position,
-                      })),
-                    }}
-                    currentUserId={user?.id}
-                    onJoinSlot={handleJoinSlot}
-                    onPayment={handlePayment}
-                  />
-                ))}
+              <div className="space-y-6">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {filteredChallenges.map((challenge) => (
+                    <QuickChallengeSummaryCard
+                      key={challenge.id}
+                      challenge={{
+                        id: challenge.id,
+                        sportName: challenge.sport_categories?.display_name,
+                        sportIcon: challenge.sport_categories?.icon || "🎯",
+                        gameMode: challenge.game_mode,
+                        status: challenge.status,
+                        venueName: challenge.venues?.name,
+                        venueAddress: challenge.venues?.address,
+                        scheduledDate: challenge.scheduled_date || undefined,
+                        scheduledTime: challenge.scheduled_time || undefined,
+                        courtImage: challenge.courts?.photo_url || challenge.venues?.photo_url || "/placeholder.svg",
+                        pricePerPlayer: challenge.price_per_player,
+                        totalSlots: challenge.total_slots,
+                        playersCount: challenge.quick_challenge_players?.length || 0,
+                      }}
+                      onSelect={() => navigate(`/quick-games/${challenge.id}`)}
+                    />
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="text-center py-12 text-muted-foreground">
