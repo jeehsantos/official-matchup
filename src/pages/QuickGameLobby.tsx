@@ -303,7 +303,7 @@ export default function QuickGameLobby() {
     }));
   }, [challenge?.quick_challenge_players, user?.id]);
 
-  // Generate roles for each team
+  // Generate roles for each team (0-indexed to match database)
   const leftRoles = useMemo(
     () => Array.from({ length: teamSize }, (_, i) => `Player ${i + 1}`),
     [teamSize]
@@ -313,7 +313,17 @@ export default function QuickGameLobby() {
     [teamSize]
   );
 
-  // Handlers
+  // Get players by team
+  const leftTeamPlayers = useMemo(
+    () => players.filter((p) => p.team === "left"),
+    [players]
+  );
+  const rightTeamPlayers = useMemo(
+    () => players.filter((p) => p.team === "right"),
+    [players]
+  );
+
+  // Handlers - use 0-based slot positions to match database
   const handleJoinSlot = (team: TeamSide, slotPosition: number) => {
     if (!id || !user) return;
     setJoiningSlot({ team, position: slotPosition });
@@ -443,11 +453,12 @@ export default function QuickGameLobby() {
             </div>
             <div className="flex flex-col gap-2">
               {leftRoles.map((role, i) => {
-                const player = players.find(
-                  (p) => p.team === "left" && p.slotPosition === i + 1
-                );
+                // Use 0-indexed slot positions to match database
+                const player = leftTeamPlayers.find(
+                  (p) => p.slotPosition === i
+                ) || leftTeamPlayers[i]; // Fallback to array index if slot_position doesn't match
                 const isJoiningThis =
-                  joiningSlot?.team === "left" && joiningSlot?.position === i + 1;
+                  joiningSlot?.team === "left" && joiningSlot?.position === i;
                 return (
                   <PlayerSlot
                     key={`left-${i}`}
@@ -455,7 +466,7 @@ export default function QuickGameLobby() {
                     side="left"
                     player={player}
                     isCurrentUser={player?.isMe}
-                    onJoin={() => handleJoinSlot("left", i + 1)}
+                    onJoin={() => handleJoinSlot("left", i)}
                     onPay={() => handlePayment(challenge.id)}
                     isJoining={isJoiningThis}
                   />
@@ -474,11 +485,12 @@ export default function QuickGameLobby() {
             </div>
             <div className="flex flex-col gap-2">
               {rightRoles.map((role, i) => {
-                const player = players.find(
-                  (p) => p.team === "right" && p.slotPosition === i + 1
-                );
+                // Use 0-indexed slot positions to match database
+                const player = rightTeamPlayers.find(
+                  (p) => p.slotPosition === i
+                ) || rightTeamPlayers[i]; // Fallback to array index if slot_position doesn't match
                 const isJoiningThis =
-                  joiningSlot?.team === "right" && joiningSlot?.position === i + 1;
+                  joiningSlot?.team === "right" && joiningSlot?.position === i;
                 return (
                   <PlayerSlot
                     key={`right-mobile-${i}`}
@@ -486,7 +498,7 @@ export default function QuickGameLobby() {
                     side="right"
                     player={player}
                     isCurrentUser={player?.isMe}
-                    onJoin={() => handleJoinSlot("right", i + 1)}
+                    onJoin={() => handleJoinSlot("right", i)}
                     onPay={() => handlePayment(challenge.id)}
                     isJoining={isJoiningThis}
                   />
@@ -572,11 +584,12 @@ export default function QuickGameLobby() {
           </div>
           <div className="flex flex-col gap-2">
             {rightRoles.map((role, i) => {
-              const player = players.find(
-                (p) => p.team === "right" && p.slotPosition === i + 1
-              );
+              // Use 0-indexed slot positions to match database
+              const player = rightTeamPlayers.find(
+                (p) => p.slotPosition === i
+              ) || rightTeamPlayers[i]; // Fallback to array index if slot_position doesn't match
               const isJoiningThis =
-                joiningSlot?.team === "right" && joiningSlot?.position === i + 1;
+                joiningSlot?.team === "right" && joiningSlot?.position === i;
               return (
                 <PlayerSlot
                   key={`right-desktop-${i}`}
@@ -584,7 +597,7 @@ export default function QuickGameLobby() {
                   side="right"
                   player={player}
                   isCurrentUser={player?.isMe}
-                  onJoin={() => handleJoinSlot("right", i + 1)}
+                  onJoin={() => handleJoinSlot("right", i)}
                   onPay={() => handlePayment(challenge.id)}
                   isJoining={isJoiningThis}
                 />
