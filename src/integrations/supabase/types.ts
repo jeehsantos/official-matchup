@@ -684,6 +684,41 @@ export type Database = {
         }
         Relationships: []
       }
+      quick_challenge_messages: {
+        Row: {
+          challenge_id: string
+          content: string
+          created_at: string
+          id: string
+          message_type: string
+          sender_id: string
+        }
+        Insert: {
+          challenge_id: string
+          content: string
+          created_at?: string
+          id?: string
+          message_type?: string
+          sender_id: string
+        }
+        Update: {
+          challenge_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          message_type?: string
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_challenge_messages_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "quick_challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quick_challenge_players: {
         Row: {
           challenge_id: string
@@ -1224,6 +1259,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_challenge_participant: {
+        Args: { _challenge_id: string; _user_id: string }
         Returns: boolean
       }
       is_group_member: {

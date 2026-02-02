@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useQuickChallenges, useJoinChallenge } from "@/hooks/useQuickChallenges";
@@ -10,17 +10,16 @@ import {
   ArrowLeft,
   MapPin,
   Plus,
-  Users,
   Settings,
   X,
   CheckCircle2,
   Clock,
   Sun,
   Moon,
-  ChevronDown,
   CreditCard,
 } from "lucide-react";
 import { format } from "date-fns";
+import { LobbyChatPanel } from "@/components/quick-challenge/LobbyChatPanel";
 
 // --- TYPES ---
 type TeamSide = "left" | "right";
@@ -273,7 +272,6 @@ export default function QuickGameLobby() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [joiningSlot, setJoiningSlot] = useState<{ team: TeamSide; position: number } | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Find the challenge
   const challenge = useMemo(
@@ -394,7 +392,6 @@ export default function QuickGameLobby() {
     : "Date TBD";
 
   const totalPlayers = players.length;
-  const paidPlayers = players.filter((p) => p.paymentStatus === "paid").length;
 
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden font-sans select-none border-2 md:border-4 border-border bg-background text-foreground">
@@ -607,43 +604,14 @@ export default function QuickGameLobby() {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="h-auto md:h-24 border-t p-3 md:p-4 flex flex-col md:flex-row gap-4 shrink-0 relative z-30 bg-card border-border">
-        {/* Status Pills */}
-        <div className="flex-1 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5 border px-3 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-muted border-border text-muted-foreground">
-            <Users size={12} className="text-primary" />
-            <span className="text-primary font-bold">
-              {totalPlayers}/{teamSize * 2}
-            </span>
-            Players
-          </div>
-          <div className="flex items-center gap-1.5 border px-3 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-green-500/10 border-green-500/30 text-green-500">
-            <CheckCircle2 size={12} />
-            {paidPlayers} Paid
-          </div>
-          {totalPlayers >= teamSize * 2 && (
-            <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/30 px-3 py-1.5 rounded-full text-[9px] font-bold text-green-500 uppercase tracking-widest">
-              <CheckCircle2 size={12} />
-              Match Full
-            </div>
-          )}
-        </div>
-
-        {/* Date/Time - Mobile */}
-        <div className="md:hidden flex items-center justify-center gap-2 text-[10px] text-muted-foreground">
-          <Clock size={12} className="text-primary" />
-          <span className="font-medium">{formattedDateTime}</span>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="flex items-center justify-end gap-4">
-          <Button variant="ghost" size="sm" className="text-xs gap-1.5" onClick={handleLeaveLobby}>
-            <ArrowLeft size={14} />
-            Leave
-          </Button>
-        </div>
-      </div>
+      {/* Footer with Chat Panel */}
+      <LobbyChatPanel
+        challengeId={challenge.id}
+        currentUserId={user.id}
+        totalSlots={teamSize * 2}
+        filledSlots={totalPlayers}
+        isMatchFull={totalPlayers >= teamSize * 2}
+      />
     </div>
   );
 }
