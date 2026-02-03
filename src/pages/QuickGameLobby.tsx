@@ -17,6 +17,7 @@ import {
   Sun,
   Moon,
   CreditCard,
+  AlertTriangle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { LobbyChatPanel } from "@/components/quick-challenge/LobbyChatPanel";
@@ -27,6 +28,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // --- TYPES ---
 type TeamSide = "left" | "right";
@@ -336,6 +347,7 @@ export default function QuickGameLobby() {
   const updateFormat = useUpdateChallengeFormat();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isQuitDialogOpen, setIsQuitDialogOpen] = useState(false);
   const [joiningSlot, setJoiningSlot] = useState<{ team: TeamSide; position: number } | null>(null);
 
   // Find the challenge
@@ -435,9 +447,19 @@ export default function QuickGameLobby() {
   };
 
   const handleQuitLobby = () => {
+    setIsQuitDialogOpen(true);
+  };
+
+  const confirmQuitLobby = () => {
     if (!id || !isOrganizer) return;
     cancelChallenge.mutate(id, {
-      onSuccess: () => navigate("/discover?tab=quickgames"),
+      onSuccess: () => {
+        setIsQuitDialogOpen(false);
+        navigate("/discover?tab=quickgames");
+      },
+      onError: () => {
+        setIsQuitDialogOpen(false);
+      },
     });
   };
 
@@ -499,6 +521,41 @@ export default function QuickGameLobby() {
 
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden font-sans select-none border-2 md:border-4 border-border bg-background text-foreground">
+      {/* Quit Lobby Confirmation Dialog */}
+      <AlertDialog open={isQuitDialogOpen} onOpenChange={setIsQuitDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Cancel this lobby?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. All players will be removed from the lobby
+              and the booking will be cancelled. Any pending payments will not be processed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelChallenge.isPending}>
+              Keep Lobby
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmQuitLobby}
+              disabled={cancelChallenge.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cancelChallenge.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                "Yes, Cancel Lobby"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
