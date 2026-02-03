@@ -57,7 +57,7 @@ export function useLobbyChatMessages(challengeId: string | undefined) {
 
   // Real-time subscription for new messages
   useEffect(() => {
-    if (!challengeId || isSubscribed) return;
+    if (!challengeId) return;
 
     const channel = supabase
       .channel(`lobby-chat-${challengeId}`)
@@ -111,15 +111,15 @@ export function useLobbyChatMessages(challengeId: string | undefined) {
           });
         }
       )
-      .subscribe();
-
-    setIsSubscribed(true);
+      .subscribe((status) => {
+        setIsSubscribed(status === "SUBSCRIBED");
+      });
 
     return () => {
       supabase.removeChannel(channel);
       setIsSubscribed(false);
     };
-  }, [challengeId, queryClient, isSubscribed]);
+  }, [challengeId, queryClient]);
 
   // Send a user message
   const sendMessage = useMutation({

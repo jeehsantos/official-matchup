@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useQuickChallenges, useJoinChallenge } from "@/hooks/useQuickChallenges";
+import { useQuickChallenges, useJoinChallenge, useCancelChallenge, useUpdateChallengeFormat } from "@/hooks/useQuickChallenges";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import {
   MapPin,
   Plus,
   Settings,
-  X,
+  LogOut,
   CheckCircle2,
   Clock,
   Sun,
@@ -20,6 +20,13 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { LobbyChatPanel } from "@/components/quick-challenge/LobbyChatPanel";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // --- TYPES ---
 type TeamSide = "left" | "right";
@@ -200,12 +207,47 @@ interface SettingsModalProps {
   onClose: () => void;
   teamSize: number;
   gameMode: string;
+  isOrganizer: boolean;
+  challengeId: string;
+  currentPlayerCount: number;
+  onFormatChange: (newFormat: string) => void;
+  isUpdating?: boolean;
 }
 
-function SettingsModal({ isOpen, onClose, teamSize, gameMode }: SettingsModalProps) {
+const MATCH_FORMATS = ["1vs1", "2vs2", "3vs3", "4vs4", "5vs5"];
+
+function SettingsModal({ 
+  isOpen, 
+  onClose, 
+  teamSize, 
+  gameMode, 
+  isOrganizer,
+  challengeId,
+  currentPlayerCount,
+  onFormatChange,
+  isUpdating,
+}: SettingsModalProps) {
   const { theme, setTheme } = useTheme();
+  const [selectedFormat, setSelectedFormat] = useState(gameMode);
+
+  // Update local state when gameMode changes
+  useEffect(() => {
+    setSelectedFormat(gameMode);
+  }, [gameMode]);
 
   if (!isOpen) return null;
+
+  const handleFormatChange = (newFormat: string) => {
+    setSelectedFormat(newFormat);
+    onFormatChange(newFormat);
+  };
+
+  // Calculate which formats are available based on current players
+  const getFormatDisabled = (format: string) => {
+    const match = format.match(/(\d+)vs(\d+)/);
+    const slots = match ? parseInt(match[1]) * 2 : 2;
+    return currentPlayerCount > slots;
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -218,7 +260,7 @@ function SettingsModal({ isOpen, onClose, teamSize, gameMode }: SettingsModalPro
             onClick={onClose}
             className="p-1 hover:bg-accent rounded-full transition-colors"
           >
-            <X size={20} />
+            <LogOut size={20} />
           </button>
         </div>
 
@@ -239,18 +281,39 @@ function SettingsModal({ isOpen, onClose, teamSize, gameMode }: SettingsModalPro
             </button>
           </div>
 
-          {/* Match Format (Read-only) */}
+          {/* Match Format */}
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase text-muted-foreground">
               Match Format
             </span>
-            <div className="relative">
+            {isOrganizer ? (
+              <Select 
+                value={selectedFormat} 
+                onValueChange={handleFormatChange}
+                disabled={isUpdating}
+              >
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Select format" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MATCH_FORMATS.map((format) => (
+                    <SelectItem 
+                      key={format} 
+                      value={format}
+                      disabled={getFormatDisabled(format)}
+                    >
+                      {format}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-muted border-border">
                 <span className="text-[10px] font-black uppercase">
                   {gameMode}
                 </span>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -269,6 +332,8 @@ export default function QuickGameLobby() {
   const { user, isLoading } = useAuth();
   const { data: quickChallenges = [], isLoading: loadingChallenges } = useQuickChallenges();
   const joinChallenge = useJoinChallenge();
+  const cancelChallenge = useCancelChallenge();
+  const updateFormat = useUpdateChallengeFormat();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [joiningSlot, setJoiningSlot] = useState<{ team: TeamSide; position: number } | null>(null);
@@ -286,10 +351,31 @@ export default function QuickGameLobby() {
     return match ? parseInt(match[1], 10) : 5;
   }, [challenge?.game_mode]);
 
-  // Map players from backend to lobby format
+  // Check if current user is the organizer
+  const isOrganizer = useMemo(
+    () => challenge?.created_by === user?.id,
+    [challenge?.created_by, user?.id]
+  );
+
+  // Map players from backend to lobby format - deduplicate by user_id
   const players: LobbyPlayer[] = useMemo(() => {
     if (!challenge?.quick_challenge_players) return [];
-    return challenge.quick_challenge_players.map((p) => ({
+    
+    // Use a Map to deduplicate by user_id - keep the first occurrence (lowest slot)
+    const uniquePlayersMap = new Map<string, typeof challenge.quick_challenge_players[0]>();
+    
+    // Sort by slot_position to ensure consistent ordering
+    const sortedPlayers = [...challenge.quick_challenge_players].sort(
+      (a, b) => a.slot_position - b.slot_position
+    );
+    
+    for (const player of sortedPlayers) {
+      if (!uniquePlayersMap.has(player.user_id)) {
+        uniquePlayersMap.set(player.user_id, player);
+      }
+    }
+    
+    return Array.from(uniquePlayersMap.values()).map((p) => ({
       id: p.id,
       name: p.profiles?.full_name || "Player",
       avatarUrl: p.profiles?.avatar_url,
@@ -321,9 +407,15 @@ export default function QuickGameLobby() {
     [players]
   );
 
+  // Check if current user has already joined
+  const hasUserJoined = useMemo(
+    () => players.some((p) => p.isMe),
+    [players]
+  );
+
   // Handlers - use 0-based slot positions to match database
   const handleJoinSlot = (team: TeamSide, slotPosition: number) => {
-    if (!id || !user) return;
+    if (!id || !user || hasUserJoined) return;
     setJoiningSlot({ team, position: slotPosition });
     joinChallenge.mutate(
       { challengeId: id, team, slotPosition },
@@ -340,6 +432,18 @@ export default function QuickGameLobby() {
 
   const handleLeaveLobby = () => {
     navigate("/discover?tab=quickgames");
+  };
+
+  const handleQuitLobby = () => {
+    if (!id || !isOrganizer) return;
+    cancelChallenge.mutate(id, {
+      onSuccess: () => navigate("/discover?tab=quickgames"),
+    });
+  };
+
+  const handleFormatChange = (newFormat: string) => {
+    if (!id || !isOrganizer) return;
+    updateFormat.mutate({ challengeId: id, gameMode: newFormat });
   };
 
   // Auth redirect
@@ -401,6 +505,11 @@ export default function QuickGameLobby() {
         onClose={() => setIsSettingsOpen(false)}
         teamSize={teamSize}
         gameMode={challenge.game_mode}
+        isOrganizer={isOrganizer}
+        challengeId={challenge.id}
+        currentPlayerCount={players.length}
+        onFormatChange={handleFormatChange}
+        isUpdating={updateFormat.isPending}
       />
 
       {/* Header */}
@@ -423,16 +532,33 @@ export default function QuickGameLobby() {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 w-1/4 text-muted-foreground">
+        <div className="flex items-center justify-end gap-2 w-1/4 text-muted-foreground">
           <button onClick={() => setIsSettingsOpen(true)} className="p-1 hover:bg-accent rounded-full transition-colors">
             <Settings
               size={18}
               className="cursor-pointer hover:rotate-90 transition-transform duration-500 hover:text-primary"
             />
           </button>
-          <button onClick={handleLeaveLobby} className="p-1 hover:bg-accent rounded-full transition-colors">
-            <X size={18} className="cursor-pointer hover:text-destructive" />
-          </button>
+          {isOrganizer ? (
+            <Button 
+              variant="destructive" 
+              size="sm" 
+              className="h-7 text-[9px] uppercase font-bold tracking-wide gap-1 px-2"
+              onClick={handleQuitLobby}
+              disabled={cancelChallenge.isPending}
+            >
+              {cancelChallenge.isPending ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <LogOut size={12} />
+              )}
+              <span className="hidden sm:inline">Quit Lobby</span>
+            </Button>
+          ) : (
+            <button onClick={handleLeaveLobby} className="p-1 hover:bg-accent rounded-full transition-colors">
+              <LogOut size={18} className="cursor-pointer hover:text-destructive" />
+            </button>
+          )}
         </div>
       </div>
 
