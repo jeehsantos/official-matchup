@@ -181,6 +181,18 @@ export function useJoinChallenge() {
     }) => {
       if (!user) throw new Error("Must be logged in to join");
 
+      // First check if user is already in this challenge (any slot)
+      const { data: existingPlayer } = await supabase
+        .from("quick_challenge_players")
+        .select("id")
+        .eq("challenge_id", challengeId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (existingPlayer) {
+        throw new Error("You have already joined this challenge");
+      }
+
       const { data, error } = await supabase
         .from("quick_challenge_players")
         .insert({
@@ -311,6 +323,119 @@ export function useLeaveChallenge() {
     onError: (error: Error) => {
       toast({
         title: "Failed to leave",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useCancelChallenge() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (challengeId: string) => {
+      if (!user) throw new Error("Must be logged in");
+
+      // Verify user is the organizer
+      const { data: challenge } = await supabase
+        .from("quick_challenges")
+        .select("created_by")
+        .eq("id", challengeId)
+        .single();
+
+      if (!challenge || challenge.created_by !== user.id) {
+        throw new Error("Only the organizer can cancel this challenge");
+      }
+
+      // Delete all players first (due to FK constraint)
+      await supabase
+        .from("quick_challenge_players")
+        .delete()
+        .eq("challenge_id", challengeId);
+
+      // Update challenge status to cancelled
+      const { error } = await supabase
+        .from("quick_challenges")
+        .update({ status: "cancelled" })
+        .eq("id", challengeId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quick-challenges"] });
+      toast({
+        title: "Lobby cancelled",
+        description: "The challenge has been cancelled.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to cancel",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useUpdateChallengeFormat() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      challengeId,
+      gameMode,
+    }: {
+      challengeId: string;
+      gameMode: string;
+    }) => {
+      if (!user) throw new Error("Must be logged in");
+
+      // Verify user is the organizer
+      const { data: challenge } = await supabase
+        .from("quick_challenges")
+        .select("created_by, quick_challenge_players(id)")
+        .eq("id", challengeId)
+        .single();
+
+      if (!challenge || challenge.created_by !== user.id) {
+        throw new Error("Only the organizer can change the format");
+      }
+
+      // Calculate new total slots
+      const match = gameMode.match(/(\d+)vs(\d+)/);
+      const playersPerTeam = match ? parseInt(match[1]) : 1;
+      const newTotalSlots = playersPerTeam * 2;
+
+      // Check if current players exceed new format
+      const currentPlayers = challenge.quick_challenge_players?.length || 0;
+      if (currentPlayers > newTotalSlots) {
+        throw new Error(`Cannot reduce format - ${currentPlayers} players are already in the lobby`);
+      }
+
+      const { error } = await supabase
+        .from("quick_challenges")
+        .update({ 
+          game_mode: gameMode,
+          total_slots: newTotalSlots
+        })
+        .eq("id", challengeId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quick-challenges"] });
+      toast({
+        title: "Format updated",
+        description: "The match format has been changed.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to update format",
         description: error.message,
         variant: "destructive",
       });
