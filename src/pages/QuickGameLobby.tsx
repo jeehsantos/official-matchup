@@ -340,7 +340,7 @@ function SettingsModal({
 export default function QuickGameLobby() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, userRole } = useAuth();
   const { data: quickChallenges = [], isLoading: loadingChallenges } = useQuickChallenges();
   const joinChallenge = useJoinChallenge();
   const cancelChallenge = useCancelChallenge();
@@ -367,6 +367,10 @@ export default function QuickGameLobby() {
   const isOrganizer = useMemo(
     () => challenge?.created_by === user?.id,
     [challenge?.created_by, user?.id]
+  );
+  const canManageLobby = useMemo(
+    () => isOrganizer || userRole === "organizer",
+    [isOrganizer, userRole]
   );
 
   // Map players from backend to lobby format - deduplicate by user_id
@@ -451,7 +455,7 @@ export default function QuickGameLobby() {
   };
 
   const confirmQuitLobby = () => {
-    if (!id || !isOrganizer) return;
+    if (!id) return;
     cancelChallenge.mutate(id, {
       onSuccess: () => {
         setIsQuitDialogOpen(false);
@@ -596,7 +600,7 @@ export default function QuickGameLobby() {
               className="cursor-pointer hover:rotate-90 transition-transform duration-500 hover:text-primary"
             />
           </button>
-          {isOrganizer ? (
+          {canManageLobby ? (
             <Button 
               variant="destructive" 
               size="sm" 
