@@ -358,10 +358,10 @@ export default function QuickGameLobby() {
     [quickChallenges, id]
   );
 
-  // Parse game mode to get team size (e.g., "5v5" -> 5)
+  // Parse game mode to get team size (e.g., "5vs5" -> 5)
   const teamSize = useMemo(() => {
     if (!challenge?.game_mode) return 5;
-    const match = challenge.game_mode.match(/(\d+)v\d+/i);
+    const match = challenge.game_mode.match(/(\d+)vs(\d+)/i);
     return match ? parseInt(match[1], 10) : 5;
   }, [challenge?.game_mode]);
 
