@@ -403,10 +403,10 @@ export function useUpdateChallengeFormat() {
     }) => {
       if (!user) throw new Error("Must be logged in");
 
-      // Verify user is the organizer
+      // Verify user is the organizer and get current challenge data
       const { data: challenge } = await supabase
         .from("quick_challenges")
-        .select("created_by, quick_challenge_players(id)")
+        .select("created_by, price_per_player, total_slots, quick_challenge_players(id)")
         .eq("id", challengeId)
         .single();
 
@@ -425,11 +425,17 @@ export function useUpdateChallengeFormat() {
         throw new Error(`Cannot reduce format - ${currentPlayers} players are already in the lobby`);
       }
 
+      // Calculate new price per player (keep total court price the same)
+      // Total court price = current price_per_player * current total_slots
+      const totalCourtPrice = (challenge.price_per_player || 0) * (challenge.total_slots || 1);
+      const newPricePerPlayer = totalCourtPrice / newTotalSlots;
+
       const { error } = await supabase
         .from("quick_challenges")
         .update({ 
           game_mode: gameMode,
-          total_slots: newTotalSlots
+          total_slots: newTotalSlots,
+          price_per_player: newPricePerPlayer
         })
         .eq("id", challengeId);
 
