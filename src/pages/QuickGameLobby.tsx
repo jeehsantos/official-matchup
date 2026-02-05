@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useQuickChallenges, useJoinChallenge, useCancelChallenge, useUpdateChallengeFormat } from "@/hooks/useQuickChallenges";
+import { useQuickChallengePayment } from "@/hooks/useQuickChallengePayment";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
@@ -340,17 +341,20 @@ function SettingsModal({
 // --- MAIN COMPONENT ---
 export default function QuickGameLobby() {
   const { id } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, isLoading } = useAuth();
   const { data: quickChallenges = [], isLoading: loadingChallenges } = useQuickChallenges();
   const joinChallenge = useJoinChallenge();
   const cancelChallenge = useCancelChallenge();
   const updateFormat = useUpdateChallengeFormat();
+  const { isPaying, initiatePayment, verifyPayment } = useQuickChallengePayment();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isQuitDialogOpen, setIsQuitDialogOpen] = useState(false);
   const [joiningSlot, setJoiningSlot] = useState<{ team: TeamSide; position: number } | null>(null);
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
 
   // Find the challenge
   const challenge = useMemo(
@@ -440,9 +444,9 @@ export default function QuickGameLobby() {
     );
   };
 
-  const handlePayment = (challengeId: string) => {
-    // TODO: Integrate with Stripe checkout
-    console.log("Payment for challenge:", challengeId);
+  const handlePayment = async () => {
+    if (!id) return;
+    await initiatePayment(id);
   };
 
   const handleLeaveLobby = () => {
@@ -511,7 +515,24 @@ export default function QuickGameLobby() {
     };
   }, [user]);
 
-  // Loading state
+  // Handle payment verification on return from Stripe
+  useEffect(() => {
+    const checkoutSessionId = searchParams.get("checkout_session_id");
+    const paymentStatus = searchParams.get("payment");
+
+    if (checkoutSessionId && paymentStatus === "success" && id) {
+      setIsVerifyingPayment(true);
+      verifyPayment(checkoutSessionId, id).finally(() => {
+        setIsVerifyingPayment(false);
+        // Clean up URL params
+        setSearchParams({}, { replace: true });
+      });
+    } else if (paymentStatus === "cancelled") {
+      // Clean up URL params
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, id, verifyPayment, setSearchParams]);
+
   if (isLoading || loadingChallenges) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -683,7 +704,7 @@ export default function QuickGameLobby() {
                     player={player}
                     isCurrentUser={player?.isMe}
                     onJoin={() => handleJoinSlot("left", i)}
-                    onPay={() => handlePayment(challenge.id)}
+                    onPay={handlePayment}
                     isJoining={isJoiningThis}
                   />
                 );
@@ -715,7 +736,7 @@ export default function QuickGameLobby() {
                     player={player}
                     isCurrentUser={player?.isMe}
                     onJoin={() => handleJoinSlot("right", i)}
-                    onPay={() => handlePayment(challenge.id)}
+                    onPay={handlePayment}
                     isJoining={isJoiningThis}
                   />
                 );
@@ -814,7 +835,7 @@ export default function QuickGameLobby() {
                   player={player}
                   isCurrentUser={player?.isMe}
                   onJoin={() => handleJoinSlot("right", i)}
-                  onPay={() => handlePayment(challenge.id)}
+                  onPay={handlePayment}
                   isJoining={isJoiningThis}
                 />
               );
