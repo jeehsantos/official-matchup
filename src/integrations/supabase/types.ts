@@ -56,6 +56,47 @@ export type Database = {
           },
         ]
       }
+      booking_holds: {
+        Row: {
+          court_id: string
+          created_at: string
+          end_datetime: string
+          expires_at: string
+          id: string
+          start_datetime: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          court_id: string
+          created_at?: string
+          end_datetime: string
+          expires_at: string
+          id?: string
+          start_datetime: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          court_id?: string
+          created_at?: string
+          end_datetime?: string
+          expires_at?: string
+          id?: string
+          start_datetime?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_holds_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_conversations: {
         Row: {
           booking_id: string | null
@@ -1253,6 +1294,17 @@ export type Database = {
         Args: { session_id: string }
         Returns: boolean
       }
+      convert_hold_to_booking: { Args: { p_hold_id: string }; Returns: Json }
+      create_booking_hold: {
+        Args: {
+          p_court_id: string
+          p_end_datetime: string
+          p_start_datetime: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      expire_stale_holds: { Args: never; Returns: number }
       get_user_credits: { Args: { p_user_id: string }; Returns: number }
       has_role: {
         Args: {
@@ -1267,6 +1319,10 @@ export type Database = {
       }
       is_group_member: {
         Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
+      release_booking_hold: {
+        Args: { p_hold_id: string; p_user_id: string }
         Returns: boolean
       }
       use_user_credits: {

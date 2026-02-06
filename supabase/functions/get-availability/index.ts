@@ -34,6 +34,16 @@ interface Booking {
   end_time: string;
 }
 
+interface BookingHold {
+  id: string;
+  court_id: string;
+  user_id: string;
+  start_datetime: string;
+  end_datetime: string;
+  status: string;
+  expires_at: string;
+}
+
 interface Court {
   id: string;
   name: string;
@@ -62,10 +72,16 @@ interface AvailableCourt {
   photo_urls: string[] | null;
 }
 
+// Slot status: AVAILABLE | HELD | CONFIRMED
+type SlotStatus = "AVAILABLE" | "HELD" | "CONFIRMED";
+
 interface AvailableSlot {
   start_time: string;
-  available_durations: number[]; // in minutes
-  available_courts: AvailableCourt[]; // courts available at this slot
+  status: SlotStatus;
+  held_by_current_user?: boolean;
+  hold_expires_at?: string;
+  available_durations: number[];
+  available_courts: AvailableCourt[];
 }
 
 function timeToMinutes(time: string): number {
@@ -103,7 +119,6 @@ function getAvailableWindow(
   const targetDate = new Date(date);
   const dayOfWeek = targetDate.getDay();
 
-  // Check for date override first (priority)
   const override = dateOverrides.find((o) => {
     const startDate = new Date(o.start_date);
     const endDate = o.end_date ? new Date(o.end_date) : startDate;
@@ -118,10 +133,8 @@ function getAvailableWindow(
         endTime: override.custom_end_time,
       };
     }
-    // Override exists but no custom times, fall through to weekly rule
   }
 
-  // Use weekly rule
   const weeklyRule = weeklyRules.find((r) => r.day_of_week === dayOfWeek);
   if (!weeklyRule || weeklyRule.is_closed) return null;
 
@@ -131,6 +144,61 @@ function getAvailableWindow(
   };
 }
 
+// Check if a time block overlaps with bookings
+function isBlockBooked(
+  blockTime: string,
+  intervalMinutes: number,
+  bookings: Booking[],
+  courtId: string,
+  date: string
+): boolean {
+  const blockStart = timeToMinutes(blockTime);
+  const blockEnd = blockStart + intervalMinutes;
+
+  return bookings.some((booking) => {
+    if (booking.court_id !== courtId || booking.available_date !== date) return false;
+    const bookingStart = timeToMinutes(booking.start_time);
+    const bookingEnd = timeToMinutes(booking.end_time);
+    return blockStart < bookingEnd && blockEnd > bookingStart;
+  });
+}
+
+// Check if a time block overlaps with active holds
+function getBlockHoldStatus(
+  blockTime: string,
+  intervalMinutes: number,
+  holds: BookingHold[],
+  courtId: string,
+  date: string,
+  currentUserId: string | null
+): { status: SlotStatus; heldByCurrentUser: boolean; expiresAt?: string } {
+  const blockStart = timeToMinutes(blockTime);
+  const blockEnd = blockStart + intervalMinutes;
+
+  for (const hold of holds) {
+    if (hold.court_id !== courtId || hold.status !== "HELD") continue;
+    
+    const holdDate = new Date(hold.start_datetime).toISOString().split("T")[0];
+    if (holdDate !== date) continue;
+
+    const holdStartTime = new Date(hold.start_datetime).toTimeString().slice(0, 5);
+    const holdEndTime = new Date(hold.end_datetime).toTimeString().slice(0, 5);
+    const holdStart = timeToMinutes(holdStartTime);
+    const holdEnd = timeToMinutes(holdEndTime);
+
+    if (blockStart < holdEnd && blockEnd > holdStart) {
+      const heldByCurrentUser = currentUserId === hold.user_id;
+      return {
+        status: "HELD",
+        heldByCurrentUser,
+        expiresAt: hold.expires_at,
+      };
+    }
+  }
+
+  return { status: "AVAILABLE", heldByCurrentUser: false };
+}
+
 function getAvailableBlocksForCourt(
   allBlocks: string[],
   bookings: Booking[],
@@ -138,20 +206,8 @@ function getAvailableBlocksForCourt(
   date: string,
   intervalMinutes: number
 ): string[] {
-  const courtBookings = bookings.filter(
-    (b) => b.court_id === courtId && b.available_date === date
-  );
-
   return allBlocks.filter((blockTime) => {
-    const blockStart = timeToMinutes(blockTime);
-    const blockEnd = blockStart + intervalMinutes;
-
-    // Check if this block overlaps with any booking
-    return !courtBookings.some((booking) => {
-      const bookingStart = timeToMinutes(booking.start_time);
-      const bookingEnd = timeToMinutes(booking.end_time);
-      return blockStart < bookingEnd && blockEnd > bookingStart;
-    });
+    return !isBlockBooked(blockTime, intervalMinutes, bookings, courtId, date);
   });
 }
 
@@ -212,6 +268,18 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Try to get current user from auth header
+    let currentUserId: string | null = null;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user } } = await userClient.auth.getUser();
+      currentUserId = user?.id || null;
+    }
+
     // Fetch venue configuration
     const { data: venue, error: venueError } = await supabase
       .from("venues")
@@ -238,20 +306,16 @@ serve(async (req) => {
 
     const allCourts: Court[] = venueCourts || [];
     
-    // Determine which courts to show in the dropdown and process
     let courtsToProcess: Court[] = [];
     let courtsForDropdown: Court[] = [];
     
     if (courtId) {
-      // Find the requested court
       const requestedCourt = allCourts.find(c => c.id === courtId);
       
       if (requestedCourt) {
         if (requestedCourt.is_multi_court) {
-          // This is a parent court - show the parent plus all children linked to it
           courtsForDropdown = [requestedCourt, ...allCourts.filter(c => c.parent_court_id === courtId)];
         } else if (requestedCourt.parent_court_id) {
-          // This is a child court - show the parent plus all siblings
           const parentCourt = allCourts.find(c => c.id === requestedCourt.parent_court_id);
           if (parentCourt) {
             courtsForDropdown = [parentCourt, ...allCourts.filter(c => c.parent_court_id === parentCourt.id)];
@@ -259,15 +323,12 @@ serve(async (req) => {
             courtsForDropdown = [requestedCourt];
           }
         } else {
-          // Standalone court - just show this one
           courtsForDropdown = [requestedCourt];
         }
         
-        // Process all courts in the dropdown for availability
         courtsToProcess = courtsForDropdown;
       }
     } else {
-      // No specific court requested - show all courts
       courtsForDropdown = allCourts;
       courtsToProcess = allCourts;
     }
@@ -299,7 +360,7 @@ serve(async (req) => {
 
     if (rulesError) throw rulesError;
 
-    // Fetch date overrides that might apply
+    // Fetch date overrides
     const { data: dateOverrides, error: overridesError } = await supabase
       .from("venue_date_overrides")
       .select("*")
@@ -309,12 +370,8 @@ serve(async (req) => {
 
     if (overridesError) throw overridesError;
 
-    // Get the availability window for the requested date
-    const window = getAvailableWindow(
-      date,
-      weeklyRules || [],
-      dateOverrides || []
-    );
+    // Get the availability window
+    const window = getAvailableWindow(date, weeklyRules || [], dateOverrides || []);
 
     if (!window) {
       return new Response(
@@ -342,7 +399,7 @@ serve(async (req) => {
       venue.slot_interval_minutes
     );
 
-    // Fetch existing bookings for this date for ALL courts at venue
+    // Fetch existing bookings for this date
     const { data: bookings, error: bookingsError } = await supabase
       .from("court_availability")
       .select("id, court_id, available_date, start_time, end_time")
@@ -351,6 +408,21 @@ serve(async (req) => {
       .in("court_id", courtsToProcess.map(c => c.id));
 
     if (bookingsError) throw bookingsError;
+
+    // Fetch active holds for this date
+    const startOfDay = `${date}T00:00:00Z`;
+    const endOfDay = `${date}T23:59:59Z`;
+    
+    const { data: holds, error: holdsError } = await supabase
+      .from("booking_holds")
+      .select("id, court_id, user_id, start_datetime, end_datetime, status, expires_at")
+      .eq("status", "HELD")
+      .gt("expires_at", new Date().toISOString())
+      .gte("start_datetime", startOfDay)
+      .lte("start_datetime", endOfDay)
+      .in("court_id", courtsToProcess.map(c => c.id));
+
+    if (holdsError) throw holdsError;
 
     // Calculate available blocks per court
     const courtAvailability: Map<string, string[]> = new Map();
@@ -365,14 +437,42 @@ serve(async (req) => {
       courtAvailability.set(court.id, availableBlocks);
     }
 
-    // Build slots with multi-court availability
+    // Build slots with status
     const slotMap: Map<string, AvailableSlot> = new Map();
 
     for (const blockTime of allBlocks) {
       const availableCourts: AvailableCourt[] = [];
+      let slotStatus: SlotStatus = "AVAILABLE";
+      let heldByCurrentUser = false;
+      let holdExpiresAt: string | undefined;
 
       for (const court of courtsToProcess) {
         const courtBlocks = courtAvailability.get(court.id) || [];
+        
+        // Check if this block is booked
+        if (isBlockBooked(blockTime, venue.slot_interval_minutes, bookings || [], court.id, date)) {
+          slotStatus = "CONFIRMED";
+          continue;
+        }
+
+        // Check if this block has an active hold
+        const holdStatus = getBlockHoldStatus(
+          blockTime,
+          venue.slot_interval_minutes,
+          holds || [],
+          court.id,
+          date,
+          currentUserId
+        );
+
+        if (holdStatus.status === "HELD") {
+          if (slotStatus !== "CONFIRMED") {
+            slotStatus = "HELD";
+            heldByCurrentUser = holdStatus.heldByCurrentUser;
+            holdExpiresAt = holdStatus.expiresAt;
+          }
+        }
+
         if (courtBlocks.includes(blockTime)) {
           const durations = calculateAvailableDurations(
             blockTime,
@@ -395,31 +495,38 @@ serve(async (req) => {
         }
       }
 
-      if (availableCourts.length > 0) {
-        // For the slot's available_durations, use the max durations from any court
-        // (since different courts might have different availability)
-        const maxDurations: number[] = [];
-        for (const court of availableCourts) {
-          const courtBlocks = courtAvailability.get(court.id) || [];
-          const durations = calculateAvailableDurations(
-            blockTime,
-            courtBlocks,
-            window.endTime,
-            venue.slot_interval_minutes,
-            venue.max_booking_minutes
-          );
-          durations.forEach(d => {
-            if (!maxDurations.includes(d)) maxDurations.push(d);
-          });
-        }
-        maxDurations.sort((a, b) => a - b);
-
-        slotMap.set(blockTime, {
-          start_time: blockTime,
-          available_durations: maxDurations,
-          available_courts: availableCourts,
+      // Build slot entry
+      const maxDurations: number[] = [];
+      for (const court of availableCourts) {
+        const courtBlocks = courtAvailability.get(court.id) || [];
+        const durations = calculateAvailableDurations(
+          blockTime,
+          courtBlocks,
+          window.endTime,
+          venue.slot_interval_minutes,
+          venue.max_booking_minutes
+        );
+        durations.forEach(d => {
+          if (!maxDurations.includes(d)) maxDurations.push(d);
         });
       }
+      maxDurations.sort((a, b) => a - b);
+
+      const slot: AvailableSlot = {
+        start_time: blockTime,
+        status: availableCourts.length > 0 ? slotStatus : "CONFIRMED",
+        available_durations: maxDurations,
+        available_courts: availableCourts,
+      };
+
+      if (heldByCurrentUser) {
+        slot.held_by_current_user = true;
+      }
+      if (holdExpiresAt && slotStatus === "HELD") {
+        slot.hold_expires_at = holdExpiresAt;
+      }
+
+      slotMap.set(blockTime, slot);
     }
 
     const slots = Array.from(slotMap.values());

@@ -22,7 +22,9 @@ import {
   Expand,
   FileText,
   Package,
-  Zap
+  Zap,
+  Lock,
+  Users
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -38,6 +40,10 @@ import { useVenueEquipment } from "@/hooks/useVenueEquipment";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
 import { PaymentTimingChoice } from "@/components/booking/PaymentTimingChoice";
+import { HoldCountdown } from "@/components/booking/HoldCountdown";
+import { SlotStatusBadge } from "@/components/booking/SlotStatusBadge";
+import { useBookingHold } from "@/hooks/useBookingHold";
+import { useSlotPresence } from "@/hooks/useSlotPresence";
 import {
   Dialog,
   DialogContent,
@@ -69,8 +75,13 @@ interface AvailableCourt {
   photo_urls: string[] | null;
 }
 
+type SlotStatus = "AVAILABLE" | "HELD" | "CONFIRMED";
+
 interface AvailableSlot {
   start_time: string;
+  status: SlotStatus;
+  held_by_current_user?: boolean;
+  hold_expires_at?: string;
   available_durations: number[];
   available_courts?: AvailableCourt[];
 }
@@ -148,6 +159,22 @@ export default function CourtDetail() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityData, setAvailabilityData] = useState<AvailabilityResponse | null>(null);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  
+  // Booking hold hook
+  const { 
+    holdId, 
+    remainingSeconds, 
+    isCreatingHold, 
+    createHold, 
+    releaseHold, 
+    isHoldValid 
+  } = useBookingHold();
+  
+  // Presence tracking for slot selection
+  const { trackSelection, isSlotBeingSelected } = useSlotPresence(
+    court?.venue_id || null,
+    selectedDate ? format(selectedDate, "yyyy-MM-dd") : null
+  );
   
   // Fetch venue equipment
   const { data: venueEquipment = [] } = useVenueEquipment(court?.venue_id || null);
@@ -294,7 +321,50 @@ export default function CourtDetail() {
     // Clear slots when date changes (user-initiated date change)
     setSelectedSlots([]);
     setSelectedEquipment([]);
-  }, [selectedDate]);
+    // Release any existing hold when date changes
+    releaseHold();
+  }, [selectedDate, releaseHold]);
+
+  // Track presence when slots are selected
+  useEffect(() => {
+    if (selectedSlots.length === 0) {
+      trackSelection(null, null);
+      return;
+    }
+    
+    const startTime = selectedSlots.sort((a, b) => timeToMinutes(a) - timeToMinutes(b))[0];
+    const endTime = getEndTime();
+    trackSelection(startTime, endTime);
+  }, [selectedSlots, trackSelection]);
+
+  // Subscribe to booking_holds changes for real-time updates
+  useEffect(() => {
+    if (!court?.id) return;
+
+    const channel = supabase
+      .channel(`booking-holds-${court.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'booking_holds',
+          filter: `court_id=eq.${court.id}`,
+        },
+        (payload) => {
+          console.log('Hold changed:', payload);
+          // Refetch availability when holds change
+          if (court.venues && selectedDate) {
+            fetchAvailability(court.venues.id, court.id, selectedDate);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [court?.id, court?.venues, selectedDate, fetchAvailability]);
 
   // Real-time subscription for availability updates
   useEffect(() => {
@@ -465,6 +535,8 @@ export default function CourtDetail() {
 
     if (selectedSlots.length === 0 || !court || !selectedDate) return;
 
+    const bookingCourtId = selectedCourtId || court.id;
+
     // Check profile completeness - use cached profile if available
     const { data: profile } = await supabase
       .from("profiles")
@@ -480,6 +552,44 @@ export default function CourtDetail() {
       return;
     }
 
+    // Create a hold on the slot before proceeding to wizard
+    const dateStr = format(selectedDate, "yyyy-MM-dd");
+    const startTime = getStartTime();
+    const endTime = getEndTime();
+    const startDatetime = new Date(`${dateStr}T${startTime}:00`);
+    const endDatetime = new Date(`${dateStr}T${endTime}:00`);
+
+    const holdResult = await createHold(bookingCourtId, startDatetime, endDatetime);
+
+    if (!holdResult.success) {
+      // Hold failed - slot is taken
+      if (holdResult.error === "SLOT_UNAVAILABLE") {
+        toast({
+          title: "Slot Unavailable",
+          description: holdResult.message || "This slot was just taken by another user. Please select a different time.",
+          variant: "destructive",
+        });
+        // Refresh availability
+        if (court.venues) {
+          fetchAvailability(court.venues.id, court.id, selectedDate);
+        }
+        setSelectedSlots([]);
+      } else {
+        toast({
+          title: "Unable to reserve slot",
+          description: holdResult.message || "Please try again.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    // Hold created successfully - proceed to wizard
+    toast({
+      title: "Slot Reserved!",
+      description: `You have 10 minutes to complete your booking.`,
+    });
+
     // Check if we're in quick game mode
     if (isQuickGameMode) {
       if (quickGameConfig) {
@@ -491,6 +601,7 @@ export default function CourtDetail() {
           description: "Please start your Quick Challenge again.",
           variant: "destructive",
         });
+        releaseHold();
         navigate("/discover");
       }
     } else {
@@ -1339,21 +1450,57 @@ export default function CourtDetail() {
                         const isAvailableForSelectedCourt = !selectedCourtId || 
                           availableCourts.some(c => c.id === selectedCourtId);
                         
+                        // Determine slot status
+                        const slotStatus = slot.status || "AVAILABLE";
+                        const isBooked = slotStatus === "CONFIRMED";
+                        const isHeld = slotStatus === "HELD" && !slot.held_by_current_user;
+                        const isSomeoneSelecting = isSlotBeingSelected(slotTime);
+                        const isDisabled = isBooked || isHeld || !isAvailableForSelectedCourt;
+                        
                         return (
                           <Button
                             key={slot.start_time}
-                            variant={isSelected ? "default" : "outline"}
-                            className={`h-auto py-2.5 px-2 transition-all ${
+                            variant={isSelected ? "default" : isBooked ? "ghost" : "outline"}
+                            className={`h-auto py-2.5 px-2 transition-all relative ${
                               isSelected 
                                 ? "ring-2 ring-primary ring-offset-2 ring-offset-background" 
+                                : isBooked
+                                ? "opacity-40 cursor-not-allowed line-through"
+                                : isHeld
+                                ? "border-warning/50 bg-warning/5 opacity-60 cursor-not-allowed"
+                                : isSomeoneSelecting
+                                ? "border-muted-foreground/50 bg-muted/30"
                                 : "hover:border-primary/50"
-                            } ${!isAvailableForSelectedCourt ? "opacity-50 cursor-not-allowed" : ""}`}
-                            onClick={() => isAvailableForSelectedCourt && toggleSlot(slot.start_time)}
-                            disabled={!isAvailableForSelectedCourt}
+                            }`}
+                            onClick={() => !isDisabled && toggleSlot(slot.start_time)}
+                            disabled={isDisabled}
                           >
                             <div className="text-center">
-                              <span className="text-sm font-medium">{slotTime}</span>
-                              {venueCourts.length > 1 && !selectedCourtId && (
+                              <span className={`text-sm font-medium ${isBooked ? "line-through" : ""}`}>
+                                {slotTime}
+                              </span>
+                              {/* Status indicators */}
+                              {isBooked && (
+                                <span className="block text-[9px] text-muted-foreground">
+                                  <CheckCircle2 className="h-3 w-3 inline mr-0.5" />Booked
+                                </span>
+                              )}
+                              {isHeld && !isBooked && (
+                                <span className="block text-[9px] text-warning">
+                                  <Lock className="h-3 w-3 inline mr-0.5" />Held
+                                </span>
+                              )}
+                              {isSomeoneSelecting && !isBooked && !isHeld && !isSelected && (
+                                <span className="block text-[9px] text-muted-foreground">
+                                  <Users className="h-3 w-3 inline mr-0.5" />
+                                </span>
+                              )}
+                              {slot.held_by_current_user && !isSelected && (
+                                <span className="block text-[9px] text-primary">
+                                  Your hold
+                                </span>
+                              )}
+                              {venueCourts.length > 1 && !selectedCourtId && !isBooked && !isHeld && (
                                 <span className="block text-[10px] text-muted-foreground">
                                   {availableCourts.length} court{availableCourts.length !== 1 ? 's' : ''}
                                 </span>
@@ -1384,6 +1531,11 @@ export default function CourtDetail() {
                             ({formatDuration(totalDuration)})
                           </span>
                         </div>
+                        
+                        {/* Hold countdown */}
+                        {isHoldValid && remainingSeconds > 0 && (
+                          <HoldCountdown remainingSeconds={remainingSeconds} />
+                        )}
                         
                         {/* Price breakdown */}
                         <div className="space-y-1 pt-2 border-t border-primary/10">
