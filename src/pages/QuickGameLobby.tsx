@@ -195,20 +195,12 @@ function PlayerSlot({ role, player, side, isCurrentUser, onJoin, onPay, isJoinin
         )}
       </div>
 
-      {/* Pay Button for current user with pending status */}
-      {isMe && !isPaid && !isEmpty && (
-        <Button
-          size="sm"
-          variant="default"
-          className="h-7 px-2 text-[9px] md:text-[10px] gap-1 shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            onPay?.();
-          }}
-        >
-          <CreditCard size={12} />
-          Pay
-        </Button>
+      {/* Paid badge for current user */}
+      {isMe && isPaid && !isEmpty && (
+        <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-green-500/10 shrink-0">
+          <CheckCircle2 size={12} className="text-green-500" />
+          <span className="text-[9px] md:text-[10px] font-bold text-green-500 uppercase">Confirmed</span>
+        </div>
       )}
     </div>
   );
@@ -787,12 +779,36 @@ export default function QuickGameLobby() {
           {/* Action Buttons */}
           <div className="mt-6 md:mt-8 flex flex-col items-center gap-4 w-full max-w-2xl">
             <div className="flex flex-row gap-3 w-full">
-              <Button
-                className="flex-1 py-5 md:py-6 font-black text-[10px] md:text-xs uppercase tracking-[0.15em]"
-                variant="default"
-              >
-                Confirm Presence
-              </Button>
+              {hasUserJoined && !players.find(p => p.isMe)?.paymentStatus?.includes("paid") ? (
+                <Button
+                  className="flex-1 py-5 md:py-6 font-black text-[10px] md:text-xs uppercase tracking-[0.15em] gap-2"
+                  variant="default"
+                  onClick={handlePayment}
+                  disabled={isPaying || isVerifyingPayment}
+                >
+                  {isPaying || isVerifyingPayment ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <CreditCard size={14} />
+                  )}
+                  {isVerifyingPayment ? "Verifying..." : "Pay and Confirm"}
+                </Button>
+              ) : (
+                <Button
+                  className="flex-1 py-5 md:py-6 font-black text-[10px] md:text-xs uppercase tracking-[0.15em] gap-2"
+                  variant="default"
+                  disabled={!hasUserJoined || players.find(p => p.isMe)?.paymentStatus === "paid"}
+                >
+                  {players.find(p => p.isMe)?.paymentStatus === "paid" ? (
+                    <>
+                      <CheckCircle2 size={14} />
+                      Confirmed
+                    </>
+                  ) : (
+                    "Confirm Presence"
+                  )}
+                </Button>
+              )}
               <Button
                 className="flex-1 py-5 md:py-6 font-black text-[10px] md:text-xs uppercase tracking-[0.15em]"
                 variant="outline"
