@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 // Platform fee: $1.50 fixed
@@ -128,8 +128,8 @@ serve(async (req) => {
 
     // Build success and cancel URLs - redirect back to lobby
     const baseUrl = origin || "https://sportarenaxp.lovable.app";
-    const successUrl = `${baseUrl}/quick-lobby/${challengeId}?payment=success&checkout_session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${baseUrl}/quick-lobby/${challengeId}?payment=cancelled`;
+    const successUrl = `${baseUrl}/quick-games/${challengeId}?payment=success&checkout_session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}/quick-games/${challengeId}?payment=cancelled`;
 
     // Build description
     const description = [
