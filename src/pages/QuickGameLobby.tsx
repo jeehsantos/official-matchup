@@ -639,12 +639,14 @@ export default function QuickGameLobby() {
         </div>
 
         <div className="flex items-center justify-end gap-2 w-1/4 text-muted-foreground">
-          <button onClick={() => setIsSettingsOpen(true)} className="p-1 hover:bg-accent rounded-full transition-colors">
-            <Settings
-              size={18}
-              className="cursor-pointer hover:rotate-90 transition-transform duration-500 hover:text-primary"
-            />
-          </button>
+          {isOrganizer && (
+            <button onClick={() => setIsSettingsOpen(true)} className="p-1 hover:bg-accent rounded-full transition-colors">
+              <Settings
+                size={18}
+                className="cursor-pointer hover:rotate-90 transition-transform duration-500 hover:text-primary"
+              />
+            </button>
+          )}
           {isOrganizer ? (
             <Button 
               variant="destructive" 
