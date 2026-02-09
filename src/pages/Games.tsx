@@ -7,7 +7,7 @@ import { QuickChallengeSummaryCard } from "@/components/quick-challenge/QuickCha
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Calendar, Search } from "lucide-react";
+import { Loader2, Calendar, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isBefore, parseISO } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
@@ -54,6 +54,8 @@ interface QuickGameData {
   playersCount: number;
 }
 
+const ITEMS_PER_PAGE = 12;
+
 const isSessionPast = (sessionDate: string, startTime: string): boolean => {
   const now = new Date();
   const sessionDateTime = parseISO(`${sessionDate}T${startTime}`);
@@ -79,6 +81,10 @@ export default function Games() {
   const [loading, setLoading] = useState(true);
   const [allGames, setAllGames] = useState<(GameData & { durationMinutes: number })[]>([]);
   const [myQuickGames, setMyQuickGames] = useState<QuickGameData[]>([]);
+  const [isPastGamesExpanded, setIsPastGamesExpanded] = useState(true);
+  const [isPastQuickGamesExpanded, setIsPastQuickGamesExpanded] = useState(true);
+  const [pastGamesPage, setPastGamesPage] = useState(1);
+  const [pastQuickGamesPage, setPastQuickGamesPage] = useState(1);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -99,7 +105,14 @@ export default function Games() {
     try {
       const sportCategoriesMap = await getSportCategoriesMap();
 
-      // Sessions the user has joined and completed payment for
+      // Sessions the user has joined (covers pre-payment joins and organizer-paid/free scenarios)
+      const { data: joinedSessions } = await supabase
+        .from("session_players")
+        .select("session_id")
+        // NOTE: session_players has no `status` column; membership is represented by row existence.
+        .eq("user_id", user.id);
+
+      // Sessions with completed payment records for this user (kept for completeness)
       const { data: paidSessions } = await supabase
         .from("payments")
         .select("session_id")
@@ -107,7 +120,12 @@ export default function Games() {
         .eq("status", "completed")
         .not("session_id", "is", null);
 
-      const paidSessionIds = [...new Set((paidSessions || []).map((p) => p.session_id).filter(Boolean))] as string[];
+      const participantSessionIds = [
+        ...(joinedSessions || []).map((p) => p.session_id),
+        ...(paidSessions || []).map((p) => p.session_id),
+      ].filter(Boolean);
+
+      const uniqueParticipantSessionIds = [...new Set(participantSessionIds)] as string[];
 
       const { data: organizerGroups } = await supabase
         .from("groups")
@@ -116,37 +134,36 @@ export default function Games() {
 
       const organizerGroupIds = organizerGroups?.map((g) => g.id) || [];
 
-      let query = supabase
-        .from("sessions")
-        .select(`
-          *,
-          groups (*),
-          courts (
+      const hasSessionMembership = organizerGroupIds.length > 0 || uniqueParticipantSessionIds.length > 0;
+      let sessionsWithCounts: (GameData & { durationMinutes: number })[] = [];
+
+      if (hasSessionMembership) {
+        let query = supabase
+          .from("sessions")
+          .select(`
             *,
-            venues (*)
-          ),
-          sport_categories (*)
-        `)
-        .eq("is_cancelled", false);
+            groups (*),
+            courts (
+              *,
+              venues (*)
+            ),
+            sport_categories (*)
+          `)
+          .eq("is_cancelled", false);
 
-      if (organizerGroupIds.length > 0 && paidSessionIds.length > 0) {
-        query = query.or(`group_id.in.(${organizerGroupIds.join(",")}),id.in.(${paidSessionIds.join(",")})`);
-      } else if (organizerGroupIds.length > 0) {
-        query = query.in("group_id", organizerGroupIds);
-      } else if (paidSessionIds.length > 0) {
-        query = query.in("id", paidSessionIds);
-      } else {
-        setAllGames([]);
-        setMyQuickGames([]);
-        setLoading(false);
-        return;
-      }
+        if (organizerGroupIds.length > 0 && uniqueParticipantSessionIds.length > 0) {
+          query = query.or(`group_id.in.(${organizerGroupIds.join(",")}),id.in.(${uniqueParticipantSessionIds.join(",")})`);
+        } else if (organizerGroupIds.length > 0) {
+          query = query.in("group_id", organizerGroupIds);
+        } else {
+          query = query.in("id", uniqueParticipantSessionIds);
+        }
 
-      const { data: sessions, error } = await query.order("session_date", { ascending: true });
-      if (error) throw error;
+        const { data: sessions, error } = await query.order("session_date", { ascending: true });
+        if (error) throw error;
 
-      const sessionsWithCounts = await Promise.all(
-        (sessions || []).map(async (session: any) => {
+        sessionsWithCounts = await Promise.all(
+          (sessions || []).map(async (session: any) => {
           const { count } = await supabase
             .from("session_players")
             .select("*", { count: "exact", head: true })
@@ -192,7 +209,47 @@ export default function Games() {
             durationMinutes: session.duration_minutes,
           };
         })
-      );
+        );
+      }
+
+      const { data: quickChallenges, error: quickChallengesError } = await supabase
+        .from("quick_challenges")
+        .select(`
+          id,
+          created_by,
+          game_mode,
+          status,
+          scheduled_date,
+          scheduled_time,
+          price_per_player,
+          total_slots,
+          sport_categories(display_name, icon),
+          venues(name, address, photo_url),
+          courts(photo_url),
+          quick_challenge_players(user_id, payment_status)
+        `)
+        .in("status", ["open", "full", "ready", "in_progress", "completed"])
+        .order("scheduled_date", { ascending: true });
+
+      if (quickChallengesError) throw quickChallengesError;
+
+      const confirmedQuickGames: QuickGameData[] = (quickChallenges || [])
+        .filter((challenge: any) => isUserConfirmedInQuickChallenge(challenge, user.id))
+        .map((challenge: any) => ({
+          id: challenge.id,
+          sportName: challenge.sport_categories?.display_name,
+          sportIcon: challenge.sport_categories?.icon || "🎯",
+          gameMode: challenge.game_mode,
+          status: challenge.status,
+          venueName: challenge.venues?.name,
+          venueAddress: challenge.venues?.address,
+          scheduledDate: challenge.scheduled_date || undefined,
+          scheduledTime: challenge.scheduled_time || undefined,
+          courtImage: challenge.courts?.photo_url || challenge.venues?.photo_url || "/placeholder.svg",
+          pricePerPlayer: challenge.price_per_player,
+          totalSlots: challenge.total_slots,
+          playersCount: challenge.quick_challenge_players?.length || 0,
+        }));
 
       const { data: quickChallenges, error: quickChallengesError } = await supabase
         .from("quick_challenges")
@@ -276,6 +333,27 @@ export default function Games() {
     };
   }, [allGames, myQuickGames]);
 
+  const totalPastGamesPages = Math.max(1, Math.ceil(pastGames.length / ITEMS_PER_PAGE));
+  const totalPastQuickGamesPages = Math.max(1, Math.ceil(pastQuickGames.length / ITEMS_PER_PAGE));
+
+  const paginatedPastGames = pastGames.slice(
+    (pastGamesPage - 1) * ITEMS_PER_PAGE,
+    pastGamesPage * ITEMS_PER_PAGE
+  );
+
+  const paginatedPastQuickGames = pastQuickGames.slice(
+    (pastQuickGamesPage - 1) * ITEMS_PER_PAGE,
+    pastQuickGamesPage * ITEMS_PER_PAGE
+  );
+
+  useEffect(() => {
+    setPastGamesPage((prev) => Math.min(prev, totalPastGamesPages));
+  }, [totalPastGamesPages]);
+
+  useEffect(() => {
+    setPastQuickGamesPage((prev) => Math.min(prev, totalPastQuickGamesPages));
+  }, [totalPastQuickGamesPages]);
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -358,28 +436,107 @@ export default function Games() {
               </div>
             ) : pastGames.length > 0 || pastQuickGames.length > 0 ? (
               <>
-                {pastGames.length > 0 && (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {pastGames.map((game) => (
-                      <GameCard key={game.id} {...game} />
-                    ))}
-                  </div>
-                )}
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left"
+                    onClick={() => setIsPastGamesExpanded((prev) => !prev)}
+                  >
+                    <span className="text-sm font-semibold uppercase tracking-wide">Games ({pastGames.length})</span>
+                    {isPastGamesExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
 
-                {pastQuickGames.length > 0 && (
-                  <div className="space-y-3">
-                    <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Quick Games</h2>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {pastQuickGames.map((challenge) => (
-                        <QuickChallengeSummaryCard
-                          key={challenge.id}
-                          challenge={challenge}
-                          onSelect={() => navigate(`/quick-games/${challenge.id}`)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  {isPastGamesExpanded && (
+                    <>
+                      {paginatedPastGames.length > 0 ? (
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {paginatedPastGames.map((game) => (
+                            <GameCard key={game.id} {...game} />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No past regular games.</p>
+                      )}
+
+                      {pastGames.length > ITEMS_PER_PAGE && (
+                        <div className="flex items-center justify-between">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={pastGamesPage === 1}
+                            onClick={() => setPastGamesPage((prev) => Math.max(1, prev - 1))}
+                          >
+                            Previous
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            Page {pastGamesPage} of {totalPastGamesPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={pastGamesPage === totalPastGamesPages}
+                            onClick={() => setPastGamesPage((prev) => Math.min(totalPastGamesPages, prev + 1))}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left"
+                    onClick={() => setIsPastQuickGamesExpanded((prev) => !prev)}
+                  >
+                    <span className="text-sm font-semibold uppercase tracking-wide">Quick Games ({pastQuickGames.length})</span>
+                    {isPastQuickGamesExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+
+                  {isPastQuickGamesExpanded && (
+                    <>
+                      {paginatedPastQuickGames.length > 0 ? (
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {paginatedPastQuickGames.map((challenge) => (
+                            <QuickChallengeSummaryCard
+                              key={challenge.id}
+                              challenge={challenge}
+                              onSelect={() => navigate(`/quick-games/${challenge.id}`)}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No past quick games.</p>
+                      )}
+
+                      {pastQuickGames.length > ITEMS_PER_PAGE && (
+                        <div className="flex items-center justify-between">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={pastQuickGamesPage === 1}
+                            onClick={() => setPastQuickGamesPage((prev) => Math.max(1, prev - 1))}
+                          >
+                            Previous
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            Page {pastQuickGamesPage} of {totalPastQuickGamesPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={pastQuickGamesPage === totalPastQuickGamesPages}
+                            onClick={() => setPastQuickGamesPage((prev) => Math.min(totalPastQuickGamesPages, prev + 1))}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
