@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { useQuickChallenges, useJoinChallenge, useCancelChallenge, useUpdateChallengeFormat, useLeaveChallenge } from "@/hooks/useQuickChallenges";
 import { useQuickChallengePayment } from "@/hooks/useQuickChallengePayment";
 import { useAuth } from "@/lib/auth-context";
-import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
@@ -18,8 +17,6 @@ import {
   LogOut,
   CheckCircle2,
   Clock,
-  Sun,
-  Moon,
   CreditCard,
   AlertTriangle,
   Maximize2,
@@ -230,7 +227,6 @@ function SettingsModal({
   onFormatChange,
   isUpdating,
 }: SettingsModalProps) {
-  const { theme, setTheme } = useTheme();
   const [selectedFormat, setSelectedFormat] = useState(gameMode);
 
   // Update local state when gameMode changes
@@ -268,21 +264,6 @@ function SettingsModal({
         </div>
 
         <div className="space-y-6">
-          {/* Theme Toggle */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase text-muted-foreground">
-              Visual Theme
-            </span>
-            <button
-              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-muted border-border transition-all"
-            >
-              {theme === "light" ? <Sun size={14} /> : <Moon size={14} />}
-              <span className="text-[10px] font-black uppercase">
-                {theme} Mode
-              </span>
-            </button>
-          </div>
 
           {/* Match Format */}
           <div className="flex items-center justify-between">

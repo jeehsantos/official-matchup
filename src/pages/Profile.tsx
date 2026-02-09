@@ -193,8 +193,9 @@ export default function Profile() {
   };
 
   const handleSignOut = async () => {
+    // signOut() already does window.location.href = '/' (hard reload),
+    // so no need for navigate() — it would never execute anyway.
     await signOut();
-    navigate("/", { replace: true });
   };
 
   // Password validation

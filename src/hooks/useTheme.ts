@@ -7,26 +7,25 @@ const THEME_CACHE_KEY = 'theme-cache';
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
-    // Always check localStorage first and use it if available
+    // Always check localStorage first — this is the user's explicit choice
     const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
-    if (stored) {
-      sessionStorage.setItem(THEME_CACHE_KEY, stored);
+    if (stored === 'light' || stored === 'dark') {
       return stored;
     }
 
-    // Fall back to cached theme (e.g. if auth sign-out cleared localStorage)
+    // Fall back to sessionStorage cache (survives Supabase auth clearing localStorage)
     const cached = sessionStorage.getItem(THEME_CACHE_KEY) as Theme | null;
-    if (cached) {
+    if (cached === 'light' || cached === 'dark') {
       localStorage.setItem(THEME_STORAGE_KEY, cached);
       return cached;
     }
 
-    // Only use system preference if no stored preference exists
-    // Then immediately save it to prevent future changes
-    const systemPreference = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    localStorage.setItem(THEME_STORAGE_KEY, systemPreference);
-    sessionStorage.setItem(THEME_CACHE_KEY, systemPreference);
-    return systemPreference;
+    // First-time visitor: default to dark (matches project aesthetic).
+    // Save immediately so the theme is locked in.
+    const defaultTheme: Theme = 'dark';
+    localStorage.setItem(THEME_STORAGE_KEY, defaultTheme);
+    sessionStorage.setItem(THEME_CACHE_KEY, defaultTheme);
+    return defaultTheme;
   });
 
   useEffect(() => {
