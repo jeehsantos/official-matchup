@@ -200,6 +200,24 @@ export default function About() {
         </div>
       </section>
 
+      {/* Contact Anchor */}
+      <section id="lets-talk-courts" className="scroll-mt-24 px-4 py-10 bg-muted/30">
+        <div className="container mx-auto max-w-5xl">
+          <div className="card-elevated p-6 md:p-8 text-center">
+            <p className="text-sm uppercase tracking-widest text-muted-foreground">Connect</p>
+            <h2 className="font-display text-3xl font-bold mt-2">Let’s talk courts</h2>
+            <p className="text-muted-foreground mt-3">
+              Have questions about Sport Arena, partnerships, or venue onboarding? We’d love to hear from you.
+            </p>
+            <div className="mt-6">
+              <Link to="/contact#lets-talk-courts">
+                <Button>Contact Us</Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="py-16 px-4 bg-primary text-primary-foreground">
         <div className="container mx-auto max-w-4xl text-center">

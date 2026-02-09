@@ -491,7 +491,7 @@ export default function Courts() {
             <QuickGameBanner />
             
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div id="browse-courts" className="scroll-mt-24 flex items-center justify-between">
               <div>
                 <h1 className="font-display text-2xl font-bold">
                   {isQuickGameMode ? "Select a Court" : "Browse Courts"}

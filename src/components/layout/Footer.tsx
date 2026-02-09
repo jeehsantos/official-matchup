@@ -16,13 +16,13 @@ import { toast } from "sonner";
 
 const footerLinks = {
   product: [
-    { label: "Browse Courts", href: "/courts" },
-    { label: "For Players", href: "/auth" },
-    { label: "For Court Managers", href: "/auth" },
+    { label: "Browse Courts", href: "/courts#browse-courts" },
+    { label: "For Players", href: "/auth?tab=signup&role=player" },
+    { label: "For Court Managers", href: "/auth?tab=signup&role=court_manager" },
   ],
   company: [
-    { label: "About Us", href: "/about" },
-    { label: "Contact", href: "/contact" },
+    { label: "About Us", href: "/about#lets-talk-courts" },
+    { label: "Contact", href: "/contact#lets-talk-courts" },
   ],
   support: [
     { label: "Help Center", href: "#" },
