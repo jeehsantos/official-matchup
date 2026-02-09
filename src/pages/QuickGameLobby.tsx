@@ -198,13 +198,6 @@ function PlayerSlot({ role, player, side, isCurrentUser, onJoin, onPay, isJoinin
         )}
       </div>
 
-      {/* Paid badge for current user */}
-      {isMe && isPaid && !isEmpty && (
-        <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-green-500/10 shrink-0">
-          <CheckCircle2 size={12} className="text-green-500" />
-          <span className="text-[9px] md:text-[10px] font-bold text-green-500 uppercase">Confirmed</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -622,6 +615,14 @@ export default function QuickGameLobby() {
       )
     : "Date TBD";
 
+  const venueAddress = [challenge.venues?.address, challenge.venues?.city, challenge.venues?.country]
+    .filter(Boolean)
+    .join(", ");
+  const venueName = challenge.venues?.name || "Venue TBD";
+  const hasVenueAddress = Boolean(venueAddress);
+  const mapsQuery = encodeURIComponent(hasVenueAddress ? `${venueName}, ${venueAddress}` : venueName);
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+
   const totalPlayers = players.length;
 
   return (
@@ -741,12 +742,6 @@ export default function QuickGameLobby() {
           <h1 className="text-sm font-black uppercase tracking-[0.2em]">
             Quick Lobby
           </h1>
-          <div className="flex items-center gap-1 text-[9px] uppercase font-bold text-muted-foreground">
-            <MapPin size={10} className="text-primary" />
-            <span className="truncate max-w-[150px] md:max-w-none">
-              {challenge.venues?.name || "Venue TBD"}
-            </span>
-          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 w-1/4 text-muted-foreground">
@@ -867,12 +862,27 @@ export default function QuickGameLobby() {
 
         {/* Central Panel */}
         <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 min-h-[300px] md:min-h-[400px]">
-          {/* Date/Time Badge - Desktop */}
-          <div className="hidden md:flex w-full max-w-2xl mb-6 items-center justify-center px-4 py-2 rounded-full border bg-card/50 border-border text-muted-foreground">
-            <div className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-2">
-              <Clock size={12} className="text-primary" />
-              {formattedDateTime}
+          <div className="w-full max-w-2xl mb-4 md:mb-6 flex flex-col items-center gap-2">
+            <div className="w-full flex items-center justify-center px-4 py-2 rounded-full border bg-card/50 border-border text-muted-foreground">
+              <div className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-2 text-center">
+                <Clock size={12} className="text-primary" />
+                {formattedDateTime}
+              </div>
             </div>
+            <a
+              href={mapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={cn(
+                "w-full text-center text-[10px] font-semibold text-muted-foreground transition-colors flex items-center justify-center gap-1",
+                hasVenueAddress && "hover:text-primary"
+              )}
+            >
+              <MapPin size={12} className="text-primary shrink-0" />
+              <span className="truncate">
+                {hasVenueAddress ? `${venueName} • ${venueAddress}` : venueName}
+              </span>
+            </a>
           </div>
 
           {/* Arena Image */}

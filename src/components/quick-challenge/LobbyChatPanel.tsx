@@ -47,7 +47,7 @@ export function LobbyChatPanel({
   };
 
   return (
-    <div className="h-32 md:h-28 border-t flex shrink-0 relative z-30 bg-card border-border">
+    <div className="h-40 md:h-32 border-t flex shrink-0 relative z-30 bg-card border-border">
       {/* Chat Section (Left) */}
       <div className="flex-1 flex flex-col min-w-0 border-r border-border/50">
         {/* Messages Area */}
