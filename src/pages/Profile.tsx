@@ -60,7 +60,7 @@ interface ProfileData {
 export default function Profile() {
   const { user, isLoading, signOut } = useAuth();
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const isMobile = useIsMobile();
   const { toast } = useToast();
 
@@ -663,7 +663,7 @@ export default function Profile() {
                   </div>
                   <Switch
                     checked={theme === 'dark'}
-                    onCheckedChange={toggleTheme}
+                    onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
                   />
                 </div>
               </CollapsibleContent>

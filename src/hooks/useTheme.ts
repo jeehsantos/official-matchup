@@ -1,49 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from "react";
 
-type Theme = 'light' | 'dark';
+type Theme = "light" | "dark";
 
-const THEME_STORAGE_KEY = 'theme';
-const THEME_CACHE_KEY = 'theme-cache';
+const THEME_STORAGE_KEY = "theme";
+
+const isTheme = (value: string | null): value is Theme => value === "light" || value === "dark";
 
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    // Always check localStorage first — this is the user's explicit choice
-    const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
-    if (stored === 'light' || stored === 'dark') {
+  const [theme, setThemeState] = useState<Theme>(() => {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    if (isTheme(stored)) {
       return stored;
     }
 
-    // Fall back to sessionStorage cache (survives Supabase auth clearing localStorage)
-    const cached = sessionStorage.getItem(THEME_CACHE_KEY) as Theme | null;
-    if (cached === 'light' || cached === 'dark') {
-      localStorage.setItem(THEME_STORAGE_KEY, cached);
-      return cached;
-    }
-
-    // First-time visitor: default to dark (matches project aesthetic).
-    // Save immediately so the theme is locked in.
-    const defaultTheme: Theme = 'dark';
-    localStorage.setItem(THEME_STORAGE_KEY, defaultTheme);
-    sessionStorage.setItem(THEME_CACHE_KEY, defaultTheme);
-    return defaultTheme;
+    return "dark";
   });
 
   useEffect(() => {
     const root = window.document.documentElement;
-    
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    
-    // Always persist theme choice
+
+    root.classList.toggle("dark", theme === "dark");
     localStorage.setItem(THEME_STORAGE_KEY, theme);
-    sessionStorage.setItem(THEME_CACHE_KEY, theme);
   }, [theme]);
 
+  const setTheme = (nextTheme: Theme) => {
+    setThemeState(nextTheme);
+  };
+
   const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    setThemeState((prev) => (prev === "light" ? "dark" : "light"));
   };
 
   return { theme, setTheme, toggleTheme };

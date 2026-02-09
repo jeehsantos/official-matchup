@@ -55,48 +55,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-    let initialised = false;
+    let latestRoleRequest = 0;
+
+    const syncSession = async (currentSession: Session | null) => {
+      if (!mounted) return;
+
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+
+      if (!currentSession?.user) {
+        setUserRole(null);
+        setRoleLoaded(true);
+        setIsLoading(false);
+        return;
+      }
+
+      const requestId = ++latestRoleRequest;
+      const role = await fetchUserRole(currentSession.user.id);
+
+      if (!mounted || requestId !== latestRoleRequest) return;
+
+      setUserRole(role);
+      setRoleLoaded(true);
+      setIsLoading(false);
+    };
 
     // Set up auth state listener FIRST — handles INITIAL_SESSION + all subsequent events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent, currentSession: Session | null) => {
-        if (!mounted) return;
-
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-
-        if (currentSession?.user) {
-          // Defer role fetch to avoid Supabase deadlock on token refresh
-          setTimeout(async () => {
-            if (!mounted) return;
-            const role = await fetchUserRole(currentSession.user.id);
-            if (mounted) {
-              setUserRole(role);
-              setRoleLoaded(true);
-              setIsLoading(false);
-              initialised = true;
-            }
-          }, 0);
-        } else {
-          setUserRole(null);
-          setRoleLoaded(true);
-          setIsLoading(false);
-          initialised = true;
-        }
+      async (_event: AuthChangeEvent, currentSession: Session | null) => {
+        await syncSession(currentSession);
       }
     );
 
-    // Fallback: if onAuthStateChange hasn't fired after 3 s, resolve loading state
-    const timeout = setTimeout(() => {
-      if (!initialised && mounted) {
-        setRoleLoaded(true);
-        setIsLoading(false);
-      }
-    }, 3000);
+    // Explicitly hydrate the initial session to avoid intermittent auth races.
+    void supabase.auth.getSession().then(({ data }) => {
+      void syncSession(data.session ?? null);
+    });
 
     return () => {
       mounted = false;
-      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, [fetchUserRole]);
@@ -172,12 +169,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserRole(null);
     setRoleLoaded(true);
 
-    // Use scope: 'local' to guarantee local tokens are cleared even if
-    // the server-side session is already gone (avoids 403 "session_not_found").
-    await supabase.auth.signOut({ scope: 'local' });
+    // Attempt global sign-out first so refresh tokens are revoked server-side.
+    const { error } = await supabase.auth.signOut({ scope: "global" });
+    if (error && error.message !== "Auth session missing!") {
+      console.error("Global sign out error:", error);
+    }
+
+    // Always clear local session tokens.
+    await supabase.auth.signOut({ scope: "local" });
+
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith("sb-"))
+      .forEach((key) => localStorage.removeItem(key));
+    Object.keys(sessionStorage)
+      .filter((key) => key.startsWith("sb-"))
+      .forEach((key) => sessionStorage.removeItem(key));
+    localStorage.removeItem("redirectAfterAuth");
 
     // Hard reload so every in-memory state (React tree, query cache) is wiped
-    window.location.href = '/';
+    window.location.replace("/");
   };
 
   const resetPassword = async (email: string) => {
