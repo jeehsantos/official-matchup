@@ -1,96 +1,92 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { 
-  Calendar, 
-  Users, 
-  Shield, 
-  MapPin,
-  ChevronRight,
-  CheckCircle2,
-  Zap,
-  Star,
-  Loader2
-} from "lucide-react";
+import { Calendar, Users, Shield, MapPin, ChevronRight, CheckCircle2, Zap, Star, Loader2 } from "lucide-react";
 import { SportIcon } from "@/components/ui/sport-icon";
 import { Footer } from "@/components/layout/Footer";
 import { useSportCategories } from "@/hooks/useSportCategories";
-
-const valueProps = [
-  {
-    icon: Calendar,
-    title: "Instant Scheduling",
-    description: "Check live availability and lock in courts with a few taps."
-  },
-  {
-    icon: Users,
-    title: "Team-First",
-    description: "Organize groups, invite players, and keep everyone in sync."
-  },
-  {
-    icon: Shield,
-    title: "Trusted Venues",
-    description: "Play on verified courts with transparent ratings and reviews."
-  }
-];
-
-const features = [
-  {
-    icon: MapPin,
-    title: "Smart Discovery",
-    description: "Search by sport, location, and time in one clean map view."
-  },
-  {
-    icon: Users,
-    title: "Roster Control",
-    description: "Manage recurring games, invites, and attendance in minutes."
-  },
-  {
-    icon: Calendar,
-    title: "Schedule Clarity",
-    description: "See upcoming sessions at a glance with quick actions."
-  },
-  {
-    icon: Star,
-    title: "Community Ratings",
-    description: "Trust real player feedback before you book."
-  }
-];
-
+const valueProps = [{
+  icon: Calendar,
+  title: "Instant Scheduling",
+  description: "Check live availability and lock in courts with a few taps."
+}, {
+  icon: Users,
+  title: "Team-First",
+  description: "Organize groups, invite players, and keep everyone in sync."
+}, {
+  icon: Shield,
+  title: "Trusted Venues",
+  description: "Play on verified courts with transparent ratings and reviews."
+}];
+const features = [{
+  icon: MapPin,
+  title: "Smart Discovery",
+  description: "Search by sport, location, and time in one clean map view."
+}, {
+  icon: Users,
+  title: "Roster Control",
+  description: "Manage recurring games, invites, and attendance in minutes."
+}, {
+  icon: Calendar,
+  title: "Schedule Clarity",
+  description: "See upcoming sessions at a glance with quick actions."
+}, {
+  icon: Star,
+  title: "Community Ratings",
+  description: "Trust real player feedback before you book."
+}];
 const howItWorks = {
-  players: [
-    { step: "1", title: "Discover Courts", description: "Browse verified venues across New Zealand and find the perfect court" },
-    { step: "2", title: "Join or Create Groups", description: "Connect with regular players or organize your own recurring games" },
-    { step: "3", title: "Book & Play", description: "Reserve your spot and enjoy hassle-free sports sessions" }
-  ],
-  managers: [
-    { step: "1", title: "List Your Courts", description: "Register your venue and showcase your facilities with photos" },
-    { step: "2", title: "Manage Availability", description: "Set your court schedules and pricing" },
-    { step: "3", title: "Grow Your Business", description: "Reach more players and fill your courts efficiently" }
-  ]
+  players: [{
+    step: "1",
+    title: "Discover Courts",
+    description: "Browse verified venues across New Zealand and find the perfect court"
+  }, {
+    step: "2",
+    title: "Join or Create Groups",
+    description: "Connect with regular players or organize your own recurring games"
+  }, {
+    step: "3",
+    title: "Book & Play",
+    description: "Reserve your spot and enjoy hassle-free sports sessions"
+  }],
+  managers: [{
+    step: "1",
+    title: "List Your Courts",
+    description: "Register your venue and showcase your facilities with photos"
+  }, {
+    step: "2",
+    title: "Manage Availability",
+    description: "Set your court schedules and pricing"
+  }, {
+    step: "3",
+    title: "Grow Your Business",
+    description: "Reach more players and fill your courts efficiently"
+  }]
 };
-
-const stats = [
-  { value: "5K+", label: "Active Players" },
-  { value: "150+", label: "Verified Courts" },
-  { value: "10K+", label: "Games Played" },
-  { value: "98%", label: "Satisfaction" }
-];
-
+const stats = [{
+  value: "5K+",
+  label: "Active Players"
+}, {
+  value: "150+",
+  label: "Verified Courts"
+}, {
+  value: "10K+",
+  label: "Games Played"
+}, {
+  value: "98%",
+  label: "Satisfaction"
+}];
 export default function Landing() {
   // Fetch sports from database - NO FALLBACKS
-  const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
-  
-  return (
-    <div className="min-h-screen bg-background">
+  const {
+    data: sportCategories = [],
+    isLoading: loadingSports
+  } = useSportCategories();
+  return <div className="min-h-screen bg-background">
       {/* Navigation */}
       <header className="fixed top-0 left-0 right-0 z-50 navbar-glass">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center" aria-label="Sport Arena home">
-            <img
-              src="/sportarena-logo.png"
-              alt="Sport Arena logo"
-              className="h-10 w-auto mix-blend-screen"
-            />
+            <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-36 w-auto mix-blend-screen" />
           </Link>
           <nav className="hidden md:flex items-center gap-8">
             <Link to="/about" className="nav-link text-sm font-medium">About</Link>
@@ -139,12 +135,10 @@ export default function Landing() {
                 </Link>
               </div>
               <div className="mt-10 flex flex-wrap gap-3">
-                {stats.map((stat) => (
-                  <div key={stat.label} className="flex items-center gap-3 rounded-full border border-border px-4 py-2 bg-background/80 shadow-sm">
+                {stats.map(stat => <div key={stat.label} className="flex items-center gap-3 rounded-full border border-border px-4 py-2 bg-background/80 shadow-sm">
                     <span className="font-display text-lg font-bold text-primary">{stat.value}</span>
                     <span className="text-xs uppercase tracking-wide text-muted-foreground">{stat.label}</span>
-                  </div>
-                ))}
+                  </div>)}
               </div>
             </div>
             <div className="card-elevated p-6 md:p-8 space-y-6">
@@ -178,11 +172,9 @@ export default function Landing() {
               <div className="bg-muted/60 rounded-xl p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Popular Today</p>
                 <div className="flex flex-wrap gap-2">
-                  {["Futsal", "Basketball", "Tennis", "Netball"].map((sport) => (
-                    <span key={sport} className="text-xs font-semibold px-3 py-1 rounded-full bg-background border border-border">
+                  {["Futsal", "Basketball", "Tennis", "Netball"].map(sport => <span key={sport} className="text-xs font-semibold px-3 py-1 rounded-full bg-background border border-border">
                       {sport}
-                    </span>
-                  ))}
+                    </span>)}
                 </div>
               </div>
             </div>
@@ -205,15 +197,13 @@ export default function Landing() {
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            {valueProps.map((prop) => (
-              <div key={prop.title} className="card-elevated p-6">
+            {valueProps.map(prop => <div key={prop.title} className="card-elevated p-6">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
                   <prop.icon className="h-6 w-6 text-primary" />
                 </div>
                 <h3 className="font-display font-semibold text-lg mb-2">{prop.title}</h3>
                 <p className="text-muted-foreground text-sm">{prop.description}</p>
-              </div>
-            ))}
+              </div>)}
           </div>
         </div>
       </section>
@@ -228,28 +218,20 @@ export default function Landing() {
                 Sport Arena keeps everyone accountable so you spend less time organizing and more time playing.
               </p>
               <div className="space-y-4">
-                {[
-                  "Verified venues with real-time availability.",
-                  "Upfront payments that protect organizers.",
-                  "Rescue mode to refill spots quickly.",
-                ].map((item) => (
-                  <div key={item} className="flex items-start gap-3">
+                {["Verified venues with real-time availability.", "Upfront payments that protect organizers.", "Rescue mode to refill spots quickly."].map(item => <div key={item} className="flex items-start gap-3">
                     <CheckCircle2 className="h-5 w-5 text-primary mt-0.5" />
                     <span className="text-sm text-muted-foreground">{item}</span>
-                  </div>
-                ))}
+                  </div>)}
               </div>
             </div>
             <div className="grid sm:grid-cols-2 gap-6">
-              {features.map((feature) => (
-                <div key={feature.title} className="card-elevated p-5">
+              {features.map(feature => <div key={feature.title} className="card-elevated p-5">
                   <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                     <feature.icon className="h-5 w-5 text-primary" />
                   </div>
                   <h3 className="font-display font-semibold text-base mb-2">{feature.title}</h3>
                   <p className="text-muted-foreground text-sm">{feature.description}</p>
-                </div>
-              ))}
+                </div>)}
             </div>
           </div>
         </div>
@@ -264,32 +246,16 @@ export default function Landing() {
           <p className="text-muted-foreground mb-10 max-w-xl mx-auto">
             From futsal to hockey, we've got courts for every sport you love.
           </p>
-          {loadingSports ? (
-            <div className="flex justify-center py-12">
+          {loadingSports ? <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : sportCategories.length === 0 ? (
-            <p className="text-muted-foreground py-12">
+            </div> : sportCategories.length === 0 ? <p className="text-muted-foreground py-12">
               Sports coming soon...
-            </p>
-          ) : (
-            <div className="flex flex-wrap justify-center gap-4">
-              {sportCategories.map((sport) => (
-                <div 
-                  key={sport.id} 
-                  className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-card border border-border hover:border-primary/50 hover:shadow-lg transition-all duration-300 min-w-[120px]"
-                >
-                  <SportIcon 
-                    sport={sport.name} 
-                    icon={sport.icon}
-                    label={sport.display_name}
-                    className="h-12 w-12 text-primary" 
-                  />
+            </p> : <div className="flex flex-wrap justify-center gap-4">
+              {sportCategories.map(sport => <div key={sport.id} className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-card border border-border hover:border-primary/50 hover:shadow-lg transition-all duration-300 min-w-[120px]">
+                  <SportIcon sport={sport.name} icon={sport.icon} label={sport.display_name} className="h-12 w-12 text-primary" />
                   <span className="text-sm font-medium">{sport.display_name}</span>
-                </div>
-              ))}
-            </div>
-          )}
+                </div>)}
+            </div>}
         </div>
       </section>
 
@@ -317,8 +283,7 @@ export default function Landing() {
                 <h3 className="font-display text-xl font-bold">For Players & Organizers</h3>
               </div>
               <div className="space-y-6">
-                {howItWorks.players.map((item) => (
-                  <div key={item.step} className="flex gap-4 items-start">
+                {howItWorks.players.map(item => <div key={item.step} className="flex gap-4 items-start">
                     <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0">
                       {item.step}
                     </div>
@@ -326,8 +291,7 @@ export default function Landing() {
                       <h4 className="font-semibold mb-1">{item.title}</h4>
                       <p className="text-muted-foreground text-sm">{item.description}</p>
                     </div>
-                  </div>
-                ))}
+                  </div>)}
               </div>
             </div>
             {/* For Managers */}
@@ -339,8 +303,7 @@ export default function Landing() {
                 <h3 className="font-display text-xl font-bold">For Court Managers</h3>
               </div>
               <div className="space-y-6">
-                {howItWorks.managers.map((item) => (
-                  <div key={item.step} className="flex gap-4 items-start">
+                {howItWorks.managers.map(item => <div key={item.step} className="flex gap-4 items-start">
                     <div className="w-9 h-9 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold shrink-0">
                       {item.step}
                     </div>
@@ -348,8 +311,7 @@ export default function Landing() {
                       <h4 className="font-semibold mb-1">{item.title}</h4>
                       <p className="text-muted-foreground text-sm">{item.description}</p>
                     </div>
-                  </div>
-                ))}
+                  </div>)}
               </div>
             </div>
           </div>
@@ -376,11 +338,7 @@ export default function Landing() {
               </Button>
             </Link>
             <Link to="/contact">
-              <Button 
-                size="lg" 
-                variant="outline" 
-                className="w-full sm:w-auto text-base px-8 py-6 border-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/10"
-              >
+              <Button size="lg" variant="outline" className="w-full sm:w-auto text-base px-8 py-6 border-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/10">
                 Contact Us
               </Button>
             </Link>
@@ -389,6 +347,5 @@ export default function Landing() {
       </section>
 
       <Footer />
-    </div>
-  );
+    </div>;
 }
