@@ -52,12 +52,12 @@ export default function Discover() {
   const [rescueGames, setRescueGames] = useState<RescueGame[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [quickGameModalOpen, setQuickGameModalOpen] = useState(false);
-  const [selectedQuickChallengeId, setSelectedQuickChallengeId] = useState<string | null>(null);
 
   // Quick Challenges hooks
   const { data: quickChallenges = [], isLoading: loadingChallenges } = useQuickChallenges({
     sportCategoryId: selectedSport !== "all" ? selectedSport : undefined,
     status: "open",
+    excludeJoinedByCurrentUser: true,
   });
   
   // Fetch dynamic categories from database - NO FALLBACKS
