@@ -99,12 +99,15 @@ export default function Games() {
     try {
       const sportCategoriesMap = await getSportCategoriesMap();
 
-      const { data: playerSessions } = await supabase
-        .from("session_players")
+      // Sessions the user has joined and completed payment for
+      const { data: paidSessions } = await supabase
+        .from("payments")
         .select("session_id")
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("status", "completed")
+        .not("session_id", "is", null);
 
-      const playerSessionIds = playerSessions?.map((p) => p.session_id) || [];
+      const paidSessionIds = [...new Set((paidSessions || []).map((p) => p.session_id).filter(Boolean))] as string[];
 
       const { data: organizerGroups } = await supabase
         .from("groups")
@@ -126,12 +129,17 @@ export default function Games() {
         `)
         .eq("is_cancelled", false);
 
-      if (organizerGroupIds.length > 0 && playerSessionIds.length > 0) {
-        query = query.or(`group_id.in.(${organizerGroupIds.join(",")}),id.in.(${playerSessionIds.join(",")})`);
+      if (organizerGroupIds.length > 0 && paidSessionIds.length > 0) {
+        query = query.or(`group_id.in.(${organizerGroupIds.join(",")}),id.in.(${paidSessionIds.join(",")})`);
       } else if (organizerGroupIds.length > 0) {
         query = query.in("group_id", organizerGroupIds);
-      } else if (playerSessionIds.length > 0) {
-        query = query.in("id", playerSessionIds);
+      } else if (paidSessionIds.length > 0) {
+        query = query.in("id", paidSessionIds);
+      } else {
+        setAllGames([]);
+        setMyQuickGames([]);
+        setLoading(false);
+        return;
       }
 
       const { data: sessions, error } = await query.order("session_date", { ascending: true });
