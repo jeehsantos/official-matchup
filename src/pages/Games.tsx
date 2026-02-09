@@ -109,7 +109,9 @@ export default function Games() {
       const { data: joinedSessions } = await supabase
         .from("session_players")
         .select("session_id")
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("status", "completed")
+        .not("session_id", "is", null);
 
       // Sessions with completed payment records for this user (kept for completeness)
       const { data: paidSessions } = await supabase
@@ -228,6 +230,45 @@ export default function Games() {
           quick_challenge_players(user_id, payment_status)
         `)
         .in("status", ["open", "full", "ready", "in_progress", "completed"])
+        .order("scheduled_date", { ascending: true });
+
+      if (quickChallengesError) throw quickChallengesError;
+
+      const confirmedQuickGames: QuickGameData[] = (quickChallenges || [])
+        .filter((challenge: any) => isUserConfirmedInQuickChallenge(challenge, user.id))
+        .map((challenge: any) => ({
+          id: challenge.id,
+          sportName: challenge.sport_categories?.display_name,
+          sportIcon: challenge.sport_categories?.icon || "🎯",
+          gameMode: challenge.game_mode,
+          status: challenge.status,
+          venueName: challenge.venues?.name,
+          venueAddress: challenge.venues?.address,
+          scheduledDate: challenge.scheduled_date || undefined,
+          scheduledTime: challenge.scheduled_time || undefined,
+          courtImage: challenge.courts?.photo_url || challenge.venues?.photo_url || "/placeholder.svg",
+          pricePerPlayer: challenge.price_per_player,
+          totalSlots: challenge.total_slots,
+          playersCount: challenge.quick_challenge_players?.length || 0,
+        }));
+
+      const { data: quickChallenges, error: quickChallengesError } = await supabase
+        .from("quick_challenges")
+        .select(`
+          id,
+          created_by,
+          game_mode,
+          status,
+          scheduled_date,
+          scheduled_time,
+          price_per_player,
+          total_slots,
+          sport_categories(display_name, icon),
+          venues(name, address, photo_url),
+          courts(photo_url),
+          quick_challenge_players(user_id, payment_status)
+        `)
+        .in("status", ["open", "full"])
         .order("scheduled_date", { ascending: true });
 
       if (quickChallengesError) throw quickChallengesError;
