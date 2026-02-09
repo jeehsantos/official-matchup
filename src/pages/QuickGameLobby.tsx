@@ -618,7 +618,7 @@ export default function QuickGameLobby() {
       )
     : "Date TBD";
 
-  const venueAddress = [challenge.venues?.address, challenge.venues?.city, challenge.venues?.country]
+  const venueAddress = [challenge.venues?.address, challenge.venues?.city]
     .filter(Boolean)
     .join(", ");
   const venueName = challenge.venues?.name || "Venue TBD";
