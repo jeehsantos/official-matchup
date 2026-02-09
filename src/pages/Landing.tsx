@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  CalendarDays,
   CheckCircle2,
-  ChevronDown,
   MapPin,
-  Search,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -49,10 +46,10 @@ const managerSteps = [
 ];
 
 export default function Landing() {
-  const { data: sportCategories = [], isLoading: isSportsLoading } = useSportCategories();
+  const { data: sportCategories = [] } = useSportCategories();
   const [wordIndex, setWordIndex] = useState(0);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [selectedSport, setSelectedSport] = useState("Any Sport");
+  const activeWordMeasureRef = useRef<HTMLSpanElement | null>(null);
+  const [activeWordWidth, setActiveWordWidth] = useState<number>(72);
 
   const sliderWords = useMemo(
     () => sportCategories.map((sport) => sport.display_name).filter(Boolean),
@@ -71,25 +68,23 @@ export default function Landing() {
     return () => window.clearInterval(intervalId);
   }, [sliderWords]);
 
-  useEffect(() => {
-    const handleClickOutside = () => setIsDropdownOpen(false);
+  const activeWord = sliderWords.length > 0 ? sliderWords[wordIndex] : "sports";
 
-    if (isDropdownOpen) {
-      document.addEventListener("click", handleClickOutside);
+  useLayoutEffect(() => {
+    if (!activeWordMeasureRef.current) {
+      return;
     }
 
-    return () => document.removeEventListener("click", handleClickOutside);
-  }, [isDropdownOpen]);
-
-  const activeWord = sliderWords.length > 0 ? sliderWords[wordIndex] : "sports";
+    const width = activeWordMeasureRef.current.getBoundingClientRect().width;
+    setActiveWordWidth(Math.ceil(width));
+  }, [activeWord]);
 
   return (
     <div className="min-h-screen bg-white text-slate-900">
       <header className="fixed top-0 z-50 w-full border-b border-white/50 bg-white/80 backdrop-blur-[10px]">
-        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-6">
-          <Link to="/" className="flex items-center gap-3" aria-label="Sport Arena home">
-            <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-10 w-auto object-contain" />
-            <span className="text-xl font-bold uppercase tracking-tight">Sport Arena</span>
+        <div className="mx-auto flex h-24 w-full max-w-7xl items-center justify-between px-6">
+          <Link to="/" className="flex items-center" aria-label="Sport Arena home">
+            <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-36 w-auto object-contain" />
           </Link>
 
           <nav className="hidden items-center gap-8 text-sm font-medium text-slate-600 md:flex">
@@ -103,7 +98,7 @@ export default function Landing() {
               <Button variant="ghost" className="hidden sm:inline-flex">Sign In</Button>
             </Link>
             <Link to="/auth">
-              <Button className="bg-blue-600 hover:bg-blue-700">Get Started</Button>
+              <Button className="bg-[#0e8ddd] hover:bg-[#0b76bc]">Get Started</Button>
             </Link>
           </div>
         </div>
@@ -114,86 +109,39 @@ export default function Landing() {
           <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-2">
             <div>
               <h1 className="mb-6 text-5xl font-extrabold leading-tight md:text-6xl">
-                Book your court. <br />
-                <span className="text-blue-600">Play your game.</span>
+                Book courts faster. <br />
+                <span className="text-[#0e8ddd]">Play harder.</span>
               </h1>
 
               <p className="mb-10 max-w-lg text-lg leading-relaxed text-slate-700">
                 Find and book
-                <span className="relative mx-1 inline-flex h-8 min-w-[120px] items-end overflow-hidden align-bottom text-blue-600">
-                  <span key={activeWord} className="animate-word-slide inline-block font-bold">
+                <span
+                  className="relative mx-1 inline-flex h-8 items-end overflow-hidden align-bottom text-[#0e8ddd] transition-[width] duration-500 ease-out"
+                  style={{ width: `${activeWordWidth}px` }}
+                >
+                  <span ref={activeWordMeasureRef} key={activeWord} className="animate-word-slide inline-block whitespace-nowrap font-bold">
                     {activeWord}
                   </span>
                 </span>
                 courts in seconds. The cleanest way to manage your games and keep your team moving.
               </p>
 
-              <div className="relative z-40 flex max-w-2xl flex-col gap-2 rounded-2xl border border-blue-100 bg-white/85 p-2 shadow-xl md:flex-row">
-                <div className="flex flex-[1.8] items-center border-b border-slate-100 px-3 py-3 md:border-b-0 md:border-r">
-                  <MapPin className="mr-2 h-5 w-5 shrink-0 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Where are you playing?"
-                    className="w-full border-none bg-transparent text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400 sm:text-base"
-                  />
-                </div>
-
-                <div className="relative flex-1">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setIsDropdownOpen((current) => !current);
-                    }}
-                    className="flex h-full w-full items-center px-3 py-3 text-left"
+              <div className="relative z-40 flex max-w-2xl flex-col gap-3 sm:flex-row">
+                <Link to="/auth" className="sm:flex-1">
+                  <Button className="h-14 w-full justify-center rounded-xl bg-[#0e8ddd] px-8 text-xl font-semibold text-white shadow-md shadow-[#0e8ddd]/35 transition-all duration-300 hover:bg-[#0b76bc]">
+                    Start Playing Free
+                    <span className="ml-3 text-2xl leading-none">›</span>
+                  </Button>
+                </Link>
+                <Link to="/courts" className="sm:flex-1">
+                  <Button
+                    variant="outline"
+                    className="h-14 w-full justify-center rounded-xl border-slate-300 bg-white px-8 text-xl font-medium text-slate-800 hover:bg-slate-50"
                   >
-                    <CalendarDays className="mr-2 h-5 w-5 shrink-0 text-slate-400" />
-                    <span className="flex-1 truncate text-sm font-medium text-slate-900 sm:text-base">{selectedSport}</span>
-                    <ChevronDown
-                      className={`ml-1 h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${
-                        isDropdownOpen ? "rotate-180" : ""
-                      }`}
-                    />
-                  </button>
-
-                  {isDropdownOpen && (
-                    <div
-                      id="sportDropdownMenu"
-                      className="absolute left-0 right-0 top-full z-50 mt-2 animate-in fade-in zoom-in-95 rounded-xl border border-slate-100 bg-white py-2 shadow-2xl"
-                    >
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-slate-50"
-                        onClick={() => {
-                          setSelectedSport("Any Sport");
-                          setIsDropdownOpen(false);
-                        }}
-                      >
-                        <span className="text-lg">🎯</span>
-                        <span className="font-medium text-slate-700">Any Sport</span>
-                      </button>
-                      {sportCategories.map((sport) => (
-                        <button
-                          key={sport.id}
-                          type="button"
-                          className="flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-slate-50"
-                          onClick={() => {
-                            setSelectedSport(sport.display_name);
-                            setIsDropdownOpen(false);
-                          }}
-                        >
-                          <span className="text-lg">{sport.icon ?? "🎯"}</span>
-                          <span className="font-medium text-slate-700">{sport.display_name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <Button className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white hover:bg-blue-700 sm:text-base">
-                  <Search className="mr-2 h-4 w-4" />
-                  Search
-                </Button>
+                    <MapPin className="mr-3 h-5 w-5" />
+                    Browse Courts
+                  </Button>
+                </Link>
               </div>
 
               <div className="mt-12 flex gap-8">
@@ -289,29 +237,29 @@ export default function Landing() {
           </div>
         </section>
 
-        <section className="px-6 py-20">
-          <div className="relative mx-auto max-w-7xl overflow-hidden rounded-[3rem] bg-blue-600 p-12 text-center text-white shadow-2xl shadow-blue-200 md:p-20">
+        <section className="py-20">
+          <div className="relative overflow-hidden bg-[#0e8ddd] px-6 py-12 text-center text-white shadow-2xl shadow-[#0e8ddd]/25 md:px-10 md:py-20">
             <div className="relative z-10">
               <h2 className="mb-6 text-4xl font-extrabold md:text-5xl">Ready to Find Your Next Game?</h2>
-              <p className="mx-auto mb-10 max-w-2xl text-lg text-blue-100">
+              <p className="mx-auto mb-10 max-w-2xl text-lg text-blue-50">
                 Join players and court managers across New Zealand discovering the easier way to book and play sports.
               </p>
               <div className="flex flex-col justify-center gap-4 sm:flex-row">
                 <Link to="/auth">
-                  <Button className="rounded-2xl bg-white px-8 py-4 text-lg font-bold text-blue-600 hover:bg-blue-50">Create Free Account</Button>
+                  <Button className="rounded-2xl bg-white px-8 py-4 text-lg font-bold text-[#0e8ddd] hover:bg-blue-50">Create Free Account</Button>
                 </Link>
                 <Link to="/contact">
                   <Button
                     variant="outline"
-                    className="rounded-2xl border-blue-400/30 bg-blue-500 px-8 py-4 text-lg font-bold text-white hover:bg-blue-400"
+                    className="rounded-2xl border-white/40 bg-[#0b76bc] px-8 py-4 text-lg font-bold text-white hover:bg-[#09639e]"
                   >
                     Contact Us
                   </Button>
                 </Link>
               </div>
             </div>
-            <div className="absolute -right-24 -top-24 h-64 w-64 rounded-full bg-blue-500/70 blur-3xl" />
-            <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-blue-400/70 blur-3xl" />
+            <div className="absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[#3ab4f2]/45 blur-3xl" />
+            <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-[#2da8e8]/50 blur-3xl" />
           </div>
         </section>
       </main>
@@ -320,11 +268,10 @@ export default function Landing() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="mb-20 grid gap-12 md:grid-cols-4">
             <div className="md:col-span-2">
-              <Link to="/" className="mb-6 flex items-center gap-3" aria-label="Sport Arena home">
-                <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-10 w-auto object-contain" />
-                <span className="text-xl font-bold uppercase tracking-tight">Sport Arena</span>
+              <Link to="/" className="mb-0 flex items-center gap-3 leading-none" aria-label="Sport Arena home">
+                <img src="/sportarena-logo.png" alt="Sport Arena logo" className="block h-36 w-auto object-contain" />
               </Link>
-              <p className="mb-8 max-w-xs text-sm leading-relaxed text-slate-500">
+              <p className="-mt-3 mb-6 max-w-xs text-sm leading-relaxed text-slate-500">
                 The smarter way to book courts and guarantee games.
               </p>
               <div className="space-y-3 text-sm text-slate-400">
