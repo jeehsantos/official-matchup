@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -49,6 +49,7 @@ export default function Auth() {
   const [resetSent, setResetSent] = useState(false);
   const { user, userRole, signIn, signUp, resetPassword, isLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
   const handleGoogleSignIn = async () => {
@@ -77,6 +78,22 @@ export default function Auth() {
     resolver: zodResolver(signUpSchema),
     defaultValues: { fullName: "", email: "", password: "", confirmPassword: "", role: "player" },
   });
+
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    const roleParam = searchParams.get("role");
+
+    if (tabParam === "signup") {
+      setActiveTab("signup");
+    } else if (tabParam === "login") {
+      setActiveTab("login");
+    }
+
+    if (roleParam === "player" || roleParam === "court_manager") {
+      signUpForm.setValue("role", roleParam, { shouldValidate: true });
+    }
+  }, [searchParams, signUpForm]);
 
   useEffect(() => {
     // Only redirect if we have a user AND role loaded (not during sign out)

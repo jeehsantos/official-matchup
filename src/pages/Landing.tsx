@@ -97,7 +97,7 @@ export default function Landing() {
             <Link to="/auth">
               <Button variant="ghost" className="hidden sm:inline-flex">Sign In</Button>
             </Link>
-            <Link to="/auth">
+            <Link to="/auth?tab=signup">
               <Button className="bg-[#0e8ddd] hover:bg-[#0b76bc]">Get Started</Button>
             </Link>
           </div>
@@ -127,7 +127,7 @@ export default function Landing() {
               </p>
 
               <div className="relative z-40 flex max-w-2xl flex-col gap-3 sm:flex-row">
-                <Link to="/auth" className="sm:flex-1">
+                <Link to="/auth?tab=signup" className="sm:flex-1">
                   <Button className="h-14 w-full justify-center rounded-xl bg-[#0e8ddd] px-8 text-xl font-semibold text-white shadow-md shadow-[#0e8ddd]/35 transition-all duration-300 hover:bg-[#0b76bc]">
                     Start Playing Free
                     <span className="ml-3 text-2xl leading-none">›</span>
@@ -241,10 +241,10 @@ export default function Landing() {
                 Join players and court managers across New Zealand discovering the easier way to book and play sports.
               </p>
               <div className="flex flex-col justify-center gap-4 sm:flex-row">
-                <Link to="/auth">
+                <Link to="/auth?tab=signup">
                   <Button className="rounded-2xl bg-white px-8 py-4 text-lg font-bold text-[#0e8ddd] hover:bg-blue-50">Create Free Account</Button>
                 </Link>
-                <Link to="/contact">
+                <Link to="/contact#lets-talk-courts">
                   <Button
                     variant="outline"
                     className="rounded-2xl border-white/40 bg-[#0b76bc] px-8 py-4 text-lg font-bold text-white hover:bg-[#09639e]"
@@ -281,9 +281,9 @@ export default function Landing() {
             <div>
               <h4 className="mb-6 text-sm font-bold uppercase tracking-widest text-slate-400">Product</h4>
               <ul className="space-y-4 text-sm font-medium text-slate-600">
-                <li><Link to="/courts" className="transition hover:text-blue-600">Browse Courts</Link></li>
-                <li><Link to="/discover" className="transition hover:text-blue-600">For Players</Link></li>
-                <li><Link to="/manager" className="transition hover:text-blue-600">For Court Managers</Link></li>
+                <li><Link to="/courts#browse-courts" className="transition hover:text-blue-600">Browse Courts</Link></li>
+                <li><Link to="/auth?tab=signup&role=player" className="transition hover:text-blue-600">For Players</Link></li>
+                <li><Link to="/auth?tab=signup&role=court_manager" className="transition hover:text-blue-600">For Court Managers</Link></li>
                 <li><Link to="/groups" className="transition hover:text-blue-600">Community Groups</Link></li>
               </ul>
             </div>
@@ -291,8 +291,8 @@ export default function Landing() {
             <div>
               <h4 className="mb-6 text-sm font-bold uppercase tracking-widest text-slate-400">Company</h4>
               <ul className="space-y-4 text-sm font-medium text-slate-600">
-                <li><Link to="/about" className="transition hover:text-blue-600">About Us</Link></li>
-                <li><Link to="/contact" className="transition hover:text-blue-600">Contact</Link></li>
+                <li><Link to="/about#lets-talk-courts" className="transition hover:text-blue-600">About Us</Link></li>
+                <li><Link to="/contact#lets-talk-courts" className="transition hover:text-blue-600">Contact</Link></li>
                 <li><Link to="/about#privacy" className="transition hover:text-blue-600">Privacy Policy</Link></li>
                 <li><Link to="/about#terms" className="transition hover:text-blue-600">Terms of Service</Link></li>
               </ul>
