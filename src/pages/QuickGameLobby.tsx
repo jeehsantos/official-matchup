@@ -22,6 +22,8 @@ import {
   Moon,
   CreditCard,
   AlertTriangle,
+  Maximize2,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { LobbyChatPanel } from "@/components/quick-challenge/LobbyChatPanel";
@@ -198,13 +200,6 @@ function PlayerSlot({ role, player, side, isCurrentUser, onJoin, onPay, isJoinin
         )}
       </div>
 
-      {/* Paid badge for current user */}
-      {isMe && isPaid && !isEmpty && (
-        <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-green-500/10 shrink-0">
-          <CheckCircle2 size={12} className="text-green-500" />
-          <span className="text-[9px] md:text-[10px] font-bold text-green-500 uppercase">Confirmed</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -355,6 +350,7 @@ export default function QuickGameLobby() {
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
+  const [isCourtImageOpen, setIsCourtImageOpen] = useState(false);
 
   // Find the challenge
   const challenge = useMemo(
@@ -622,6 +618,18 @@ export default function QuickGameLobby() {
       )
     : "Date TBD";
 
+  const venueAddress = [challenge.venues?.address, challenge.venues?.city, challenge.venues?.country]
+    .filter(Boolean)
+    .join(", ");
+  const venueName = challenge.venues?.name || "Venue TBD";
+  const hasVenueAddress = Boolean(venueAddress);
+  const mapsQuery = encodeURIComponent(hasVenueAddress ? `${venueName}, ${venueAddress}` : venueName);
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+  const courtImageUrl =
+    challenge.courts?.photo_url ||
+    challenge.venues?.photo_url ||
+    "https://images.unsplash.com/photo-1544919396-1033604f552e?q=80&w=2070&auto=format&fit=crop";
+
   const totalPlayers = players.length;
 
   return (
@@ -729,6 +737,30 @@ export default function QuickGameLobby() {
         gameMode={challenge.game_mode}
       />
 
+      {isCourtImageOpen && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Court image preview"
+          onClick={() => setIsCourtImageOpen(false)}
+        >
+          <button
+            className="absolute top-4 right-4 rounded-full border border-white/40 bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
+            onClick={() => setIsCourtImageOpen(false)}
+            aria-label="Close court image"
+          >
+            <X size={18} />
+          </button>
+          <img
+            src={courtImageUrl}
+            className="max-h-[90vh] w-full max-w-5xl rounded-xl object-contain"
+            alt="Court full view"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
+
       {/* Header */}
       <div className="h-14 flex items-center justify-between px-4 md:px-6 relative z-20 shrink-0 border-b border-border bg-card">
         <div className="flex items-center gap-4 w-1/4">
@@ -741,12 +773,6 @@ export default function QuickGameLobby() {
           <h1 className="text-sm font-black uppercase tracking-[0.2em]">
             Quick Lobby
           </h1>
-          <div className="flex items-center gap-1 text-[9px] uppercase font-bold text-muted-foreground">
-            <MapPin size={10} className="text-primary" />
-            <span className="truncate max-w-[150px] md:max-w-none">
-              {challenge.venues?.name || "Venue TBD"}
-            </span>
-          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 w-1/4 text-muted-foreground">
@@ -867,26 +893,46 @@ export default function QuickGameLobby() {
 
         {/* Central Panel */}
         <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 min-h-[300px] md:min-h-[400px]">
-          {/* Date/Time Badge - Desktop */}
-          <div className="hidden md:flex w-full max-w-2xl mb-6 items-center justify-center px-4 py-2 rounded-full border bg-card/50 border-border text-muted-foreground">
-            <div className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-2">
-              <Clock size={12} className="text-primary" />
-              {formattedDateTime}
+          <div className="w-full max-w-2xl mb-4 md:mb-6 flex flex-col items-center gap-2">
+            <div className="w-full flex items-center justify-center px-4 py-2 rounded-full border bg-card/50 border-border text-muted-foreground">
+              <div className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-2 text-center">
+                <Clock size={12} className="text-primary" />
+                {formattedDateTime}
+              </div>
             </div>
+            <a
+              href={mapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={cn(
+                "w-full text-center text-[10px] font-semibold text-muted-foreground transition-colors flex items-center justify-center gap-1",
+                hasVenueAddress && "hover:text-primary"
+              )}
+            >
+              <MapPin size={12} className="text-primary shrink-0" />
+              <span className="truncate">
+                {hasVenueAddress ? `${venueName} • ${venueAddress}` : venueName}
+              </span>
+            </a>
           </div>
 
           {/* Arena Image */}
-          <div className="relative w-full max-w-2xl aspect-video border-4 md:border-[6px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] overflow-hidden rounded-xl bg-muted border-card">
+          <button
+            type="button"
+            className="relative w-full max-w-2xl aspect-video border-4 md:border-[6px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] overflow-hidden rounded-xl bg-muted border-card group cursor-zoom-in text-left"
+            onClick={() => setIsCourtImageOpen(true)}
+            aria-label="Open court image"
+          >
             <img
-              src={
-                challenge.courts?.photo_url ||
-                challenge.venues?.photo_url ||
-                "https://images.unsplash.com/photo-1544919396-1033604f552e?q=80&w=2070&auto=format&fit=crop"
-              }
+              src={courtImageUrl}
               className="w-full h-full object-cover opacity-90"
               alt="Arena"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
+            <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full border border-white/40 bg-black/45 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white opacity-100 md:opacity-0 transition-opacity md:group-hover:opacity-100">
+              <Maximize2 size={11} />
+              View
+            </div>
             
             {/* Sport Badge */}
             <div className="absolute top-3 left-3 flex items-center gap-2 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-border">
@@ -902,7 +948,7 @@ export default function QuickGameLobby() {
                 {challenge.game_mode}
               </span>
             </div>
-          </div>
+          </button>
 
           {/* Action Buttons */}
           <div className="mt-6 md:mt-8 flex flex-col items-center gap-4 w-full max-w-2xl">
