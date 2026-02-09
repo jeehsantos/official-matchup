@@ -59,11 +59,13 @@ interface QuickChallenge {
 export function useQuickChallenges(filters?: {
   sportCategoryId?: string;
   status?: string;
+  excludeJoinedByCurrentUser?: boolean;
 }) {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["quick-challenges", filters],
+    queryKey: ["quick-challenges", filters, user?.id],
     queryFn: async () => {
       let queryBuilder = supabase
         .from("quick_challenges")
@@ -123,6 +125,14 @@ export function useQuickChallenges(filters?: {
             }
           }
         }
+      }
+
+      if (filters?.excludeJoinedByCurrentUser && user?.id) {
+        return challenges.filter((challenge) =>
+          !(challenge.quick_challenge_players || []).some(
+            (player) => player.user_id === user.id
+          )
+        );
       }
 
       return challenges;
