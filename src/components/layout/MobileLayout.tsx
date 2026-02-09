@@ -53,9 +53,6 @@ export function MobileLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const handleSignOut = async () => {
     await signOut();
-    navigate("/", {
-      replace: true
-    });
   };
   const isLoggedIn = !!user;
   return <div className="min-h-screen flex flex-col bg-background">

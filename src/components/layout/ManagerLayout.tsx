@@ -2,7 +2,6 @@ import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { ChatWidget } from "@/components/chat/ChatWidget";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { 
   LayoutDashboard, 
   Building2, 
@@ -83,7 +82,6 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/", { replace: true });
   };
 
   return (
@@ -99,7 +97,6 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
             />
           </Link>
           <div className="flex items-center gap-2">
-            <ThemeToggle variant="ghost" size="icon" />
             <Button 
               variant="ghost" 
               size="icon"
@@ -163,12 +160,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
             })}
           </nav>
 
-          {/* Theme Toggle & Sign Out */}
           <div className="p-4 border-t border-border space-y-2">
-            <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-sm text-muted-foreground">Theme</span>
-              <ThemeToggle variant="outline" size="icon" />
-            </div>
             <Button 
               variant="ghost" 
               className="w-full justify-start gap-3 text-muted-foreground"
