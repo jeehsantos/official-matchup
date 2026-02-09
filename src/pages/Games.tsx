@@ -109,7 +109,9 @@ export default function Games() {
       const { data: joinedSessions } = await supabase
         .from("session_players")
         .select("session_id")
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("status", "completed")
+        .not("session_id", "is", null);
 
       // Sessions with completed payment records for this user (kept for completeness)
       const { data: paidSessions } = await supabase
