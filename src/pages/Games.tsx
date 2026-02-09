@@ -132,9 +132,21 @@ export default function Games() {
         .select("id")
         .eq("organizer_id", user.id);
 
-      const organizerGroupIds = organizerGroups?.map((g) => g.id) || [];
+      const { data: memberships } = await supabase
+        .from("group_members")
+        .select("group_id")
+        .eq("user_id", user.id);
 
-      const hasSessionMembership = organizerGroupIds.length > 0 || uniqueParticipantSessionIds.length > 0;
+      const groupMembershipIds = memberships?.map((membership) => membership.group_id) || [];
+
+      const organizerGroupIds = [
+        ...(organizerGroups?.map((group) => group.id) || []),
+        ...groupMembershipIds,
+      ];
+
+      const uniqueOrganizerGroupIds = [...new Set(organizerGroupIds)];
+
+      const hasSessionMembership = uniqueOrganizerGroupIds.length > 0 || uniqueParticipantSessionIds.length > 0;
       let sessionsWithCounts: (GameData & { durationMinutes: number })[] = [];
 
       if (hasSessionMembership) {
@@ -151,10 +163,10 @@ export default function Games() {
           `)
           .eq("is_cancelled", false);
 
-        if (organizerGroupIds.length > 0 && uniqueParticipantSessionIds.length > 0) {
-          query = query.or(`group_id.in.(${organizerGroupIds.join(",")}),id.in.(${uniqueParticipantSessionIds.join(",")})`);
-        } else if (organizerGroupIds.length > 0) {
-          query = query.in("group_id", organizerGroupIds);
+        if (uniqueOrganizerGroupIds.length > 0 && uniqueParticipantSessionIds.length > 0) {
+          query = query.or(`group_id.in.(${uniqueOrganizerGroupIds.join(",")}),id.in.(${uniqueParticipantSessionIds.join(",")})`);
+        } else if (uniqueOrganizerGroupIds.length > 0) {
+          query = query.in("group_id", uniqueOrganizerGroupIds);
         } else {
           query = query.in("id", uniqueParticipantSessionIds);
         }
