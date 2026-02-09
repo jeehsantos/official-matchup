@@ -158,11 +158,7 @@ export default function Landing() {
 
             <div className="relative hidden lg:block">
               <div className="relative aspect-[4/5] overflow-hidden rounded-[3rem] border-8 border-white shadow-2xl">
-                <img
-                  src="https://images.unsplash.com/photo-1595435063821-26c714b6099b?q=80&w=1200&auto=format&fit=crop"
-                  alt="Sport court"
-                  className="h-full w-full object-cover"
-                />
+                <img src="/homeCourt.png" alt="Sport court" className="h-full w-full object-cover" />
                 <div className="absolute bottom-8 left-6 z-20 w-56 rounded-xl border border-slate-100 bg-white p-4 shadow-xl">
                   <div className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-600">
