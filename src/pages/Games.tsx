@@ -62,7 +62,7 @@ const isSessionPast = (sessionDate: string, startTime: string): boolean => {
   return isBefore(sessionDateTime, now);
 };
 
-const isUserConfirmedInQuickChallenge = (
+const isUserParticipantInQuickChallenge = (
   challenge: { created_by: string; quick_challenge_players?: QuickChallengePlayer[] },
   userId: string
 ): boolean => {
@@ -72,7 +72,7 @@ const isUserConfirmedInQuickChallenge = (
     (player) => player.user_id === userId
   );
 
-  return participant?.payment_status === "paid";
+  return participant?.payment_status === "paid" || participant?.payment_status === "pending";
 };
 
 export default function Games() {
@@ -233,8 +233,8 @@ export default function Games() {
 
       if (quickChallengesError) throw quickChallengesError;
 
-      const confirmedQuickGames: QuickGameData[] = (quickChallenges || [])
-        .filter((challenge: any) => isUserConfirmedInQuickChallenge(challenge, user.id))
+      const participantQuickGames: QuickGameData[] = (quickChallenges || [])
+        .filter((challenge: any) => isUserParticipantInQuickChallenge(challenge, user.id))
         .map((challenge: any) => ({
           id: challenge.id,
           sportName: challenge.sport_categories?.display_name,
@@ -252,7 +252,7 @@ export default function Games() {
         }));
 
       setAllGames(sessionsWithCounts);
-      setMyQuickGames(confirmedQuickGames);
+      setMyQuickGames(participantQuickGames);
     } catch (error) {
       console.error("Error fetching games:", error);
     } finally {
