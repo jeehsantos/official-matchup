@@ -113,14 +113,14 @@ export default function ManagerAvailability() {
 
   return (
     <ManagerLayout>
-      <div className="p-4 md:p-6 space-y-6">
+      <div className="manager-availability-mobile p-4 md:p-6 space-y-5 md:space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold">Availability</h1>
           <p className="text-muted-foreground">Configure your venue's opening hours and exceptions</p>
         </div>
 
         {courts.length === 0 ? (
-          <Card>
+          <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">
             <CardContent className="py-12 text-center">
               <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="font-semibold text-lg mb-2">No courts available</h3>
@@ -129,8 +129,8 @@ export default function ManagerAvailability() {
           </Card>
         ) : (
           <>
-            <Card>
-              <CardContent className="pt-6">
+            <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">
+              <CardContent className="pt-5 md:pt-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">
                     Select Venue & Court
@@ -175,7 +175,7 @@ export default function ManagerAvailability() {
             </Card>
 
             {venueId && (
-              <div className="grid lg:grid-cols-2 gap-6">
+              <div className="grid lg:grid-cols-2 gap-5 md:gap-6">
                 <div className="space-y-6">
                   <WeeklyScheduleEditor venueId={venueId} onScheduleUpdated={handleRefresh} />
                   <VenueConfigEditor venueId={venueId} onConfigUpdated={handleRefresh} />

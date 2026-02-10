@@ -179,7 +179,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-64 pt-14 lg:pt-0 min-h-screen pb-20 lg:pb-0">
+      <main className="lg:ml-64 pt-14 lg:pt-0 h-[calc(100dvh-3.5rem)] overflow-y-auto scrollbar-hide lg:h-auto lg:min-h-screen lg:overflow-visible pb-20 lg:pb-0">
         {children}
       </main>
 
