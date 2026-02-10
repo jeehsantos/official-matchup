@@ -199,11 +199,13 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
                   key={path}
                   onClick={handleSignOut}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors",
+                    "relative flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors",
                     "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <Icon className="h-5 w-5" />
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200">
+                    <Icon className="h-5 w-5" />
+                  </span>
                   <span className="text-[10px] font-medium">{label}</span>
                 </button>
               );
@@ -214,13 +216,26 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
                 key={path}
                 to={path}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors",
+                  "relative flex flex-col items-center justify-center gap-1 w-16 h-full transition-colors",
                   isActive
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <Icon className={cn("h-5 w-5", isActive && "stroke-[2.5]")} />
+                <span
+                  className={cn(
+                    "absolute top-0 h-1 w-10 rounded-full bg-primary transition-opacity duration-200",
+                    isActive ? "opacity-100" : "opacity-0"
+                  )}
+                />
+                <span
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200",
+                    isActive && "bg-primary/10"
+                  )}
+                >
+                  <Icon className={cn("h-5 w-5", isActive && "stroke-[2.5]")} />
+                </span>
                 <span className="text-[10px] font-medium">{label}</span>
               </Link>
             );
