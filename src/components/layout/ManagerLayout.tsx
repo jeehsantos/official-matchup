@@ -84,7 +84,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="min-h-screen bg-background">
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 glass border-b border-border/50 h-14">
         <div className="flex items-center justify-between h-full px-4">
@@ -111,18 +111,17 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
-          className="lg:hidden fixed inset-x-0 top-14 bottom-0 bg-black/50 z-40"
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed left-0 z-50 w-1/2 max-w-64 bg-card border-r border-border transition-transform lg:top-0 lg:h-full lg:w-64 lg:translate-x-0",
-        "top-14 h-[65dvh] rounded-br-2xl shadow-xl lg:rounded-none lg:shadow-none",
+        "fixed top-0 left-0 z-50 h-full w-1/2 max-w-64 bg-card border-r border-border transition-transform lg:w-64 lg:translate-x-0",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="flex h-full flex-col overflow-x-hidden overflow-y-auto">
+        <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="h-14 flex items-center px-4 border-b border-border">
             <Link to="/manager" className="flex items-center gap-3" aria-label="Sport Arena manager home">
@@ -162,7 +161,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
           </nav>
 
           {/* Theme Toggle & Sign Out */}
-          <div className="p-4 border-t border-border space-y-2">
+          <div className="p-4 border-t border-border space-y-2 pb-20 lg:pb-4">
             <div className="flex items-center justify-between px-3 py-2">
               <span className="text-sm text-muted-foreground">Theme</span>
               <ThemeToggle variant="outline" size="icon" />
