@@ -99,6 +99,22 @@ interface AvailabilityResponse {
   venue_courts?: AvailableCourt[];
 }
 
+// Map facility names to emoji icons
+function getFacilityIcon(facility: string): string {
+  const lower = facility.toLowerCase();
+  if (lower.includes("changing") || lower.includes("locker room")) return "🚪";
+  if (lower.includes("shower")) return "🚿";
+  if (lower.includes("locker")) return "🔒";
+  if (lower.includes("parking")) return "🅿️";
+  if (lower.includes("restroom") || lower.includes("toilet")) return "🚻";
+  if (lower.includes("water") || lower.includes("fountain")) return "💧";
+  if (lower.includes("first aid")) return "🩹";
+  if (lower.includes("wi-fi") || lower.includes("wifi")) return "📶";
+  if (lower.includes("seat") || lower.includes("spectator")) return "💺";
+  if (lower.includes("cafe") || lower.includes("food")) return "☕";
+  return "✅";
+}
+
 export default function CourtDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -1334,15 +1350,47 @@ export default function CourtDetail() {
               </div>
             </div>
 
-            {/* Amenities */}
-            {court.venues?.amenities && court.venues.amenities.length > 0 && (
-              <div className="px-4 lg:px-0">
-                <h3 className="font-semibold mb-3">Amenities</h3>
-                <div className="flex flex-wrap gap-2">
-                  {court.venues.amenities.map((amenity, i) => (
-                    <Badge key={i} variant="secondary">{amenity}</Badge>
-                  ))}
-                </div>
+            {/* Venue Details: Allowed Sports + Amenities */}
+            {(court.venues?.amenities?.length > 0 || (court.venues as any)?.allowed_sports?.length > 0) && (
+              <div className="px-4 lg:px-0 space-y-4">
+                {/* Allowed Sports */}
+                {(court.venues as any)?.allowed_sports?.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <span className="text-lg">🏅</span>
+                      Sports Available
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {((court.venues as any).allowed_sports as string[]).map((sport, i) => (
+                        <Badge key={i} variant="secondary" className="gap-1.5 py-1 px-3">
+                          <SportIcon sport={sport} size="sm" className="w-5 h-5 text-xs" />
+                          <span className="capitalize">{sport.replace(/_/g, " ")}</span>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Facilities / Amenities */}
+                {court.venues?.amenities && court.venues.amenities.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <span className="text-lg">🏢</span>
+                      Facilities
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {court.venues.amenities.map((amenity, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2 text-sm border border-border"
+                        >
+                          <span className="text-base">{getFacilityIcon(amenity)}</span>
+                          {amenity}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

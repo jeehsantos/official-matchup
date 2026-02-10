@@ -26,6 +26,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { CourtPhotosUpload } from "@/components/manager/CourtPhotosUpload";
 import { PaymentSettingsCard } from "@/components/manager/PaymentSettingsCard";
+import { VenueDetailsEditor } from "@/components/manager/VenueDetailsEditor";
 import { nzCities, getSuburbsForCity } from "@/data/nzLocations";
 import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
 
@@ -84,6 +85,8 @@ export default function ManagerCourtFormNew() {
   const [availableSuburbs, setAvailableSuburbs] = useState<string[]>([]);
   const [venueName, setVenueName] = useState<string>("");
   const [venueData, setVenueData] = useState<any>(null);
+  const [venueAllowedSports, setVenueAllowedSports] = useState<string[]>([]);
+  const [venueAmenities, setVenueAmenities] = useState<string[]>([]);
   
   // Multi-court state
   const [selectedTabCourtId, setSelectedTabCourtId] = useState<string | null>(null);
@@ -231,7 +234,7 @@ export default function ManagerCourtFormNew() {
         .from("courts")
         .select(`
           *,
-          venue:venues(id, name, address, city, suburb, country, owner_id)
+          venue:venues(id, name, address, city, suburb, country, owner_id, amenities, allowed_sports)
         `)
         .eq("id", courtId)
         .single();
@@ -248,6 +251,8 @@ export default function ManagerCourtFormNew() {
       setVenueName(data.venue?.name || "");
       setVenueData(data.venue);
       setParentCourtId(data.parent_court_id || data.id);
+      setVenueAllowedSports(data.venue?.allowed_sports || []);
+      setVenueAmenities(data.venue?.amenities || []);
       
       reset({
         name: data.name,
@@ -393,7 +398,9 @@ export default function ManagerCourtFormNew() {
             city: data.city,
             suburb: data.suburb || null,
             country: data.country,
-          })
+            allowed_sports: venueAllowedSports,
+            amenities: venueAmenities,
+          } as any)
           .eq("id", existingVenueId);
 
         if (venueError) throw venueError;
@@ -436,7 +443,9 @@ export default function ManagerCourtFormNew() {
             suburb: data.suburb || null,
             country: data.country,
             is_active: true,
-          }])
+            allowed_sports: venueAllowedSports,
+            amenities: venueAmenities,
+          } as any])
           .select()
           .single();
 
@@ -1004,6 +1013,16 @@ export default function ManagerCourtFormNew() {
                   </CollapsibleContent>
                 </Collapsible>
               </Card>
+
+              {/* Venue Details - Only for parent courts (main venue) */}
+              {(!currentCourt?.parent_court_id && !isAddingNewSubCourt) && (
+                <VenueDetailsEditor
+                  allowedSports={venueAllowedSports}
+                  amenities={venueAmenities}
+                  onAllowedSportsChange={setVenueAllowedSports}
+                  onAmenitiesChange={setVenueAmenities}
+                />
+              )}
 
               {/* Payment Settings */}
               <PaymentSettingsCard

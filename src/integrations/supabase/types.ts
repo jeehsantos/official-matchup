@@ -1205,6 +1205,7 @@ export type Database = {
       venues: {
         Row: {
           address: string
+          allowed_sports: string[] | null
           amenities: string[] | null
           city: string
           country: string | null
@@ -1227,6 +1228,7 @@ export type Database = {
         }
         Insert: {
           address: string
+          allowed_sports?: string[] | null
           amenities?: string[] | null
           city: string
           country?: string | null
@@ -1249,6 +1251,7 @@ export type Database = {
         }
         Update: {
           address?: string
+          allowed_sports?: string[] | null
           amenities?: string[] | null
           city?: string
           country?: string | null
