@@ -1351,17 +1351,17 @@ export default function CourtDetail() {
             </div>
 
             {/* Venue Details: Allowed Sports + Amenities */}
-            {(court.venues?.amenities?.length > 0 || (court.venues as any)?.allowed_sports?.length > 0) && (
+            {((court.venues?.amenities && court.venues.amenities.length > 0) || (court.venues?.allowed_sports && court.venues.allowed_sports.length > 0)) && (
               <div className="px-4 lg:px-0 space-y-4">
                 {/* Allowed Sports */}
-                {(court.venues as any)?.allowed_sports?.length > 0 && (
+                {court.venues?.allowed_sports && court.venues.allowed_sports.length > 0 && (
                   <div>
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <span className="text-lg">🏅</span>
                       Sports Available
                     </h3>
                     <div className="flex flex-wrap gap-2">
-                      {((court.venues as any).allowed_sports as string[]).map((sport, i) => (
+                      {court.venues.allowed_sports.map((sport, i) => (
                         <Badge key={i} variant="secondary" className="gap-1.5 py-1 px-3">
                           <SportIcon sport={sport} size="sm" className="w-5 h-5 text-xs" />
                           <span className="capitalize">{sport.replace(/_/g, " ")}</span>
