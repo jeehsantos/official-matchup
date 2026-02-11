@@ -22,6 +22,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
 import { usePaginationThreshold } from "@/hooks/usePaginationThreshold";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import type { Database } from "@/integrations/supabase/types";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
@@ -33,6 +34,7 @@ interface CourtWithVenue extends Court {
 
 export default function Courts() {
   const { user } = useAuth();
+  const { preferredSports } = useUserProfile();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const location = useLocation();
@@ -158,7 +160,12 @@ export default function Courts() {
     
     const matchesCity = selectedCity === "all" || court.venues?.city === selectedCity;
 
-    return matchesSearch && matchesGroundType && matchesVenueType && matchesCity;
+    // Auto-filter by user's preferred sports (match court sport_type or venue allowed_sports)
+    const matchesSport = !user || preferredSports.length === 0 || 
+      preferredSports.includes(court.sport_type) ||
+      (court.venues?.allowed_sports && court.venues.allowed_sports.some(s => preferredSports.includes(s)));
+
+    return matchesSearch && matchesGroundType && matchesVenueType && matchesCity && matchesSport;
   });
 
   // Pagination (desktop only)

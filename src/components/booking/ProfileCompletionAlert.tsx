@@ -12,7 +12,7 @@ export function ProfileCompletionAlert({ missingFields, onClose }: ProfileComple
 
   const handleCompleteProfile = () => {
     onClose?.();
-    navigate("/profile");
+    navigate("/profile/edit");
   };
 
   return (

@@ -18,6 +18,7 @@ import { Loader2, Search, AlertTriangle, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSportCategories } from "@/hooks/useSportCategories";
 import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { QuickGameModal } from "@/components/quick-challenge/QuickGameModal";
 import { QuickChallengeSummaryCard } from "@/components/quick-challenge/QuickChallengeSummaryCard";
 import { useQuickChallenges } from "@/hooks/useQuickChallenges";
@@ -43,6 +44,7 @@ export default function Discover() {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { preferredSports } = useUserProfile();
   const [activeTab, setActiveTab] = useState<string>(
     searchParams.get("tab") === "quickgames" ? "quickgames" : "rescue"
   );
@@ -195,28 +197,41 @@ export default function Discover() {
     }
   };
 
-  // Filter rescue games based on sport and search
+  // Filter rescue games based on sport, preferred sports, and search
   const filteredRescueGames = useMemo(() => {
     return rescueGames.filter((game) => {
-      const matchesSport = selectedSport === "all" || game.sport === selectedSport;
+      // If explicit sport filter is set, use it; otherwise auto-filter by preferred sports
+      const matchesSport = selectedSport === "all" 
+        ? (preferredSports.length === 0 || preferredSports.includes(game.sport))
+        : game.sport === selectedSport;
       const matchesSearch = searchQuery === "" || 
         game.groupName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         game.venueName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         game.sport.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesSport && matchesSearch;
     });
-  }, [rescueGames, selectedSport, searchQuery]);
+  }, [rescueGames, selectedSport, searchQuery, preferredSports]);
 
-  // Filter quick challenges based on search
+  // Filter quick challenges based on search and preferred sports
   const filteredChallenges = useMemo(() => {
-    if (!searchQuery) return quickChallenges;
-    return quickChallenges.filter((challenge) => {
+    let filtered = quickChallenges;
+    
+    // Auto-filter by preferred sports when no explicit sport filter
+    if (selectedSport === "all" && preferredSports.length > 0) {
+      filtered = filtered.filter((challenge) => {
+        const sportName = challenge.sport_categories?.name || "";
+        return preferredSports.includes(sportName);
+      });
+    }
+    
+    if (!searchQuery) return filtered;
+    return filtered.filter((challenge) => {
       const sportName = challenge.sport_categories?.display_name?.toLowerCase() || "";
       const venueName = challenge.venues?.name?.toLowerCase() || "";
       return sportName.includes(searchQuery.toLowerCase()) ||
              venueName.includes(searchQuery.toLowerCase());
     });
-  }, [quickChallenges, searchQuery]);
+  }, [quickChallenges, searchQuery, selectedSport, preferredSports]);
 
   if (isLoading) {
     return (
