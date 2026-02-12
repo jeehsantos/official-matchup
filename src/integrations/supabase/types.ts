@@ -282,6 +282,7 @@ export type Database = {
       }
       courts: {
         Row: {
+          allowed_sports: string[] | null
           capacity: number
           created_at: string
           ground_type: Database["public"]["Enums"]["ground_type"] | null
@@ -302,6 +303,7 @@ export type Database = {
           venue_id: string
         }
         Insert: {
+          allowed_sports?: string[] | null
           capacity?: number
           created_at?: string
           ground_type?: Database["public"]["Enums"]["ground_type"] | null
@@ -322,6 +324,7 @@ export type Database = {
           venue_id: string
         }
         Update: {
+          allowed_sports?: string[] | null
           capacity?: number
           created_at?: string
           ground_type?: Database["public"]["Enums"]["ground_type"] | null
@@ -1205,7 +1208,6 @@ export type Database = {
       venues: {
         Row: {
           address: string
-          allowed_sports: string[] | null
           amenities: string[] | null
           city: string
           country: string | null
@@ -1228,7 +1230,6 @@ export type Database = {
         }
         Insert: {
           address: string
-          allowed_sports?: string[] | null
           amenities?: string[] | null
           city: string
           country?: string | null
@@ -1251,7 +1252,6 @@ export type Database = {
         }
         Update: {
           address?: string
-          allowed_sports?: string[] | null
           amenities?: string[] | null
           city?: string
           country?: string | null

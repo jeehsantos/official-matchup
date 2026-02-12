@@ -160,10 +160,12 @@ export default function Courts() {
     
     const matchesCity = selectedCity === "all" || court.venues?.city === selectedCity;
 
-    // Auto-filter by user's preferred sports (match court sport_type or venue allowed_sports)
+    // Auto-filter by user's preferred sports (match court or any sub-court's sport_type/allowed_sports)
     const matchesSport = !user || preferredSports.length === 0 || 
-      preferredSports.includes(court.sport_type) ||
-      (court.venues?.allowed_sports && court.venues.allowed_sports.some(s => preferredSports.includes(s)));
+      venueCourts.some(c => 
+        preferredSports.includes(c.sport_type) ||
+        (c.allowed_sports && c.allowed_sports.some(s => preferredSports.includes(s)))
+      );
 
     return matchesSearch && matchesGroundType && matchesVenueType && matchesCity && matchesSport;
   });
