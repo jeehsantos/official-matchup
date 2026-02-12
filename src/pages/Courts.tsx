@@ -8,21 +8,17 @@ import { CourtsPagination } from "@/components/courts/CourtsPagination";
 import { MobileCourtSheet } from "@/components/courts/MobileCourtSheet";
 import { MobileCourtFilters } from "@/components/courts/MobileCourtFilters";
 import { Button } from "@/components/ui/button";
-import { Search, MapPin, SlidersHorizontal, Building2, Loader2, Zap, X } from "lucide-react";
+import { Search, MapPin, SlidersHorizontal, Building2, Loader2, Zap, X, Filter } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
 import { usePaginationThreshold } from "@/hooks/usePaginationThreshold";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { useSportCategories } from "@/hooks/useSportCategories";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import type { Database } from "@/integrations/supabase/types";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
@@ -46,11 +42,14 @@ export default function Courts() {
   const [selectedGroundType, setSelectedGroundType] = useState<string>("all");
   const [selectedVenueType, setSelectedVenueType] = useState<"all" | "indoor" | "outdoor">("all");
   const [selectedCity, setSelectedCity] = useState<string>("all");
+  const [selectedSport, setSelectedSport] = useState<string>("all");
+  const [hasAppliedPreferredSportDefault, setHasAppliedPreferredSportDefault] = useState(false);
   const [cities, setCities] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [highlightedCourtId, setHighlightedCourtId] = useState<string | null>(null);
   const [showPagination, setShowPagination] = useState(false);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [showDesktopFilters, setShowDesktopFilters] = useState(false);
   
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
@@ -75,8 +74,9 @@ export default function Courts() {
     navigate("/courts", { replace: true });
   };
 
-  // Fetch surface types from database - NO FALLBACKS
-  const { data: surfaceTypes = [], isLoading: loadingSurfaceTypes } = useSurfaceTypes();
+  // Fetch surface and sport types from database - NO FALLBACKS
+  const { data: surfaceTypes = [] } = useSurfaceTypes();
+  const { data: sportCategories = [] } = useSportCategories();
 
   // Build ground type data from database
   const groundTypeData = useMemo(() => {
@@ -100,6 +100,42 @@ export default function Courts() {
   const groundTypeFilters = useMemo(() => {
     return ["all", ...surfaceTypes.map(s => s.name)];
   }, [surfaceTypes]);
+
+  useEffect(() => {
+    if (
+      !hasAppliedPreferredSportDefault &&
+      user &&
+      preferredSports.length > 0 &&
+      selectedSport === "all"
+    ) {
+      setSelectedSport("preferred");
+      setHasAppliedPreferredSportDefault(true);
+    }
+  }, [user, preferredSports, selectedSport, hasAppliedPreferredSportDefault]);
+
+  const sportFilterOptions = useMemo(() => {
+    const preferredSportSet = new Set(preferredSports);
+    const preferredOptions = sportCategories
+      .filter((cat) => preferredSportSet.has(cat.name))
+      .map((cat) => ({
+        value: cat.name,
+        label: cat.display_name,
+        emoji: cat.icon || "🎯",
+      }));
+
+    const missingPreferredOptions = preferredSports
+      .filter((sportName) => !preferredOptions.some((option) => option.value === sportName))
+      .map((sportName) => ({ value: sportName, label: sportName, emoji: "🎯" }));
+
+    return [
+      { value: "all", label: "All Sports", emoji: "🎯" },
+      ...(user && preferredSports.length > 0
+        ? [{ value: "preferred", label: "My Preferred Sports", emoji: "⭐" }]
+        : []),
+      ...preferredOptions,
+      ...missingPreferredOptions,
+    ];
+  }, [sportCategories, preferredSports, user]);
 
   useEffect(() => {
     fetchCourts();
@@ -160,12 +196,18 @@ export default function Courts() {
     
     const matchesCity = selectedCity === "all" || court.venues?.city === selectedCity;
 
-    // Auto-filter by user's preferred sports (match court or any sub-court's sport_type/allowed_sports)
-    const matchesSport = !user || preferredSports.length === 0 || 
-      venueCourts.some(c => 
-        preferredSports.includes(c.sport_type) ||
-        (c.allowed_sports && c.allowed_sports.some(s => preferredSports.includes(s)))
+    const sportMatchesForCourt = (sportName: string) =>
+      venueCourts.some(c =>
+        c.sport_type === sportName ||
+        (c.allowed_sports && c.allowed_sports.includes(sportName))
       );
+
+    const matchesSport =
+      selectedSport === "all"
+        ? true
+        : selectedSport === "preferred"
+          ? (!user || preferredSports.length === 0 || preferredSports.some((sport) => sportMatchesForCourt(sport)))
+          : sportMatchesForCourt(selectedSport);
 
     return matchesSearch && matchesGroundType && matchesVenueType && matchesCity && matchesSport;
   });
@@ -180,7 +222,7 @@ export default function Courts() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedGroundType, selectedVenueType, selectedCity]);
+  }, [searchQuery, selectedGroundType, selectedVenueType, selectedCity, selectedSport]);
 
   // Scroll detection for pagination visibility
   const handleScroll = useCallback(() => {
@@ -213,7 +255,15 @@ export default function Courts() {
     selectedGroundType !== "all",
     selectedVenueType !== "all",
     selectedCity !== "all",
+    selectedSport !== "all",
   ].filter(Boolean).length;
+
+  const clearAllFilters = () => {
+    setSelectedGroundType("all");
+    setSelectedVenueType("all");
+    setSelectedCity("all");
+    setSelectedSport("all");
+  };
 
   const Layout = user ? MobileLayout : PublicLayout;
 
@@ -251,7 +301,7 @@ export default function Courts() {
     );
   };
 
-  // Desktop Filter bar component with dropdowns
+  // Desktop Filter bar component with dialog filters
   const FilterBar = () => (
     <div className="space-y-4">
       {/* Search Bar */}
@@ -266,7 +316,7 @@ export default function Courts() {
             className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
           />
           {searchQuery && (
-            <button 
+            <button
               onClick={() => setSearchQuery("")}
               className="h-5 w-5 rounded-full bg-muted flex items-center justify-center hover:bg-muted-foreground/20 transition-colors"
             >
@@ -276,99 +326,111 @@ export default function Courts() {
         </div>
       </div>
 
-      {/* Filter Dropdowns Row */}
-      <div className="flex flex-wrap gap-3">
-        {/* Ground Type Dropdown */}
-        {loadingSurfaceTypes ? (
-          <div className="flex items-center gap-2 h-10 px-3 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Loading...</span>
-          </div>
-        ) : (
-          <Select value={selectedGroundType} onValueChange={setSelectedGroundType}>
-            <SelectTrigger className="w-[160px] h-10">
-              <SelectValue>
-                <div className="flex items-center gap-2">
-                  <span>{groundTypeData[selectedGroundType]?.emoji || "🎯"}</span>
-                  <span>{groundTypeData[selectedGroundType]?.label || "All Surfaces"}</span>
-                </div>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent className="bg-popover border border-border shadow-lg z-50">
-              {groundTypeFilters.map((groundType) => {
-                const data = groundTypeData[groundType];
-                return (
-                  <SelectItem key={groundType} value={groundType}>
-                    <div className="flex items-center gap-2">
-                      <span>{data?.emoji || "🎯"}</span>
-                      <span>{data?.label || groundType}</span>
-                    </div>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        )}
-
-        {/* Indoor/Outdoor Dropdown */}
-        <Select value={selectedVenueType} onValueChange={(val) => setSelectedVenueType(val as "all" | "indoor" | "outdoor")}>
-          <SelectTrigger className="w-[140px] h-10">
-            <SelectValue>
-              <div className="flex items-center gap-2">
-                <span>{selectedVenueType === "all" ? "🏟️" : selectedVenueType === "indoor" ? "🏢" : "🌳"}</span>
-                <span>{selectedVenueType === "all" ? "All Types" : selectedVenueType === "indoor" ? "Indoor" : "Outdoor"}</span>
-              </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="bg-popover border border-border shadow-lg z-50">
-            <SelectItem value="all">
-              <div className="flex items-center gap-2">
-                <span>🏟️</span>
-                <span>All Types</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="indoor">
-              <div className="flex items-center gap-2">
-                <span>🏢</span>
-                <span>Indoor</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="outdoor">
-              <div className="flex items-center gap-2">
-                <span>🌳</span>
-                <span>Outdoor</span>
-              </div>
-            </SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* City Dropdown */}
-        {cities.length > 0 && (
-          <Select value={selectedCity} onValueChange={setSelectedCity}>
-            <SelectTrigger className="w-[160px] h-10">
-              <SelectValue>
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  <span>{selectedCity === "all" ? "All Cities" : selectedCity}</span>
-                </div>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent className="bg-popover border border-border shadow-lg z-50">
-              <SelectItem value="all">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  <span>All Cities</span>
-                </div>
-              </SelectItem>
-              {cities.map((city) => (
-                <SelectItem key={city} value={city}>
-                  {city}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+      <div>
+        <Button variant="outline" className="h-11 rounded-xl gap-2" onClick={() => setShowDesktopFilters(true)}>
+          <Filter className="h-4 w-4" />
+          Filter
+          {activeFiltersCount > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary text-xs font-medium">{activeFiltersCount}</span>
+          )}
+        </Button>
       </div>
+
+      <Dialog open={showDesktopFilters} onOpenChange={setShowDesktopFilters}>
+        <DialogContent className="max-w-md p-0 overflow-hidden rounded-3xl">
+          <div className="p-5 border-b border-border flex items-center justify-between">
+            <DialogHeader>
+              <DialogTitle>Filters</DialogTitle>
+            </DialogHeader>
+            {activeFiltersCount > 0 && (
+              <Button variant="ghost" className="text-primary" onClick={clearAllFilters}>Clear All</Button>
+            )}
+          </div>
+
+          <div className="p-5 pt-3">
+            <div className="rounded-2xl border border-border overflow-hidden">
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="surface" className="border-b border-border">
+                  <AccordionTrigger className="px-4 py-4 hover:no-underline"><span className="font-medium">Surface Type</span></AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      {groundTypeFilters.map((groundType) => {
+                        const data = groundTypeData[groundType];
+                        return (
+                          <Button
+                            key={groundType}
+                            variant={selectedGroundType === groundType ? "default" : "outline"}
+                            className="justify-start"
+                            onClick={() => setSelectedGroundType(groundType)}
+                          >
+                            <span className="mr-2">{data?.emoji || "🎯"}</span>
+                            {data?.label || groundType}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="venue" className="border-b border-border">
+                  <AccordionTrigger className="px-4 py-4 hover:no-underline"><span className="font-medium">Indoor / Outdoor</span></AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      {[{ value: "all", label: "All", emoji: "🏟️" }, { value: "indoor", label: "Indoor", emoji: "🏢" }, { value: "outdoor", label: "Outdoor", emoji: "🌳" }].map((type) => (
+                        <Button
+                          key={type.value}
+                          variant={selectedVenueType === type.value ? "default" : "outline"}
+                          className="justify-start"
+                          onClick={() => setSelectedVenueType(type.value as "all" | "indoor" | "outdoor")}
+                        >
+                          <span className="mr-2">{type.emoji}</span>
+                          {type.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="sport" className="border-b border-border">
+                  <AccordionTrigger className="px-4 py-4 hover:no-underline"><span className="font-medium">Sport</span></AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      {sportFilterOptions.map((sport) => (
+                        <Button
+                          key={sport.value}
+                          variant={selectedSport === sport.value ? "default" : "outline"}
+                          className="justify-start"
+                          onClick={() => setSelectedSport(sport.value)}
+                        >
+                          <span className="mr-2">{sport.emoji}</span>
+                          {sport.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="city" className="border-b-0">
+                  <AccordionTrigger className="px-4 py-4 hover:no-underline"><span className="font-medium">City</span></AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant={selectedCity === "all" ? "default" : "outline"} className="justify-start" onClick={() => setSelectedCity("all")}>All Cities</Button>
+                      {cities.map((city) => (
+                        <Button key={city} variant={selectedCity === city ? "default" : "outline"} className="justify-start" onClick={() => setSelectedCity(city)}>{city}</Button>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mt-5">
+              <Button variant="outline" onClick={() => setShowDesktopFilters(false)}>Close</Button>
+              <Button onClick={() => setShowDesktopFilters(false)}>Apply</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
@@ -480,6 +542,10 @@ export default function Courts() {
             cities={cities}
             activeFiltersCount={activeFiltersCount}
             surfaceTypes={surfaceTypes}
+            selectedSport={selectedSport}
+            setSelectedSport={setSelectedSport}
+            sportOptions={sportFilterOptions}
+            loadingSports={loadingSports}
           />
         </div>
       </MobileLayout>

@@ -2,20 +2,20 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
 import { MapPin, RotateCcw, Check, Loader2 } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import type { SurfaceType } from "@/hooks/useSurfaceTypes";
+
+interface SportFilterOption {
+  value: string;
+  label: string;
+  emoji: string;
+}
 
 interface MobileCourtFiltersProps {
   open: boolean;
@@ -29,6 +29,10 @@ interface MobileCourtFiltersProps {
   cities: string[];
   activeFiltersCount: number;
   surfaceTypes?: SurfaceType[];
+  selectedSport: string;
+  setSelectedSport: (value: string) => void;
+  sportOptions: SportFilterOption[];
+  loadingSports?: boolean;
 }
 
 const venueTypeData = [
@@ -49,6 +53,10 @@ export function MobileCourtFilters({
   cities,
   activeFiltersCount,
   surfaceTypes = [],
+  selectedSport,
+  setSelectedSport,
+  sportOptions,
+  loadingSports = false,
 }: MobileCourtFiltersProps) {
   // Build ground type data from database
   const groundTypeData = useMemo(() => {
@@ -77,9 +85,14 @@ export function MobileCourtFilters({
     setSelectedGroundType("all");
     setSelectedVenueType("all");
     setSelectedCity("all");
+    setSelectedSport("all");
   };
 
-  const hasActiveFilters = selectedGroundType !== "all" || selectedVenueType !== "all" || selectedCity !== "all";
+  const hasActiveFilters =
+    selectedGroundType !== "all" ||
+    selectedVenueType !== "all" ||
+    selectedCity !== "all" ||
+    selectedSport !== "all";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -102,86 +115,115 @@ export function MobileCourtFilters({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto min-h-0">
-          <div className="space-y-6 py-4 pb-24">
-            {/* Surface Type */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Surface Type</Label>
-              {surfaceTypes.length === 0 ? (
-                <div className="flex items-center gap-2 text-muted-foreground py-4">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading surface types...
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  {groundTypeFilters.map((type) => {
-                    const data = groundTypeData[type];
-                    const isSelected = selectedGroundType === type;
-                    return (
-                      <Button
-                        key={type}
-                        variant={isSelected ? "default" : "outline"}
-                        onClick={() => setSelectedGroundType(type)}
-                        className="flex-col h-auto py-3 gap-1"
-                      >
-                        <span className="text-lg">{data?.emoji || "🎯"}</span>
-                        <span className="text-xs">{data?.label || type}</span>
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Indoor / Outdoor */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Indoor / Outdoor</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {venueTypeData.map((type) => {
-                  const isSelected = selectedVenueType === type.value;
-                  return (
-                    <Button
-                      key={type.value}
-                      variant={isSelected ? "default" : "outline"}
-                      onClick={() => setSelectedVenueType(type.value as "all" | "indoor" | "outdoor")}
-                      className="flex-col h-auto py-3 gap-1"
-                    >
-                      <span className="text-lg">{type.emoji}</span>
-                      <span className="text-xs">{type.label}</span>
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* City */}
-            {cities.length > 0 && (
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">City</Label>
-                <Select value={selectedCity} onValueChange={setSelectedCity}>
-                  <SelectTrigger className="w-full h-12">
-                    <SelectValue>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
-                        <span>{selectedCity === "all" ? "All Cities" : selectedCity}</span>
+          <div className="py-4 pb-24">
+            <div className="rounded-2xl border border-border overflow-hidden">
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="surface" className="border-b border-border">
+                  <AccordionTrigger className="px-4 py-4 hover:no-underline">
+                    <Label className="text-sm font-medium">Surface Type</Label>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4">
+                    {surfaceTypes.length === 0 ? (
+                      <div className="flex items-center gap-2 text-muted-foreground py-4">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading surface types...
                       </div>
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border border-border shadow-lg z-50">
-                    <SelectItem value="all">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
-                        <span>All Cities</span>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {groundTypeFilters.map((type) => {
+                          const data = groundTypeData[type];
+                          const isSelected = selectedGroundType === type;
+                          return (
+                            <Button
+                              key={type}
+                              variant={isSelected ? "default" : "outline"}
+                              onClick={() => setSelectedGroundType(type)}
+                              className="justify-start"
+                            >
+                              <span className="mr-2">{data?.emoji || "🎯"}</span>
+                              <span>{data?.label || type}</span>
+                            </Button>
+                          );
+                        })}
                       </div>
-                    </SelectItem>
-                    {cities.map((city) => (
-                      <SelectItem key={city} value={city}>
-                        {city}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="venue" className="border-b border-border">
+                  <AccordionTrigger className="px-4 py-4 hover:no-underline">
+                    <Label className="text-sm font-medium">Indoor / Outdoor</Label>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {venueTypeData.map((type) => {
+                        const isSelected = selectedVenueType === type.value;
+                        return (
+                          <Button
+                            key={type.value}
+                            variant={isSelected ? "default" : "outline"}
+                            onClick={() => setSelectedVenueType(type.value as "all" | "indoor" | "outdoor")}
+                            className="justify-start"
+                          >
+                            <span className="mr-2">{type.emoji}</span>
+                            <span>{type.label}</span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="sport" className="border-b border-border">
+                  <AccordionTrigger className="px-4 py-4 hover:no-underline">
+                    <Label className="text-sm font-medium">Sport</Label>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4">
+                    {loadingSports ? (
+                      <div className="flex items-center gap-2 text-muted-foreground py-4">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading sports...
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {sportOptions.map((sport) => (
+                          <Button
+                            key={sport.value}
+                            variant={selectedSport === sport.value ? "default" : "outline"}
+                            className="justify-start"
+                            onClick={() => setSelectedSport(sport.value)}
+                          >
+                            <span className="mr-2">{sport.emoji}</span>
+                            <span>{sport.label}</span>
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+
+                {cities.length > 0 && (
+                  <AccordionItem value="city" className="border-b-0">
+                    <AccordionTrigger className="px-4 py-4 hover:no-underline">
+                      <Label className="text-sm font-medium">City</Label>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <Button variant={selectedCity === "all" ? "default" : "outline"} className="justify-start" onClick={() => setSelectedCity("all")}>
+                          <MapPin className="h-4 w-4 mr-2" />
+                          All Cities
+                        </Button>
+                        {cities.map((city) => (
+                          <Button key={city} variant={selectedCity === city ? "default" : "outline"} className="justify-start" onClick={() => setSelectedCity(city)}>
+                            {city}
+                          </Button>
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
+              </Accordion>
+            </div>
           </div>
         </div>
 
