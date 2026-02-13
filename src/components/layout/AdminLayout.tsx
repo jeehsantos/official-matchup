@@ -1,7 +1,8 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Shield, Activity, Layers, Archive, Gift } from "lucide-react";
+import { Shield, Activity, Layers, Archive, Gift, Menu, X, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
 interface AdminLayoutProps {
@@ -19,20 +20,49 @@ const adminNavItems = [
 
 export function AdminLayout({ children, title }: AdminLayoutProps) {
   const location = useLocation();
+  const { signOut } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 p-4">
+    <div className="min-h-screen bg-background lg:flex">
+      <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b bg-background px-4 lg:hidden">
+        <div className="flex items-center gap-2">
+          <Shield className="h-5 w-5 text-primary" />
+          <span className="font-display text-base font-semibold">Admin Panel</span>
+        </div>
+        <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)}>
+          {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </Button>
+      </header>
+
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col border-r bg-card transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
+          sidebarOpen && "translate-x-0"
+        )}
+      >
+        <div className="border-b px-5 py-4">
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            <h1 className="font-display text-xl font-semibold">{title}</h1>
+            <div>
+              <h1 className="font-display text-lg font-semibold">Admin</h1>
+              <p className="text-xs text-muted-foreground">System controls</p>
+            </div>
           </div>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/games">Player View</Link>
-          </Button>
         </div>
-        <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 pb-3">
+
+        <nav className="flex-1 space-y-1 p-4">
           {adminNavItems.map(({ label, path, icon: Icon }) => {
             const isActive = location.pathname === path;
 
@@ -40,8 +70,9 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
               <Link
                 key={path}
                 to={path}
+                onClick={() => setSidebarOpen(false)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm whitespace-nowrap transition-colors",
+                  "flex items-center gap-3 rounded-md border px-3 py-2 text-sm transition-colors",
                   isActive
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -52,9 +83,32 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
               </Link>
             );
           })}
+        </nav>
+
+        <div className="space-y-2 border-t p-4">
+          <Button asChild variant="outline" className="w-full justify-start">
+            <Link to="/games">Player View</Link>
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 text-muted-foreground"
+            onClick={handleSignOut}
+          >
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </Button>
         </div>
-      </header>
-      <main className="mx-auto max-w-6xl p-4">{children}</main>
+      </aside>
+
+      <main className="w-full px-4 pb-6 pt-20 lg:px-8 lg:pt-8">
+        <div className="mx-auto w-full max-w-6xl space-y-6">
+          <div className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-primary" />
+            <h2 className="font-display text-2xl font-semibold">{title}</h2>
+          </div>
+          {children}
+        </div>
+      </main>
     </div>
   );
 }
