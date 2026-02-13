@@ -64,7 +64,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
 
         <nav className="flex-1 space-y-1 p-4">
           {adminNavItems.map(({ label, path, icon: Icon }) => {
-            const isActive = location.pathname === path;
+            const isActive = location.pathname === path || (path !== "/admin" && location.pathname.startsWith(path));
 
             return (
               <Link
@@ -86,9 +86,6 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
         </nav>
 
         <div className="space-y-2 border-t p-4">
-          <Button asChild variant="outline" className="w-full justify-start">
-            <Link to="/games">Player View</Link>
-          </Button>
           <Button
             variant="ghost"
             className="w-full justify-start gap-2 text-muted-foreground"
