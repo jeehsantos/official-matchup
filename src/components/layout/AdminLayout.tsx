@@ -1,6 +1,6 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Shield, Activity, Layers, Archive, Gift, Menu, X, LogOut } from "lucide-react";
+import { Shield, Activity, Layers, Archive, Gift, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -21,37 +21,14 @@ const adminNavItems = [
 export function AdminLayout({ children, title }: AdminLayoutProps) {
   const location = useLocation();
   const { signOut } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
   };
 
   return (
-    <div className="min-h-screen bg-background lg:flex">
-      <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b bg-background px-4 lg:hidden">
-        <div className="flex items-center gap-2">
-          <Shield className="h-5 w-5 text-primary" />
-          <span className="font-display text-base font-semibold">Admin Panel</span>
-        </div>
-        <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)}>
-          {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
-      </header>
-
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col border-r bg-card transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
-          sidebarOpen && "translate-x-0"
-        )}
-      >
+    <div className="min-h-screen bg-background md:flex">
+      <aside className="border-b bg-card md:sticky md:top-0 md:h-screen md:w-72 md:border-b-0 md:border-r">
         <div className="border-b px-5 py-4">
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
@@ -62,9 +39,11 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 p-4">
+        <nav className="flex gap-1 overflow-x-auto p-4 md:flex-col md:overflow-visible">
           {adminNavItems.map(({ label, path, icon: Icon }) => {
-            const isActive = location.pathname === path || (path !== "/admin" && location.pathname.startsWith(path));
+            const isActive =
+              location.pathname === path ||
+              (path !== "/admin" && location.pathname.startsWith(path));
 
             return (
               <Link
@@ -72,7 +51,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
                 to={path}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-md border px-3 py-2 text-sm transition-colors",
+                  "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm whitespace-nowrap transition-colors",
                   isActive
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -85,7 +64,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
           })}
         </nav>
 
-        <div className="space-y-2 border-t p-4">
+        <div className="border-t p-4 md:mt-auto">
           <Button
             variant="ghost"
             className="w-full justify-start gap-2 text-muted-foreground"
@@ -97,7 +76,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
         </div>
       </aside>
 
-      <main className="w-full px-4 pb-6 pt-20 lg:px-8 lg:pt-8">
+      <main className="w-full p-4 md:p-8">
         <div className="mx-auto w-full max-w-6xl space-y-6">
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
