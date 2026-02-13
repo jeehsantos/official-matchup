@@ -88,6 +88,7 @@ const App = () => (
             <Route path="/admin/surfaces" element={<AdminSurfaceTypes />} />
             <Route path="/admin/archiving" element={<AdminArchiving />} />
             <Route path="/admin/referrals" element={<AdminReferralSettings />} />
+            <Route path="/admin/*" element={<AdminDashboard />} />
             {/* User Routes */}
             <Route path="/archived-sessions" element={<ArchivedSessions />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
