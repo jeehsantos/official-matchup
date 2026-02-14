@@ -421,7 +421,9 @@ export default function GameDetail() {
     // Check if user has enough credits to cover full amount
     const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
     const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
-    const totalDue = pricePerPlayer + serviceFee;
+    const totalDue = gameData.session.payment_type === "single"
+      ? gameData.session.court_price + serviceFee
+      : pricePerPlayer + serviceFee;
     if (credits >= totalDue && !loadingCredits) {
       setShowCreditsModal(true);
       return;
@@ -436,46 +438,12 @@ export default function GameDetail() {
     creditsToUse?: number
   ) => {
     if (!gameData || !id || !user) return;
-    
+
     setActionLoading(true);
     try {
-      const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
-      const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
-      const totalDue = pricePerPlayer + serviceFee;
-      
       if (method === "credits") {
-        // If credits cover the full amount, process with credits only
-        if (credits >= totalDue) {
-          const { data, error } = await supabase.functions.invoke("create-payment", {
-            body: {
-              sessionId: id,
-              paymentType: "before_session",
-              returnUrl: `/games/${id}`,
-              origin: window.location.origin,
-              useCredits: true,
-              creditsAmount: creditsToUse,
-            },
-          });
-
-          if (error) throw error;
-
-          if (data?.success) {
-            // Payment completed with credits only
-            toast({
-              title: "Payment Complete",
-              description: data.message || "Payment completed using your credits.",
-            });
-            setShowCreditsModal(false);
-            refetchCredits();
-            fetchGameData();
-            return;
-          }
-        }
-
-        // Partial credits - proceed to Stripe with credits applied
         await processCardPayment(true, creditsToUse);
       } else {
-        // Pay with card only
         await processCardPayment(false);
       }
     } catch (error) {
@@ -1363,7 +1331,7 @@ const getGoogleMapsUrl = (address: string): string => {
           open={showCreditsModal}
           onOpenChange={setShowCreditsModal}
           userCredits={credits}
-          sessionCost={pricePerPlayer}
+          sessionCost={session.payment_type === "single" ? singleTotal : splitTotalPerPlayer}
           onSelectPaymentMethod={handleSelectPaymentMethod}
           isLoading={actionLoading}
         />

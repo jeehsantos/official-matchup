@@ -197,7 +197,8 @@ serve(async (req) => {
       challenge.scheduled_date ? `on ${challenge.scheduled_date}` : "",
     ].filter(Boolean).join(" - ");
 
-    const baseAmountCents = Math.max(0, amountCents - playerFeeCents);
+    const appliedPlayerFeeCents = Math.min(playerFeeCents, amountCents);
+    const baseAmountCents = amountCents - appliedPlayerFeeCents;
 
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
@@ -213,14 +214,14 @@ serve(async (req) => {
       },
     ];
 
-    if (playerFeeCents > 0) {
+    if (appliedPlayerFeeCents > 0) {
       lineItems.push({
         price_data: {
           currency: "nzd",
           product_data: {
             name: "Platform Service Fee",
           },
-          unit_amount: playerFeeCents,
+          unit_amount: appliedPlayerFeeCents,
         },
         quantity: 1,
       });
@@ -243,7 +244,7 @@ serve(async (req) => {
     };
 
     if (stripeAccountId) {
-      const applicationFee = Math.min(playerFeeCents, amountCents);
+      const applicationFee = appliedPlayerFeeCents;
       sessionParams.payment_intent_data = {
         application_fee_amount: applicationFee,
         transfer_data: {
