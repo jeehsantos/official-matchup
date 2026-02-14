@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Shield, Activity, Layers, Archive, Gift, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,6 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
               <Link
                 key={path}
                 to={path}
-                onClick={() => setSidebarOpen(false)}
                 className={cn(
                   "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm whitespace-nowrap transition-colors",
                   isActive
