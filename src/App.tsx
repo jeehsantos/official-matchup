@@ -38,6 +38,7 @@ import AdminSportCategories from "./pages/admin/AdminSportCategories";
 import AdminSurfaceTypes from "./pages/admin/AdminSurfaceTypes";
 import AdminArchiving from "./pages/admin/AdminArchiving";
 import AdminReferralSettings from "./pages/admin/AdminReferralSettings";
+import AdminPlatformFees from "./pages/admin/AdminPlatformFees";
 import ArchivedSessions from "./pages/ArchivedSessions";
 
 const queryClient = new QueryClient({});
@@ -88,6 +89,7 @@ const App = () => (
             <Route path="/admin/surfaces" element={<AdminSurfaceTypes />} />
             <Route path="/admin/archiving" element={<AdminArchiving />} />
             <Route path="/admin/referrals" element={<AdminReferralSettings />} />
+            <Route path="/admin/fees" element={<AdminPlatformFees />} />
             <Route path="/admin/*" element={<AdminDashboard />} />
             {/* User Routes */}
             <Route path="/archived-sessions" element={<ArchivedSessions />} />

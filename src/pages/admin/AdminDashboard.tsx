@@ -7,7 +7,8 @@ import {
   Activity,
   Shield,
   Archive,
-  Gift
+  Gift,
+  DollarSign
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AdminLayout } from "@/components/layout/AdminLayout";
@@ -39,6 +40,12 @@ function AdminDashboardContent() {
       description: "Configure referral credit amount and view stats",
       icon: Gift,
       href: "/admin/referrals",
+    },
+    {
+      title: "Platform Fees",
+      description: "Configure commission fees for players and managers",
+      icon: DollarSign,
+      href: "/admin/fees",
     },
   ];
 

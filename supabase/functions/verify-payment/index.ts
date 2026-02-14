@@ -7,8 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Platform fee: $1.50 fixed
-const PLATFORM_FEE = 1.50;
+// Platform fee is now read from metadata (set during create-payment)
+// Fallback to $1.50 if not present for backward compatibility
+const DEFAULT_PLATFORM_FEE = 1.50;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -34,11 +35,11 @@ serve(async (req) => {
     let paymentSuccessful = false;
     let paymentIntentId: string | null = null;
     let amountPaid = 0;
+    let platformFee = DEFAULT_PLATFORM_FEE;
     let actualUserId = userId;
     let actualSessionId = sessionId;
 
     if (checkoutSessionId) {
-      // Verify the checkout session
       const checkoutSession = await stripe.checkout.sessions.retrieve(checkoutSessionId);
       
       if (checkoutSession.payment_status === "paid") {
@@ -47,6 +48,9 @@ serve(async (req) => {
         amountPaid = (checkoutSession.amount_total || 0) / 100;
         actualUserId = checkoutSession.metadata?.user_id || userId;
         actualSessionId = checkoutSession.metadata?.session_id || sessionId;
+        // Read platform fee from metadata (set during create-payment)
+        const metadataFee = checkoutSession.metadata?.platform_fee;
+        platformFee = metadataFee ? parseFloat(metadataFee) : DEFAULT_PLATFORM_FEE;
       }
     }
 
@@ -76,7 +80,7 @@ serve(async (req) => {
           status: "completed",
           paid_at: new Date().toISOString(),
           stripe_payment_intent_id: paymentIntentId,
-          platform_fee: PLATFORM_FEE,
+          platform_fee: platformFee,
         })
         .eq("id", existingPayment.id);
     } else {
@@ -90,7 +94,7 @@ serve(async (req) => {
           status: "completed",
           paid_at: new Date().toISOString(),
           stripe_payment_intent_id: paymentIntentId,
-          platform_fee: PLATFORM_FEE,
+          platform_fee: platformFee,
         });
     }
 
