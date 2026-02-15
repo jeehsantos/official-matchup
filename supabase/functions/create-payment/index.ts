@@ -4,11 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-// Platform fee: $1.50 fixed
-const PLATFORM_FEE = 150; // in cents
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -37,17 +34,24 @@ serve(async (req) => {
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
+      { global: { headers: { Authorization: authHeader } } }
     );
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       throw new Error("User not authenticated");
     }
+
+    // Fetch platform settings from DB
+    const { data: platformSettings } = await supabaseAdmin
+      .from("platform_settings")
+      .select("player_fee, manager_fee_percentage, is_active")
+      .limit(1)
+      .maybeSingle();
+
+    const playerFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 1.50) : 0;
+    const managerFeePercentage = platformSettings?.is_active ? (platformSettings?.manager_fee_percentage ?? 0) : 0;
+    const playerFeeCents = Math.round(playerFee * 100);
 
     // Fetch session with group and court using admin client (bypasses RLS)
     const { data: session, error: sessionError } = await supabaseAdmin
@@ -75,10 +79,9 @@ serve(async (req) => {
       throw new Error("Court or venue not found");
     }
 
-    // Calculate total amount (court price + equipment if any)
-    let totalAmountCents = Math.round(session.court_price * 100);
+    // Calculate base amount (court price + equipment)
+    let baseAmountCents = Math.round(session.court_price * 100);
 
-    // Fetch booking equipment if any
     const { data: bookingEquipment } = await supabaseAdmin
       .from("booking_equipment")
       .select("*, equipment_inventory(*)")
@@ -89,15 +92,17 @@ serve(async (req) => {
         (sum, item) => sum + item.quantity * item.price_at_booking * 100,
         0
       );
-      totalAmountCents += Math.round(equipmentTotal);
+      baseAmountCents += Math.round(equipmentTotal);
     }
 
-    // Handle credits if provided
+    // Total for player = base + player service fee
+    const totalAmountCents = baseAmountCents + playerFeeCents;
+
+    // Handle credits
     let creditsToApply = 0;
     if (useCredits && creditsAmount && creditsAmount > 0) {
       creditsToApply = Math.min(creditsAmount, totalAmountCents / 100);
-      
-      // Deduct credits from user balance
+
       const { data: creditResult, error: creditError } = await supabaseAdmin.rpc(
         "use_user_credits",
         {
@@ -118,13 +123,15 @@ serve(async (req) => {
       }
     }
 
-    // Calculate remaining amount after credits
     const creditsInCents = Math.round(creditsToApply * 100);
     const remainingAmountCents = totalAmountCents - creditsInCents;
 
-    // If credits cover the full amount, complete payment without Stripe
+    // Platform fee = player service fee + manager commission percentage of court price
+    const managerCommissionCents = Math.round((baseAmountCents * managerFeePercentage) / 100);
+    const totalPlatformFeeCents = playerFeeCents + managerCommissionCents;
+
+    // If credits cover everything
     if (remainingAmountCents <= 0) {
-      // Create payment record as completed
       await supabaseAdmin
         .from("payments")
         .upsert({
@@ -134,22 +141,15 @@ serve(async (req) => {
           paid_with_credits: creditsToApply,
           status: "completed",
           paid_at: new Date().toISOString(),
-          platform_fee: PLATFORM_FEE / 100,
-        }, {
-          onConflict: "session_id,user_id",
-        });
+          platform_fee: totalPlatformFeeCents / 100,
+        }, { onConflict: "session_id,user_id" });
 
-      // Update session player to confirmed
       await supabaseAdmin
         .from("session_players")
-        .update({
-          is_confirmed: true,
-          confirmed_at: new Date().toISOString(),
-        })
+        .update({ is_confirmed: true, confirmed_at: new Date().toISOString() })
         .eq("session_id", sessionId)
         .eq("user_id", user.id);
 
-      // Update court availability payment status
       await supabaseAdmin
         .from("court_availability")
         .update({ payment_status: "completed" })
@@ -171,12 +171,10 @@ serve(async (req) => {
       apiVersion: "2024-12-18.acacia",
     });
 
-    // Build success and cancel URLs
     const baseUrl = origin || "https://sportarenaxp.lovable.app";
     const successUrl = `${baseUrl}/payment-success?checkout_session_id={CHECKOUT_SESSION_ID}&session_id=${sessionId}`;
     const cancelUrl = returnUrl ? `${baseUrl}${returnUrl}` : `${baseUrl}/courts`;
 
-    // Build line items
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         price_data: {
@@ -185,13 +183,26 @@ serve(async (req) => {
             name: `Court Booking: ${court.name}`,
             description: `${venue.name} - ${session.session_date} at ${session.start_time}`,
           },
-          unit_amount: remainingAmountCents,
+          unit_amount: remainingAmountCents - (playerFeeCents > 0 ? playerFeeCents : 0),
         },
         quantity: 1,
       },
     ];
 
-    // Check if venue has Stripe Connect account
+    // Add platform service fee as separate line item for transparency
+    if (playerFeeCents > 0) {
+      lineItems.push({
+        price_data: {
+          currency: "nzd",
+          product_data: {
+            name: "Platform Service Fee",
+          },
+          unit_amount: playerFeeCents,
+        },
+        quantity: 1,
+      });
+    }
+
     const stripeAccountId = venue.stripe_account_id;
     let sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
@@ -203,28 +214,29 @@ serve(async (req) => {
         session_id: sessionId,
         user_id: user.id,
         credits_applied: creditsToApply.toString(),
+        platform_fee: (totalPlatformFeeCents / 100).toString(),
       },
     };
 
-    // If venue has Stripe Connect, set up destination charge
+    // If venue has Stripe Connect, set up destination charge with dynamic fee
     if (stripeAccountId) {
-      const applicationFee = Math.min(PLATFORM_FEE, remainingAmountCents);
+      // application_fee_amount = player fee + manager commission (capped to remaining)
+      const applicationFee = Math.min(totalPlatformFeeCents, remainingAmountCents);
       sessionParams.payment_intent_data = {
         application_fee_amount: applicationFee,
         transfer_data: {
           destination: stripeAccountId,
         },
       };
-      console.log(`Stripe Connect destination charge - Account: ${stripeAccountId}, Fee: $${applicationFee / 100}`);
+      console.log(`Stripe Connect - Account: ${stripeAccountId}, Application fee: $${applicationFee / 100} (player: $${playerFeeCents / 100}, manager commission: $${managerCommissionCents / 100})`);
     } else {
       console.log("No Stripe Connect account - platform receives full payment");
     }
 
     const checkoutSession = await stripe.checkout.sessions.create(sessionParams);
 
-    console.log(`Checkout session created: ${checkoutSession.id} Credits to apply: ${creditsToApply}`);
+    console.log(`Checkout session created: ${checkoutSession.id}, Total: $${remainingAmountCents / 100}, Platform fee: $${totalPlatformFeeCents / 100}`);
 
-    // Create pending payment record
     await supabaseAdmin
       .from("payments")
       .upsert({
@@ -234,10 +246,8 @@ serve(async (req) => {
         paid_with_credits: creditsToApply,
         status: "pending",
         stripe_payment_intent_id: checkoutSession.payment_intent as string,
-        platform_fee: PLATFORM_FEE / 100,
-      }, {
-        onConflict: "session_id,user_id",
-      });
+        platform_fee: totalPlatformFeeCents / 100,
+      }, { onConflict: "session_id,user_id" });
 
     return new Response(JSON.stringify({
       url: checkoutSession.url,

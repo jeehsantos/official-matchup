@@ -18,6 +18,7 @@ import { checkProfileComplete } from "@/lib/profile-utils";
 import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
 import { useUserCredits } from "@/hooks/useUserCredits";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { getSportCategory } from "@/lib/sport-category-utils";
 import {
   Dialog,
@@ -107,6 +108,7 @@ export default function GameDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  const { data: platformSettings } = usePlatformSettings();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -417,8 +419,12 @@ export default function GameDetail() {
     if (!gameData || !id || !user) return;
 
     // Check if user has enough credits to cover full amount
+    const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
     const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
-    if (credits >= pricePerPlayer && !loadingCredits) {
+    const totalDue = gameData.session.payment_type === "single"
+      ? gameData.session.court_price + serviceFee
+      : pricePerPlayer + serviceFee;
+    if (credits >= totalDue && !loadingCredits) {
       setShowCreditsModal(true);
       return;
     }
@@ -432,44 +438,12 @@ export default function GameDetail() {
     creditsToUse?: number
   ) => {
     if (!gameData || !id || !user) return;
-    
+
     setActionLoading(true);
     try {
-      const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
-      
       if (method === "credits") {
-        // If credits cover the full amount, process with credits only
-        if (credits >= pricePerPlayer) {
-          const { data, error } = await supabase.functions.invoke("create-payment", {
-            body: {
-              sessionId: id,
-              paymentType: "before_session",
-              returnUrl: `/games/${id}`,
-              origin: window.location.origin,
-              useCredits: true,
-              creditsAmount: creditsToUse,
-            },
-          });
-
-          if (error) throw error;
-
-          if (data?.success) {
-            // Payment completed with credits only
-            toast({
-              title: "Payment Complete",
-              description: data.message || "Payment completed using your credits.",
-            });
-            setShowCreditsModal(false);
-            refetchCredits();
-            fetchGameData();
-            return;
-          }
-        }
-
-        // Partial credits - proceed to Stripe with credits applied
         await processCardPayment(true, creditsToUse);
       } else {
-        // Pay with card only
         await processCardPayment(false);
       }
     } catch (error) {
@@ -647,7 +621,10 @@ const getGoogleMapsUrl = (address: string): string => {
   const sessionDateTime = new Date(`${session.session_date}T${session.start_time}`);
   const isGamePast = isPast(sessionDateTime);
   const paidCount = players.filter(p => p.isPaid).length;
+  const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
   const pricePerPlayer = session.court_price / session.min_players;
+  const splitTotalPerPlayer = pricePerPlayer + serviceFee;
+  const singleTotal = session.court_price + serviceFee;
   const isOrganizer = group.organizer_id === user.id;
   const isPlayerInGame = players.some(p => p.user_id === user.id);
   const isInWaitingList = waitingList.some(p => p.user_id === user.id);
@@ -951,18 +928,27 @@ const getGoogleMapsUrl = (address: string): string => {
                         currentPlayerPayment?.isPaid ? (
                           <>
                             <p className="font-semibold text-success">Paid & Confirmed</p>
-                            <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                            <p className="text-sm text-muted-foreground">Total: ${singleTotal.toFixed(2)}</p>
+                            {serviceFee > 0 && (
+                              <p className="text-xs text-muted-foreground">${session.court_price.toFixed(2)} game fee + ${serviceFee.toFixed(2)} platform fee</p>
+                            )}
+                            {serviceFee > 0 && (
+                              <p className="text-xs text-muted-foreground">${session.court_price.toFixed(2)} game fee + ${serviceFee.toFixed(2)} platform fee</p>
+                            )}
                           </>
                         ) : (
                           <>
                             <p className="font-semibold text-warning">Payment Pending</p>
-                            <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                            <p className="text-sm text-muted-foreground">Total: ${singleTotal.toFixed(2)}</p>
+                            {serviceFee > 0 && (
+                              <p className="text-xs text-muted-foreground">${session.court_price.toFixed(2)} game fee + ${serviceFee.toFixed(2)} platform fee</p>
+                            )}
                           </>
                         )
                       ) : (
                         <>
                           <p className="font-semibold text-success">Covered by Organizer</p>
-                          <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                          <p className="text-sm text-muted-foreground">Total: ${singleTotal.toFixed(2)}</p>
                         </>
                       )}
                     </div>
@@ -981,7 +967,7 @@ const getGoogleMapsUrl = (address: string): string => {
                           disabled={actionLoading}
                         >
                           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Pay Now - ${session.court_price.toFixed(2)}
+                          Pay Now - ${singleTotal.toFixed(2)}
                         </Button>
                       )
                     )}
@@ -1013,7 +999,12 @@ const getGoogleMapsUrl = (address: string): string => {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Price per player</p>
-                      <p className="text-2xl font-bold">${pricePerPlayer.toFixed(2)}</p>
+                      <p className="text-2xl font-bold">${splitTotalPerPlayer.toFixed(2)}</p>
+                      {serviceFee > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          ${pricePerPlayer.toFixed(2)} game fee + ${serviceFee.toFixed(2)} platform fee
+                        </p>
+                      )}
                     </div>
                   </div>
                   {!isGamePast && (
@@ -1031,7 +1022,7 @@ const getGoogleMapsUrl = (address: string): string => {
                             disabled={actionLoading}
                           >
                             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                            Make Payment - ${pricePerPlayer.toFixed(2)}
+                            Make Payment - ${splitTotalPerPlayer.toFixed(2)}
                           </Button>
                         )
                       )}
@@ -1340,7 +1331,7 @@ const getGoogleMapsUrl = (address: string): string => {
           open={showCreditsModal}
           onOpenChange={setShowCreditsModal}
           userCredits={credits}
-          sessionCost={pricePerPlayer}
+          sessionCost={session.payment_type === "single" ? singleTotal : splitTotalPerPlayer}
           onSelectPaymentMethod={handleSelectPaymentMethod}
           isLoading={actionLoading}
         />

@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Users, Building2 } from "lucide-react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
+import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email"),
@@ -52,6 +53,12 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
+  const getDefaultPathForRole = (role: string | null) => {
+    if (role === "admin") return "/admin";
+    if (role === "court_manager") return "/manager";
+    return "/games";
+  };
+
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     const { error } = await lovable.auth.signInWithOAuth("google", {
@@ -83,6 +90,7 @@ export default function Auth() {
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     const roleParam = searchParams.get("role");
+    const refParam = searchParams.get("ref");
 
     if (tabParam === "signup") {
       setActiveTab("signup");
@@ -92,6 +100,11 @@ export default function Auth() {
 
     if (roleParam === "player" || roleParam === "court_manager") {
       signUpForm.setValue("role", roleParam, { shouldValidate: true });
+    }
+
+    // Store referral code for use after signup
+    if (refParam) {
+      localStorage.setItem("referralCode", refParam);
     }
   }, [searchParams, signUpForm]);
 
@@ -104,10 +117,8 @@ export default function Auth() {
       if (redirectPath) {
         localStorage.removeItem('redirectAfterAuth');
         navigate(redirectPath, { replace: true });
-      } else if (userRole === "court_manager") {
-        navigate("/manager", { replace: true });
       } else {
-        navigate("/games", { replace: true });
+        navigate(getDefaultPathForRole(userRole), { replace: true });
       }
     }
   }, [user, userRole, isLoading, navigate]);
@@ -131,10 +142,8 @@ export default function Auth() {
       if (redirectPath) {
         localStorage.removeItem('redirectAfterAuth');
         navigate(redirectPath, { replace: true });
-      } else if (role === "court_manager") {
-        navigate("/manager", { replace: true });
       } else {
-        navigate("/games", { replace: true });
+        navigate(getDefaultPathForRole(role), { replace: true });
       }
     }
   };
@@ -156,6 +165,34 @@ export default function Auth() {
         description: friendlyMessage,
       });
     } else {
+      // Process referral code if present
+      const referralCode = localStorage.getItem("referralCode");
+      if (referralCode) {
+        localStorage.removeItem("referralCode");
+        try {
+          // Look up referrer by code
+          const { data: referrerProfile } = await supabase
+            .from("profiles")
+            .select("user_id")
+            .eq("referral_code", referralCode)
+            .maybeSingle();
+
+          if (referrerProfile) {
+            const { data: { user: currentUser } } = await supabase.auth.getUser();
+            if (currentUser && referrerProfile.user_id !== currentUser.id) {
+              await supabase.from("referrals").insert({
+                referrer_id: referrerProfile.user_id,
+                referred_user_id: currentUser.id,
+                referral_code: referralCode,
+                status: "pending",
+              });
+            }
+          }
+        } catch (refError) {
+          console.error("Error processing referral:", refError);
+        }
+      }
+
       toast({
         title: "Account created!",
         description: "Welcome to Sport Arena. Let's get you started.",
@@ -166,10 +203,8 @@ export default function Auth() {
       if (redirectPath) {
         localStorage.removeItem('redirectAfterAuth');
         navigate(redirectPath, { replace: true });
-      } else if (data.role === "court_manager") {
-        navigate("/manager", { replace: true });
       } else {
-        navigate("/games", { replace: true });
+        navigate(getDefaultPathForRole(data.role), { replace: true });
       }
     }
   };

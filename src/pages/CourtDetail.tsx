@@ -38,6 +38,7 @@ import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/
 import { checkProfileComplete } from "@/lib/profile-utils";
 import { useVenueEquipment } from "@/hooks/useVenueEquipment";
 import { useUserCredits } from "@/hooks/useUserCredits";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
 import { PaymentTimingChoice } from "@/components/booking/PaymentTimingChoice";
 import { HoldCountdown } from "@/components/booking/HoldCountdown";
@@ -165,6 +166,7 @@ export default function CourtDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  const { data: platformSettings } = usePlatformSettings();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
   
@@ -827,8 +829,10 @@ export default function CourtDetail() {
       const courtPriceCalc = courtRate * hours;
       const equipmentTotal = equipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0);
       const totalPrice = courtPriceCalc + equipmentTotal;
+      const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
+      const splitPricePerPlayer = Math.ceil((totalPrice / quickGameConfig.totalPlayers) * 100) / 100;
       const pricePerPlayer = paymentType === "split" 
-        ? Math.ceil((totalPrice / quickGameConfig.totalPlayers) * 100) / 100 
+        ? splitPricePerPlayer + serviceFee
         : 0;
 
       // Create quick_challenges record
@@ -1351,17 +1355,17 @@ export default function CourtDetail() {
             </div>
 
             {/* Venue Details: Allowed Sports + Amenities */}
-            {((court.venues?.amenities && court.venues.amenities.length > 0) || (court.venues?.allowed_sports && court.venues.allowed_sports.length > 0)) && (
+            {((court.venues?.amenities && court.venues.amenities.length > 0) || (court.allowed_sports && court.allowed_sports.length > 0)) && (
               <div className="px-4 lg:px-0 space-y-4">
                 {/* Allowed Sports */}
-                {court.venues?.allowed_sports && court.venues.allowed_sports.length > 0 && (
+                {court.allowed_sports && court.allowed_sports.length > 0 && (
                   <div>
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <span className="text-lg">🏅</span>
                       Sports Available
                     </h3>
                     <div className="flex flex-wrap gap-2">
-                      {court.venues.allowed_sports.map((sport, i) => (
+                      {court.allowed_sports.map((sport: string, i: number) => (
                         <Badge key={i} variant="secondary" className="gap-1.5 py-1 px-3">
                           <SportIcon sport={sport} size="sm" className="w-5 h-5 text-xs" />
                           <span className="capitalize">{sport.replace(/_/g, " ")}</span>

@@ -27,6 +27,7 @@ import {
   CheckCircle2
 } from "lucide-react";
 import type { Equipment } from "@/hooks/useVenueEquipment";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 
 type BookingPaymentType = "single" | "split";
 
@@ -142,8 +143,13 @@ export function QuickChallengeWizard({
     (sum, item) => sum + item.quantity * item.pricePerUnit, 
     0
   );
+  const { data: platformSettings } = usePlatformSettings();
+  const platformFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
+
   const totalPrice = courtPrice + equipmentTotal;
-  const pricePerPlayer = Math.ceil((totalPrice / totalPlayers) * 100) / 100;
+  const splitBasePerPlayer = Math.ceil((totalPrice / totalPlayers) * 100) / 100;
+  const splitTotalPerPlayer = splitBasePerPlayer + platformFee;
+  const fullAmountTotal = totalPrice + platformFee;
 
   const progress = (currentStep / STEPS.length) * 100;
 
@@ -313,7 +319,7 @@ export function QuickChallengeWizard({
                     <Label htmlFor="single" className="flex-1 cursor-pointer">
                       <span className="font-medium">Pay Full Amount</span>
                       <p className="text-sm text-muted-foreground mt-1">
-                        You pay the entire court fee (${totalPrice.toFixed(2)}) upfront. Other players join for free.
+                        You pay the full amount (${fullAmountTotal.toFixed(2)}) upfront, including a ${platformFee.toFixed(2)} platform fee. Other players join for free.
                       </p>
                     </Label>
                   </div>
@@ -327,7 +333,7 @@ export function QuickChallengeWizard({
                     <Label htmlFor="split" className="flex-1 cursor-pointer">
                       <span className="font-medium">Split Between Players</span>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Each player pays ${pricePerPlayer.toFixed(2)} when they join ({totalPlayers} players total).
+                        Each player pays ${splitTotalPerPlayer.toFixed(2)} (${splitBasePerPlayer.toFixed(2)} game fee + ${platformFee.toFixed(2)} platform fee) when they join ({totalPlayers} players total).
                       </p>
                     </Label>
                   </div>
@@ -346,14 +352,18 @@ export function QuickChallengeWizard({
                     <span>${equipmentTotal.toFixed(2)}</span>
                   </div>
                 )}
+                <div className="flex justify-between text-sm">
+                  <span>Platform Fee</span>
+                  <span>${platformFee.toFixed(2)}</span>
+                </div>
                 <div className="flex justify-between font-semibold pt-2 border-t border-border">
                   <span>Total</span>
-                  <span className="text-primary">${totalPrice.toFixed(2)}</span>
+                  <span className="text-primary">${(totalPrice + platformFee).toFixed(2)}</span>
                 </div>
                 {paymentType === "split" && (
                   <div className="flex justify-between text-sm text-muted-foreground pt-1">
                     <span>Per Player</span>
-                    <span>${pricePerPlayer.toFixed(2)}</span>
+                    <span>${splitTotalPerPlayer.toFixed(2)}</span>
                   </div>
                 )}
               </div>

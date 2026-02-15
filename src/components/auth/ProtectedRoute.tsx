@@ -31,7 +31,7 @@ export function ProtectedRoute({
     }
 
     if (requiredRole && !hasRole(requiredRole)) {
-      navigate("/games");
+      navigate("/", { replace: true });
     }
   }, [user, authLoading, roleLoading, requiredRole, hasRole, navigate, redirectTo]);
 

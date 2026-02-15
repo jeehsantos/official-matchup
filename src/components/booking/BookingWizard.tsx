@@ -21,6 +21,7 @@ import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
 import { PaymentTypeSelector } from "@/components/booking/PaymentTypeSelector";
 import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/EquipmentSelector";
 import { useSportCategories } from "@/hooks/useSportCategories";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
@@ -117,6 +118,7 @@ export function BookingWizard({
   
   // Fetch sport categories from database
   const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
+  const { data: platformSettings } = usePlatformSettings();
 
   const isNewGroup = selectedGroupId === "new";
 
@@ -273,7 +275,9 @@ export function BookingWizard({
     (sum, item) => sum + item.quantity * item.pricePerUnit, 
     0
   );
-  const totalPrice = courtPrice + equipmentTotal;
+  const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
+  const subtotal = courtPrice + equipmentTotal;
+  const totalPrice = subtotal + serviceFee;
 
   const progress = (currentStep / STEPS.length) * 100;
 
@@ -551,6 +555,12 @@ export function BookingWizard({
                       <span>${(item.quantity * item.pricePerUnit).toFixed(2)}</span>
                     </div>
                   ))}
+                  {serviceFee > 0 && (
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Platform service fee</span>
+                      <span>${serviceFee.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="border-t border-border pt-2 mt-2">
                     <div className="flex justify-between font-semibold text-lg">
                       <span>Total</span>
