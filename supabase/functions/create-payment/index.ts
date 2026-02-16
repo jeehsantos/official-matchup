@@ -191,8 +191,7 @@ serve(async (req) => {
       },
     ];
 
-    // Check if venue has Stripe Connect account
-    const stripeAccountId = venue.stripe_account_id;
+    // Platform receives all funds; transfers happen after session confirmation
     let sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       line_items: lineItems,
@@ -203,22 +202,12 @@ serve(async (req) => {
         session_id: sessionId,
         user_id: user.id,
         credits_applied: creditsToApply.toString(),
+        platform_fee: playerFeeCents.toString(),
+        venue_stripe_account_id: venue.stripe_account_id || "",
       },
     };
 
-    // If venue has Stripe Connect, set up destination charge
-    if (stripeAccountId) {
-      const applicationFee = Math.min(PLATFORM_FEE, remainingAmountCents);
-      sessionParams.payment_intent_data = {
-        application_fee_amount: applicationFee,
-        transfer_data: {
-          destination: stripeAccountId,
-        },
-      };
-      console.log(`Stripe Connect destination charge - Account: ${stripeAccountId}, Fee: $${applicationFee / 100}`);
-    } else {
-      console.log("No Stripe Connect account - platform receives full payment");
-    }
+    console.log("Platform holds all funds — deferred payout model");
 
     const checkoutSession = await stripe.checkout.sessions.create(sessionParams);
 
