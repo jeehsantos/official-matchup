@@ -60,7 +60,6 @@ Deno.serve(async (req) => {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`Error processing ${event.type}:`, msg);
     // Return 200 to acknowledge receipt even on processing errors
-    // Stripe will retry on 5xx but we don't want retries for logic errors
     return new Response(JSON.stringify({ received: true, error: msg }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -80,7 +79,6 @@ async function handleCheckoutCompleted(
   const session = event.data.object as Stripe.Checkout.Session;
   const metadata = session.metadata || {};
 
-  // Determine if this is a regular session or quick challenge
   const isQuickChallenge = metadata.type === "quick_challenge";
 
   if (isQuickChallenge) {
@@ -98,7 +96,8 @@ async function handleSessionPayment(
   const sessionId = metadata.session_id;
   const userId = metadata.user_id;
   const creditsApplied = parseFloat(metadata.credits_applied || "0");
-  const platformFee = parseFloat(metadata.platform_fee || "0");
+  const platformFeeCents = parseFloat(metadata.platform_fee || "0");
+  const platformFeeDollars = platformFeeCents / 100;
   const paymentIntentId = session.payment_intent as string;
 
   if (!sessionId || !userId) {
@@ -118,18 +117,21 @@ async function handleSessionPayment(
     return;
   }
 
-  const amountPaid = (session.amount_total || 0) / 100;
+  // amount_total includes court share + platform fee
+  const totalChargeDollars = (session.amount_total || 0) / 100;
 
   // Upsert payment record
+  // amount = total charge (including platform fee) for correct payout math:
+  // payout courtShare = amount - platform_fee
   await supabaseAdmin
     .from("payments")
     .upsert(
       {
         session_id: sessionId,
         user_id: userId,
-        amount: amountPaid,
+        amount: totalChargeDollars,
         paid_with_credits: creditsApplied,
-        platform_fee: platformFee / 100, // stored in dollars
+        platform_fee: platformFeeDollars,
         status: "completed",
         paid_at: new Date().toISOString(),
         stripe_payment_intent_id: paymentIntentId,
@@ -202,7 +204,8 @@ async function handleSessionPayment(
   console.log("Session payment processed:", {
     sessionId,
     userId,
-    amount: amountPaid,
+    totalCharge: totalChargeDollars,
+    platformFee: platformFeeDollars,
     paymentIntentId,
   });
 }
@@ -282,5 +285,7 @@ async function handleQuickChallengePayment(
     challengeId,
     playerRecordId,
     userId,
+    totalCharged: (session.amount_total || 0) / 100,
+    platformFee: parseFloat(metadata.platform_fee || "0") / 100,
   });
 }

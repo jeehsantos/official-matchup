@@ -57,7 +57,7 @@ serve(async (req) => {
       throw new Error("Court or venue not found");
     }
 
-    // Fetch platform settings for dynamic fees
+    // Fetch platform settings for dynamic fees — NEVER hardcode
     const { data: platformSettings } = await supabaseAdmin
       .from("platform_settings")
       .select("player_fee, manager_fee_percentage")
@@ -65,11 +65,11 @@ serve(async (req) => {
       .limit(1)
       .single();
 
-    const playerFeeDollars = Number(platformSettings?.player_fee ?? 1.50);
+    const playerFeeDollars = Number(platformSettings?.player_fee ?? 0);
     const playerFeeCents = Math.round(playerFeeDollars * 100);
 
-    // Calculate total amount (court price + equipment if any)
-    let totalAmountCents = Math.round(session.court_price * 100);
+    // Calculate court share (court price + equipment if any)
+    let courtShareCents = Math.round(session.court_price * 100);
 
     // Fetch booking equipment if any
     const { data: bookingEquipment } = await supabaseAdmin
@@ -82,13 +82,13 @@ serve(async (req) => {
         (sum, item) => sum + item.quantity * item.price_at_booking * 100,
         0
       );
-      totalAmountCents += Math.round(equipmentTotal);
+      courtShareCents += Math.round(equipmentTotal);
     }
 
     // Handle credits if provided
     let creditsToApply = 0;
     if (useCredits && creditsAmount && creditsAmount > 0) {
-      creditsToApply = Math.min(creditsAmount, totalAmountCents / 100);
+      creditsToApply = Math.min(creditsAmount, courtShareCents / 100);
       
       const { data: creditResult, error: creditError } = await supabaseAdmin.rpc(
         "use_user_credits",
@@ -110,13 +110,13 @@ serve(async (req) => {
       }
     }
 
-    // Calculate remaining amount after credits
+    // Calculate remaining court share after credits
     const creditsInCents = Math.round(creditsToApply * 100);
-    const remainingAmountCents = totalAmountCents - creditsInCents;
+    const remainingCourtShareCents = courtShareCents - creditsInCents;
 
-    // If credits cover the full amount, complete payment without Stripe
-    if (remainingAmountCents <= 0) {
-      // NO platform_fee for credits-only payments (fees already paid at original card payment)
+    // If credits cover the full court share, complete payment without Stripe
+    // NO platform fee for credits-only payments (fees already paid at original card payment)
+    if (remainingCourtShareCents <= 0) {
       await supabaseAdmin
         .from("payments")
         .upsert({
@@ -148,7 +148,7 @@ serve(async (req) => {
         .eq("booked_by_session_id", sessionId);
 
       // Apply held credit liabilities for this user
-      await applyHeldLiabilities(supabaseAdmin, user.id, sessionId, totalAmountCents, playerFeeCents);
+      await applyHeldLiabilities(supabaseAdmin, user.id, sessionId, courtShareCents, playerFeeCents);
 
       // Recalculate session confirmation
       try {
@@ -169,13 +169,19 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         success: true,
         message: `Payment completed using $${creditsToApply.toFixed(2)} in credits`,
+        platformFee: 0,
+        courtShare: 0,
+        total: 0,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
     }
 
-    // Create Stripe checkout session for remaining amount
+    // --- STRIPE CARD PAYMENT ---
+    // Total charge = remaining court share + platform fee
+    const totalChargeCents = remainingCourtShareCents + playerFeeCents;
+
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2024-12-18.acacia",
     });
@@ -184,6 +190,7 @@ serve(async (req) => {
     const successUrl = `${baseUrl}/payment-success?checkout_session_id={CHECKOUT_SESSION_ID}&session_id=${sessionId}`;
     const cancelUrl = returnUrl ? `${baseUrl}${returnUrl}` : `${baseUrl}/courts`;
 
+    // Separate line items for transparency
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         price_data: {
@@ -192,13 +199,29 @@ serve(async (req) => {
             name: `Court Booking: ${court.name}`,
             description: `${venue.name} - ${session.session_date} at ${session.start_time}`,
           },
-          unit_amount: remainingAmountCents,
+          unit_amount: remainingCourtShareCents,
         },
         quantity: 1,
       },
     ];
 
+    // Add platform fee as separate line item (only if > 0)
+    if (playerFeeCents > 0) {
+      lineItems.push({
+        price_data: {
+          currency: "nzd",
+          product_data: {
+            name: "Platform Fee",
+            description: "Service fee",
+          },
+          unit_amount: playerFeeCents,
+        },
+        quantity: 1,
+      });
+    }
+
     // Platform holds all funds — deferred payout model
+    // DO NOT set transfer_data.destination here
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       line_items: lineItems,
@@ -210,6 +233,8 @@ serve(async (req) => {
         user_id: user.id,
         credits_applied: creditsToApply.toString(),
         platform_fee: playerFeeCents.toString(),
+        court_share: remainingCourtShareCents.toString(),
+        total_charge: totalChargeCents.toString(),
         venue_stripe_account_id: venue.stripe_account_id || "",
       },
     };
@@ -218,15 +243,16 @@ serve(async (req) => {
 
     const checkoutSession = await stripe.checkout.sessions.create(sessionParams);
 
-    console.log(`Checkout session created: ${checkoutSession.id} Credits to apply: ${creditsToApply}`);
+    console.log(`Checkout session created: ${checkoutSession.id} | Court share: ${remainingCourtShareCents}c, Fee: ${playerFeeCents}c, Total: ${totalChargeCents}c, Credits: ${creditsToApply}`);
 
     // Create pending payment record
+    // amount = total charge (court share + fee) for correct payout math
     await supabaseAdmin
       .from("payments")
       .upsert({
         session_id: sessionId,
         user_id: user.id,
-        amount: remainingAmountCents / 100,
+        amount: totalChargeCents / 100,
         paid_with_credits: creditsToApply,
         status: "pending",
         stripe_payment_intent_id: checkoutSession.payment_intent as string,
@@ -235,9 +261,13 @@ serve(async (req) => {
         onConflict: "session_id,user_id",
       });
 
+    // Return checkout URL with fee breakdown
     return new Response(JSON.stringify({
       url: checkoutSession.url,
       checkoutSessionId: checkoutSession.id,
+      platformFee: playerFeeDollars,
+      courtShare: remainingCourtShareCents / 100,
+      total: totalChargeCents / 100,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
@@ -301,11 +331,9 @@ async function applyHeldLiabilities(
       console.log(`Applied full liability ${liability.id}: ${liability.amount_cents} cents`);
     } else {
       // Partial: apply what we need, leave the rest as HELD
-      // Split: update current to APPLIED with reduced amount, create new HELD for remainder
       const appliedAmount = remainingToApply;
       const remainderAmount = liability.amount_cents - appliedAmount;
 
-      // Mark current as APPLIED with the applied portion
       await supabaseAdmin
         .from("held_credit_liabilities")
         .update({
@@ -316,7 +344,6 @@ async function applyHeldLiabilities(
         })
         .eq("id", liability.id);
 
-      // Create new HELD row for the remainder
       await supabaseAdmin
         .from("held_credit_liabilities")
         .insert({

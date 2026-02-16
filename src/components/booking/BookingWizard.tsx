@@ -21,6 +21,7 @@ import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
 import { PaymentTypeSelector } from "@/components/booking/PaymentTypeSelector";
 import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/EquipmentSelector";
 import { useSportCategories } from "@/hooks/useSportCategories";
+import { usePlatformFee } from "@/hooks/usePlatformFee";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
@@ -117,6 +118,9 @@ export function BookingWizard({
   
   // Fetch sport categories from database
   const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
+  
+  // Fetch admin-configured platform fee (read-only display)
+  const { playerFee: platformFee } = usePlatformFee();
 
   const isNewGroup = selectedGroupId === "new";
 
@@ -273,7 +277,8 @@ export function BookingWizard({
     (sum, item) => sum + item.quantity * item.pricePerUnit, 
     0
   );
-  const totalPrice = courtPrice + equipmentTotal;
+  const courtTotal = courtPrice + equipmentTotal;
+  const totalPrice = courtTotal + platformFee;
 
   const progress = (currentStep / STEPS.length) * 100;
 
@@ -540,7 +545,7 @@ export function BookingWizard({
               {/* Price Summary */}
               <div className="space-y-3">
                 <h4 className="font-semibold">Booking Summary</h4>
-                <div className="bg-muted/50 rounded-xl p-4 border border-border space-y-2">
+              <div className="bg-muted/50 rounded-xl p-4 border border-border space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>Court rental</span>
                     <span>${courtPrice.toFixed(2)}</span>
@@ -551,6 +556,12 @@ export function BookingWizard({
                       <span>${(item.quantity * item.pricePerUnit).toFixed(2)}</span>
                     </div>
                   ))}
+                  {platformFee > 0 && (
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Platform fee</span>
+                      <span>${platformFee.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="border-t border-border pt-2 mt-2">
                     <div className="flex justify-between font-semibold text-lg">
                       <span>Total</span>

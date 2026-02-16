@@ -7,9 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Platform fee: $1.50 fixed
-const PLATFORM_FEE = 150; // in cents
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -27,27 +24,32 @@ serve(async (req) => {
       throw new Error("Challenge ID is required");
     }
 
-    // Get authorization header for user context
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       throw new Error("Authorization required");
     }
 
-    // Get user from auth header
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
+      { global: { headers: { Authorization: authHeader } } }
     );
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       throw new Error("User not authenticated");
     }
+
+    // Fetch admin-configured platform fee — NEVER hardcode
+    const { data: platformSettings } = await supabaseAdmin
+      .from("platform_settings")
+      .select("player_fee, manager_fee_percentage")
+      .eq("is_active", true)
+      .limit(1)
+      .single();
+
+    const playerFeeDollars = Number(platformSettings?.player_fee ?? 0);
+    const playerFeeCents = Math.round(playerFeeDollars * 100);
 
     // Fetch challenge with venue info
     const { data: challenge, error: challengeError } = await supabaseAdmin
@@ -94,10 +96,10 @@ serve(async (req) => {
 
     const venue = challenge.venues;
     const pricePerPlayer = challenge.price_per_player || 0;
-    const amountCents = Math.round(pricePerPlayer * 100);
+    const courtShareCents = Math.round(pricePerPlayer * 100);
 
-    if (amountCents <= 0) {
-      // Free challenge - mark as paid immediately
+    if (courtShareCents <= 0) {
+      // Free challenge - mark as paid immediately (no platform fee)
       await supabaseAdmin
         .from("quick_challenge_players")
         .update({
@@ -111,6 +113,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         success: true,
         message: "Free challenge - confirmed!",
+        platformFee: 0,
+        courtShare: 0,
+        total: 0,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -119,7 +124,6 @@ serve(async (req) => {
 
     // --- CREDITS PAYMENT FLOW ---
     if (useCredits) {
-      // Check user's credit balance
       const { data: creditBalance, error: creditError } = await supabaseAdmin
         .rpc("get_user_credits", { p_user_id: user.id });
 
@@ -134,7 +138,7 @@ serve(async (req) => {
         throw new Error("Insufficient credits");
       }
 
-      // Deduct credits
+      // Deduct credits (no platform fee for credits-only)
       const { data: useResult, error: useError } = await supabaseAdmin
         .rpc("use_user_credits", {
           p_user_id: user.id,
@@ -148,7 +152,6 @@ serve(async (req) => {
         throw new Error("Failed to deduct credits");
       }
 
-      // Mark player as paid
       await supabaseAdmin
         .from("quick_challenge_players")
         .update({
@@ -164,6 +167,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         success: true,
         message: `Payment of $${pricePerPlayer.toFixed(2)} completed using your credits.`,
+        platformFee: 0,
+        courtShare: pricePerPlayer,
+        total: pricePerPlayer,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -171,6 +177,9 @@ serve(async (req) => {
     }
 
     // --- STRIPE PAYMENT FLOW ---
+    // Total charge = court share + platform fee
+    const totalChargeCents = courtShareCents + playerFeeCents;
+
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2024-12-18.acacia",
     });
@@ -189,6 +198,7 @@ serve(async (req) => {
       challenge.scheduled_date ? `on ${challenge.scheduled_date}` : "",
     ].filter(Boolean).join(" - ");
 
+    // Separate line items for transparency
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         price_data: {
@@ -197,13 +207,29 @@ serve(async (req) => {
             name: `Quick Match: ${challenge.game_mode}`,
             description,
           },
-          unit_amount: amountCents,
+          unit_amount: courtShareCents,
         },
         quantity: 1,
       },
     ];
 
+    // Add platform fee as separate line item (only if > 0)
+    if (playerFeeCents > 0) {
+      lineItems.push({
+        price_data: {
+          currency: "nzd",
+          product_data: {
+            name: "Platform Fee",
+            description: "Service fee",
+          },
+          unit_amount: playerFeeCents,
+        },
+        quantity: 1,
+      });
+    }
+
     // Platform receives all funds; transfers happen after session confirmation
+    // DO NOT set transfer_data.destination here
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       line_items: lineItems,
@@ -215,11 +241,14 @@ serve(async (req) => {
         player_record_id: playerRecord.id,
         user_id: user.id,
         type: "quick_challenge",
+        platform_fee: playerFeeCents.toString(),
+        court_share: courtShareCents.toString(),
+        total_charge: totalChargeCents.toString(),
         venue_stripe_account_id: venue?.stripe_account_id || "",
       },
     };
 
-    console.log("Platform holds all funds — deferred payout model");
+    console.log(`Quick challenge checkout: court=${courtShareCents}c, fee=${playerFeeCents}c, total=${totalChargeCents}c`);
 
     const checkoutSession = await stripe.checkout.sessions.create(sessionParams);
 
@@ -235,6 +264,9 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       url: checkoutSession.url,
       checkoutSessionId: checkoutSession.id,
+      platformFee: playerFeeDollars,
+      courtShare: pricePerPlayer,
+      total: totalChargeCents / 100,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
