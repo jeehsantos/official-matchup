@@ -1,19 +1,17 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, Gift, Loader2, Save } from "lucide-react";
+import { Gift, Loader2, Save } from "lucide-react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { MobileLayout } from "@/components/layout/MobileLayout";
+import { AdminLayout } from "@/components/layout/AdminLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 function AdminReferralSettingsContent() {
-  const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
@@ -84,30 +82,17 @@ function AdminReferralSettingsContent() {
 
   if (isLoading) {
     return (
-      <MobileLayout showHeader={false} showBottomNav={false}>
+      <AdminLayout title="Referral Settings">
         <div className="min-h-screen flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      </MobileLayout>
+      </AdminLayout>
     );
   }
 
   return (
-    <MobileLayout showHeader={false} showBottomNav={false}>
-      <div className="min-h-screen bg-background">
-        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-          <div className="flex items-center gap-4 p-4 max-w-4xl mx-auto">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/admin")}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div className="flex items-center gap-2">
-              <Gift className="h-5 w-5 text-primary" />
-              <h1 className="font-display font-semibold text-xl">Referral Settings</h1>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 space-y-6 max-w-4xl mx-auto">
+    <AdminLayout title="Referral Settings">
+      <div className="space-y-6">
           {/* Stats */}
           {referralStats && (
             <div className="grid grid-cols-3 gap-4">
@@ -173,8 +158,7 @@ function AdminReferralSettingsContent() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </MobileLayout>
+    </AdminLayout>
   );
 }
 
