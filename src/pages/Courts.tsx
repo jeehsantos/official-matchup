@@ -79,6 +79,25 @@ export default function Courts() {
   const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
 
   // Build ground type data from database
+  const normalizedPreferredSports = useMemo(() => {
+    if (preferredSports.length === 0) return [];
+
+    const normalizedCategoryLookup = new Map<string, string>();
+    sportCategories.forEach((category) => {
+      normalizedCategoryLookup.set(category.name.toLowerCase(), category.name);
+      normalizedCategoryLookup.set(category.display_name.toLowerCase(), category.name);
+    });
+
+    return Array.from(
+      new Set(
+        preferredSports.map((sport) => {
+          const normalized = sport.trim().toLowerCase();
+          return normalizedCategoryLookup.get(normalized) || normalized;
+        })
+      )
+    );
+  }, [preferredSports, sportCategories]);
+
   const groundTypeData = useMemo(() => {
     const data: Record<string, { emoji: string; label: string }> = {
       all: { emoji: "🎯", label: "All Surfaces" },
@@ -105,16 +124,16 @@ export default function Courts() {
     if (
       !hasAppliedPreferredSportDefault &&
       user &&
-      preferredSports.length > 0 &&
+      normalizedPreferredSports.length > 0 &&
       selectedSport === "all"
     ) {
       setSelectedSport("preferred");
       setHasAppliedPreferredSportDefault(true);
     }
-  }, [user, preferredSports, selectedSport, hasAppliedPreferredSportDefault]);
+  }, [user, normalizedPreferredSports, selectedSport, hasAppliedPreferredSportDefault]);
 
   const sportFilterOptions = useMemo(() => {
-    const preferredSportSet = new Set(preferredSports);
+    const preferredSportSet = new Set(normalizedPreferredSports);
     const preferredOptions = sportCategories
       .filter((cat) => preferredSportSet.has(cat.name))
       .map((cat) => ({
@@ -123,19 +142,19 @@ export default function Courts() {
         emoji: cat.icon || "🎯",
       }));
 
-    const missingPreferredOptions = preferredSports
+    const missingPreferredOptions = normalizedPreferredSports
       .filter((sportName) => !preferredOptions.some((option) => option.value === sportName))
       .map((sportName) => ({ value: sportName, label: sportName, emoji: "🎯" }));
 
     return [
       { value: "all", label: "All Sports", emoji: "🎯" },
-      ...(user && preferredSports.length > 0
+      ...(user && normalizedPreferredSports.length > 0
         ? [{ value: "preferred", label: "My Preferred Sports", emoji: "⭐" }]
         : []),
       ...preferredOptions,
       ...missingPreferredOptions,
     ];
-  }, [sportCategories, preferredSports, user]);
+  }, [sportCategories, normalizedPreferredSports, user]);
 
   useEffect(() => {
     fetchCourts();
@@ -196,8 +215,12 @@ export default function Courts() {
     
     const matchesCity = selectedCity === "all" || court.venues?.city === selectedCity;
 
+    const sportRelatedCourts = allVenueCourts.filter(
+      (c) => c.id === court.id || c.parent_court_id === court.id
+    );
+
     const sportMatchesForCourt = (sportName: string) =>
-      venueCourts.some(c =>
+      sportRelatedCourts.some((c) =>
         c.sport_type === sportName ||
         (c.allowed_sports && c.allowed_sports.includes(sportName))
       );
@@ -206,7 +229,7 @@ export default function Courts() {
       selectedSport === "all"
         ? true
         : selectedSport === "preferred"
-          ? (!user || preferredSports.length === 0 || preferredSports.some((sport) => sportMatchesForCourt(sport)))
+          ? (!user || normalizedPreferredSports.length === 0 || normalizedPreferredSports.some((sport) => sportMatchesForCourt(sport)))
           : sportMatchesForCourt(selectedSport);
 
     return matchesSearch && matchesGroundType && matchesVenueType && matchesCity && matchesSport;
