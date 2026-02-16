@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +13,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { 
-  ArrowLeft,
   Plus,
   Pencil,
   Trash2,
@@ -23,7 +21,7 @@ import {
   GripVertical
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { MobileLayout } from "@/components/layout/MobileLayout";
+import { AdminLayout } from "@/components/layout/AdminLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -37,7 +35,6 @@ interface SportCategory {
 }
 
 function AdminSportCategoriesContent() {
-  const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<SportCategory[]>([]);
@@ -198,37 +195,25 @@ function AdminSportCategoriesContent() {
 
   if (loading) {
     return (
-      <MobileLayout showHeader={false} showBottomNav={false}>
+      <AdminLayout title="Sport Categories">
         <div className="flex items-center justify-center min-h-screen">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      </MobileLayout>
+      </AdminLayout>
     );
   }
 
   return (
-    <MobileLayout showHeader={false} showBottomNav={false}>
-      <div className="min-h-screen bg-background">
-        {/* Header */}
-        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-          <div className="flex items-center justify-between p-4 max-w-4xl mx-auto">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={() => navigate("/admin")}>
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <div className="flex items-center gap-2">
-                <Activity className="h-5 w-5 text-primary" />
-                <h1 className="font-display font-semibold text-xl">Sport Categories</h1>
-              </div>
-            </div>
-            <Button onClick={openCreateDialog}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add
-            </Button>
-          </div>
+    <AdminLayout title="Sport Categories">
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <Button onClick={openCreateDialog}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add
+          </Button>
         </div>
 
-        <div className="p-4 space-y-4 max-w-4xl mx-auto">
+        <div className="space-y-4">
           {categories.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
@@ -357,7 +342,7 @@ function AdminSportCategoriesContent() {
           </DialogContent>
         </Dialog>
       </div>
-    </MobileLayout>
+    </AdminLayout>
   );
 }
 
