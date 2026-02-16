@@ -708,6 +708,9 @@ export type Database = {
           session_id: string
           status: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id: string | null
+          stripe_transfer_id: string | null
+          transfer_amount: number | null
+          transferred_at: string | null
           updated_at: string
           user_id: string
         }
@@ -721,6 +724,9 @@ export type Database = {
           session_id: string
           status?: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
+          transfer_amount?: number | null
+          transferred_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -734,6 +740,9 @@ export type Database = {
           session_id?: string
           status?: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
+          transfer_amount?: number | null
+          transferred_at?: string | null
           updated_at?: string
           user_id?: string
         }
