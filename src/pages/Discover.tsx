@@ -75,12 +75,31 @@ export default function Discover() {
   const { data: sportCategories = [] } = useSportCategories();
   const { data: surfaceTypes = [] } = useSurfaceTypes();
 
+  const normalizedPreferredSports = useMemo(() => {
+    if (preferredSports.length === 0) return [];
+
+    const normalizedCategoryLookup = new Map<string, string>();
+    sportCategories.forEach((category) => {
+      normalizedCategoryLookup.set(category.name.toLowerCase(), category.name);
+      normalizedCategoryLookup.set(category.display_name.toLowerCase(), category.name);
+    });
+
+    return Array.from(
+      new Set(
+        preferredSports.map((sport) => {
+          const normalized = sport.trim().toLowerCase();
+          return normalizedCategoryLookup.get(normalized) || normalized;
+        })
+      )
+    );
+  }, [preferredSports, sportCategories]);
+
   useEffect(() => {
-    if (!hasAppliedPreferredSportDefault && preferredSports.length > 0 && selectedSport === "all") {
+    if (!hasAppliedPreferredSportDefault && normalizedPreferredSports.length > 0 && selectedSport === "all") {
       setSelectedSport("preferred");
       setHasAppliedPreferredSportDefault(true);
     }
-  }, [preferredSports, selectedSport, hasAppliedPreferredSportDefault]);
+  }, [normalizedPreferredSports, selectedSport, hasAppliedPreferredSportDefault]);
 
   const selectedSportCategoryId = useMemo(() => {
     if (selectedSport === "all" || selectedSport === "preferred") return undefined;
@@ -95,7 +114,7 @@ export default function Discover() {
   
   // Build sports dropdown from database ONLY
   const sports = useMemo(() => {
-    const preferredSportSet = new Set(preferredSports);
+    const preferredSportSet = new Set(normalizedPreferredSports);
     const preferredOptions = sportCategories
       .filter((cat) => preferredSportSet.has(cat.name))
       .map((cat) => ({
@@ -104,7 +123,7 @@ export default function Discover() {
         emoji: cat.icon || "🎯",
       }));
 
-    const missingPreferredOptions = preferredSports
+    const missingPreferredOptions = normalizedPreferredSports
       .filter((sportName) => !preferredOptions.some((option) => option.value === sportName))
       .map((sportName) => ({
         value: sportName,
@@ -114,13 +133,13 @@ export default function Discover() {
 
     return [
       { value: "all", label: "All Sports", emoji: "🎯" },
-      ...(preferredSports.length > 0
+      ...(normalizedPreferredSports.length > 0
         ? [{ value: "preferred", label: "My Preferred Sports", emoji: "⭐" }]
         : []),
       ...preferredOptions,
       ...missingPreferredOptions,
     ];
-  }, [sportCategories, preferredSports]);
+  }, [sportCategories, normalizedPreferredSports]);
   
   // Build court types dropdown from database ONLY
   const courtTypes = useMemo(() => {
@@ -392,7 +411,7 @@ export default function Discover() {
         selectedSport === "all"
           ? true
           : selectedSport === "preferred"
-            ? (preferredSports.length === 0 || preferredSports.includes(game.sport))
+            ? (normalizedPreferredSports.length === 0 || normalizedPreferredSports.includes(game.sport))
             : game.sport === selectedSport;
       const matchesCourtType = selectedCourtType === "all" || game.groundType === selectedCourtType;
       const matchesCity = selectedCity === "all" || game.city === selectedCity;
@@ -403,17 +422,17 @@ export default function Discover() {
         game.sport.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesSport && matchesCourtType && matchesCity && matchesSearch;
     });
-  }, [rescueGames, selectedSport, selectedCourtType, selectedCity, searchQuery, preferredSports]);
+  }, [rescueGames, selectedSport, selectedCourtType, selectedCity, searchQuery, normalizedPreferredSports]);
 
   // Filter quick challenges based on search and preferred sports
   const filteredChallenges = useMemo(() => {
     let filtered = quickChallenges;
     
     // Auto-filter by preferred sports when preferred filter is selected
-    if (selectedSport === "preferred" && preferredSports.length > 0) {
+    if (selectedSport === "preferred" && normalizedPreferredSports.length > 0) {
       filtered = filtered.filter((challenge) => {
         const sportName = challenge.sport_categories?.name || "";
-        return preferredSports.includes(sportName);
+        return normalizedPreferredSports.includes(sportName);
       });
     }
     
@@ -434,7 +453,7 @@ export default function Discover() {
              venueName.includes(searchQuery.toLowerCase()) ||
              city.includes(searchQuery.toLowerCase());
     });
-  }, [quickChallenges, searchQuery, selectedSport, selectedCourtType, selectedCity, preferredSports]);
+  }, [quickChallenges, searchQuery, selectedSport, selectedCourtType, selectedCity, normalizedPreferredSports]);
 
   if (isLoading) {
     return (
