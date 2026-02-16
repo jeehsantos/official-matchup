@@ -606,6 +606,64 @@ export type Database = {
           },
         ]
       }
+      held_credit_liabilities: {
+        Row: {
+          amount_cents: number
+          applied_at: string | null
+          applied_session_id: string | null
+          created_at: string
+          id: string
+          source_payment_id: string
+          source_session_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          amount_cents: number
+          applied_at?: string | null
+          applied_session_id?: string | null
+          created_at?: string
+          id?: string
+          source_payment_id: string
+          source_session_id: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          applied_at?: string | null
+          applied_session_id?: string | null
+          created_at?: string
+          id?: string
+          source_payment_id?: string
+          source_session_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "held_credit_liabilities_applied_session_id_fkey"
+            columns: ["applied_session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "held_credit_liabilities_source_payment_id_fkey"
+            columns: ["source_payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "held_credit_liabilities_source_session_id_fkey"
+            columns: ["source_session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string

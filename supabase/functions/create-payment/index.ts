@@ -4,11 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-// Platform fee: $1.50 fixed
-const PLATFORM_FEE = 150; // in cents
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -27,21 +24,15 @@ serve(async (req) => {
       throw new Error("Session ID is required");
     }
 
-    // Get authorization header for user context
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       throw new Error("Authorization required");
     }
 
-    // Get user from auth header
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
+      { global: { headers: { Authorization: authHeader } } }
     );
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
@@ -49,31 +40,33 @@ serve(async (req) => {
       throw new Error("User not authenticated");
     }
 
-    // Fetch session with group and court using admin client (bypasses RLS)
+    // Fetch session with group and court
     const { data: session, error: sessionError } = await supabaseAdmin
       .from("sessions")
-      .select(`
-        *,
-        groups (*),
-        courts (
-          *,
-          venues (*)
-        )
-      `)
+      .select(`*, groups (*), courts (*, venues (*))`)
       .eq("id", sessionId)
       .single();
 
     if (sessionError || !session) {
-      console.error("Session fetch error:", sessionError);
       throw new Error("Session not found");
     }
 
     const court = session.courts;
     const venue = court?.venues;
-
     if (!court || !venue) {
       throw new Error("Court or venue not found");
     }
+
+    // Fetch platform settings for dynamic fees
+    const { data: platformSettings } = await supabaseAdmin
+      .from("platform_settings")
+      .select("player_fee, manager_fee_percentage")
+      .eq("is_active", true)
+      .limit(1)
+      .single();
+
+    const playerFeeDollars = Number(platformSettings?.player_fee ?? 1.50);
+    const playerFeeCents = Math.round(playerFeeDollars * 100);
 
     // Calculate total amount (court price + equipment if any)
     let totalAmountCents = Math.round(session.court_price * 100);
@@ -97,7 +90,6 @@ serve(async (req) => {
     if (useCredits && creditsAmount && creditsAmount > 0) {
       creditsToApply = Math.min(creditsAmount, totalAmountCents / 100);
       
-      // Deduct credits from user balance
       const { data: creditResult, error: creditError } = await supabaseAdmin.rpc(
         "use_user_credits",
         {
@@ -124,22 +116,22 @@ serve(async (req) => {
 
     // If credits cover the full amount, complete payment without Stripe
     if (remainingAmountCents <= 0) {
-      // Create payment record as completed
+      // NO platform_fee for credits-only payments (fees already paid at original card payment)
       await supabaseAdmin
         .from("payments")
         .upsert({
           session_id: sessionId,
           user_id: user.id,
-          amount: totalAmountCents / 100,
+          amount: 0, // no card charge
           paid_with_credits: creditsToApply,
           status: "completed",
           paid_at: new Date().toISOString(),
-          platform_fee: PLATFORM_FEE / 100,
+          platform_fee: 0, // no additional fee for credits
         }, {
           onConflict: "session_id,user_id",
         });
 
-      // Update session player to confirmed
+      // Confirm player participation
       await supabaseAdmin
         .from("session_players")
         .update({
@@ -154,6 +146,23 @@ serve(async (req) => {
         .from("court_availability")
         .update({ payment_status: "completed" })
         .eq("booked_by_session_id", sessionId);
+
+      // Apply held credit liabilities for this user
+      await applyHeldLiabilities(supabaseAdmin, user.id, sessionId, totalAmountCents, playerFeeCents);
+
+      // Recalculate session confirmation
+      try {
+        const { data: rpcResult } = await supabaseAdmin.rpc("recalculate_and_maybe_confirm_session", {
+          p_session_id: sessionId,
+        });
+        const result = rpcResult as any;
+        if (result?.session_confirmed) {
+          console.log("Session confirmed after credits payment — triggering payout");
+          await triggerPayout(sessionId);
+        }
+      } catch (rpcErr) {
+        console.error("Session recalculation error (non-fatal):", rpcErr);
+      }
 
       console.log(`Payment completed with credits only: $${creditsToApply}`);
 
@@ -171,12 +180,10 @@ serve(async (req) => {
       apiVersion: "2024-12-18.acacia",
     });
 
-    // Build success and cancel URLs
     const baseUrl = origin || "https://sportarenaxp.lovable.app";
     const successUrl = `${baseUrl}/payment-success?checkout_session_id={CHECKOUT_SESSION_ID}&session_id=${sessionId}`;
     const cancelUrl = returnUrl ? `${baseUrl}${returnUrl}` : `${baseUrl}/courts`;
 
-    // Build line items
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         price_data: {
@@ -191,8 +198,8 @@ serve(async (req) => {
       },
     ];
 
-    // Platform receives all funds; transfers happen after session confirmation
-    let sessionParams: Stripe.Checkout.SessionCreateParams = {
+    // Platform holds all funds — deferred payout model
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       line_items: lineItems,
       mode: "payment",
@@ -223,7 +230,7 @@ serve(async (req) => {
         paid_with_credits: creditsToApply,
         status: "pending",
         stripe_payment_intent_id: checkoutSession.payment_intent as string,
-        platform_fee: PLATFORM_FEE / 100,
+        platform_fee: playerFeeDollars,
       }, {
         onConflict: "session_id,user_id",
       });
@@ -244,3 +251,111 @@ serve(async (req) => {
     });
   }
 });
+
+/**
+ * Apply held credit liabilities when a user pays with credits.
+ * Marks HELD liabilities as APPLIED up to the court-share for this session.
+ */
+async function applyHeldLiabilities(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  userId: string,
+  newSessionId: string,
+  totalAmountCents: number,
+  playerFeeCents: number
+) {
+  // Court share for this participant = total - platform fee
+  const courtShareCents = Math.max(0, totalAmountCents - playerFeeCents);
+
+  if (courtShareCents <= 0) return;
+
+  // Get HELD liabilities for this user, oldest first
+  const { data: liabilities, error } = await supabaseAdmin
+    .from("held_credit_liabilities")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("status", "HELD")
+    .order("created_at", { ascending: true });
+
+  if (error || !liabilities || liabilities.length === 0) {
+    console.log("No held liabilities to apply for user:", userId);
+    return;
+  }
+
+  let remainingToApply = courtShareCents;
+
+  for (const liability of liabilities) {
+    if (remainingToApply <= 0) break;
+
+    if (liability.amount_cents <= remainingToApply) {
+      // Apply full liability
+      await supabaseAdmin
+        .from("held_credit_liabilities")
+        .update({
+          status: "APPLIED",
+          applied_session_id: newSessionId,
+          applied_at: new Date().toISOString(),
+        })
+        .eq("id", liability.id);
+
+      remainingToApply -= liability.amount_cents;
+      console.log(`Applied full liability ${liability.id}: ${liability.amount_cents} cents`);
+    } else {
+      // Partial: apply what we need, leave the rest as HELD
+      // Split: update current to APPLIED with reduced amount, create new HELD for remainder
+      const appliedAmount = remainingToApply;
+      const remainderAmount = liability.amount_cents - appliedAmount;
+
+      // Mark current as APPLIED with the applied portion
+      await supabaseAdmin
+        .from("held_credit_liabilities")
+        .update({
+          status: "APPLIED",
+          amount_cents: appliedAmount,
+          applied_session_id: newSessionId,
+          applied_at: new Date().toISOString(),
+        })
+        .eq("id", liability.id);
+
+      // Create new HELD row for the remainder
+      await supabaseAdmin
+        .from("held_credit_liabilities")
+        .insert({
+          user_id: userId,
+          amount_cents: remainderAmount,
+          source_session_id: liability.source_session_id,
+          source_payment_id: liability.source_payment_id,
+          status: "HELD",
+        });
+
+      console.log(`Split liability ${liability.id}: applied ${appliedAmount}, remainder ${remainderAmount}`);
+      remainingToApply = 0;
+    }
+  }
+}
+
+/**
+ * Trigger the payout-session edge function
+ */
+async function triggerPayout(sessionId: string) {
+  try {
+    const payoutResponse = await fetch(
+      `${Deno.env.get("SUPABASE_URL")}/functions/v1/payout-session`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({ sessionId }),
+      }
+    );
+    const payoutResult = await payoutResponse.json();
+    if (!payoutResult.success) {
+      console.error("Payout failed (non-fatal):", payoutResult.error);
+    } else {
+      console.log("Payout completed:", payoutResult);
+    }
+  } catch (err) {
+    console.error("Payout call error (non-fatal):", err);
+  }
+}
