@@ -164,9 +164,37 @@ async function handleSessionPayment(
 
   // Recalculate session confirmation and maybe trigger payout
   try {
-    await supabaseAdmin.rpc("recalculate_and_maybe_confirm_session", {
+    const { data: rpcResult } = await supabaseAdmin.rpc("recalculate_and_maybe_confirm_session", {
       p_session_id: sessionId,
     });
+
+    const result = rpcResult as any;
+    if (result?.session_confirmed) {
+      console.log("Session confirmed — triggering payout:", sessionId);
+      try {
+        const payoutResponse = await fetch(
+          `${Deno.env.get("SUPABASE_URL")}/functions/v1/payout-session`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({ sessionId }),
+          }
+        );
+        const payoutResult = await payoutResponse.json();
+        if (!payoutResult.success) {
+          console.error("Payout failed (non-fatal):", payoutResult.error);
+        } else {
+          console.log("Payout completed:", payoutResult);
+        }
+      } catch (payoutErr) {
+        console.error("Payout call error (non-fatal):", payoutErr);
+      }
+    } else {
+      console.log("Session not yet confirmed:", result);
+    }
   } catch (rpcErr) {
     console.error("Session recalculation error (non-fatal):", rpcErr);
   }
