@@ -538,38 +538,8 @@ export default function GameDetail() {
     }
   };
 
-  const handleConfirmAttendance = async () => {
-    if (!gameData || !id || !user) return;
-
-    setActionLoading(true);
-    try {
-      const { error } = await supabase
-        .from("session_players")
-        .update({ 
-          is_confirmed: true, 
-          confirmed_at: new Date().toISOString() 
-        })
-        .eq("session_id", id)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Attendance confirmed",
-        description: "You've confirmed you're coming to this game.",
-      });
-      fetchGameData();
-    } catch (error) {
-      console.error("Error confirming attendance:", error);
-      toast({
-        title: "Error",
-        description: "Failed to confirm attendance.",
-        variant: "destructive",
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  // Attendance confirmation is handled automatically by the payment webhook.
+  // No manual frontend confirmation is allowed.
 
   const handleCancelSession = async () => {
     if (!gameData || !id) return;
@@ -992,14 +962,10 @@ const getGoogleMapsUrl = (address: string): string => {
                           <span className="font-semibold">Confirmed</span>
                         </div>
                       ) : (
-                        <Button 
-                          className="bg-success hover:bg-success/90 text-success-foreground"
-                          onClick={handleConfirmAttendance}
-                          disabled={actionLoading}
-                        >
-                          {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Confirm Attendance
-                        </Button>
+                        <div className="flex items-center gap-2 px-4 py-2 bg-muted text-muted-foreground rounded-lg">
+                          <Clock className="h-5 w-5" />
+                          <span className="text-sm">Confirmation pending — pay to confirm</span>
+                        </div>
                       )
                     )}
                   </div>
