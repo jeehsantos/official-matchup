@@ -16,6 +16,7 @@ export default function PaymentSuccess() {
   const pollCount = useRef(0);
 
   const sessionId = searchParams.get("session_id");
+  const checkoutSessionId = searchParams.get("checkout_session_id");
   const paymentType = searchParams.get("type");
 
   // Poll DB for payment confirmation (webhook is source of truth)
@@ -27,7 +28,7 @@ export default function PaymentSuccess() {
 
       try {
         const { data, error } = await supabase.functions.invoke("verify-payment", {
-          body: { sessionId, userId: user.id },
+          body: { sessionId, userId: user.id, checkoutSessionId },
         });
 
         if (error) throw error;
