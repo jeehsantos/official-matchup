@@ -1415,6 +1415,10 @@ export type Database = {
         Args: { p_referred_user_id: string }
         Returns: boolean
       }
+      recalculate_and_maybe_confirm_session: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
       release_booking_hold: {
         Args: { p_hold_id: string; p_user_id: string }
         Returns: boolean
