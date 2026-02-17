@@ -168,7 +168,7 @@ export default function Games() {
             endTime,
             price: session.payment_type === "single"
               ? session.court_price
-              : session.court_price / (session.max_players || 1),
+              : session.court_price / (session.min_players || 1),
             currentPlayers: count || 0,
             minPlayers: session.min_players,
             maxPlayers: session.max_players,

@@ -422,7 +422,7 @@ export default function GameDetail() {
     // Check if user has enough credits to cover full amount
     const courtShare = session.payment_type === "single"
       ? gameData.session.court_price
-      : gameData.session.court_price / (gameData.session.max_players || 1);
+      : gameData.session.court_price / (gameData.session.min_players || 1);
     const estServiceFee = estimateServiceFee(courtShare, playerFee);
     const totalAmount = courtShare + estServiceFee;
     if (credits >= totalAmount && !loadingCredits) {
@@ -444,7 +444,7 @@ export default function GameDetail() {
     try {
       const courtShare = session.payment_type === "single"
         ? gameData.session.court_price
-        : gameData.session.court_price / (gameData.session.max_players || 1);
+        : gameData.session.court_price / (gameData.session.min_players || 1);
       const estServiceFee = estimateServiceFee(courtShare, playerFee);
       const totalAmount = courtShare + estServiceFee;
       
@@ -630,7 +630,7 @@ const getGoogleMapsUrl = (address: string): string => {
   const paidCount = players.filter(p => p.isPaid).length;
   const pricePerPlayer = session.payment_type === "single"
     ? session.court_price
-    : session.court_price / (session.max_players || 1);
+    : session.court_price / (session.min_players || 1);
   const serviceFee = estimateServiceFee(pricePerPlayer, playerFee);
   const totalPerPlayer = pricePerPlayer + serviceFee;
   const isOrganizer = group.organizer_id === user.id;
@@ -1067,6 +1067,7 @@ const getGoogleMapsUrl = (address: string): string => {
                   currentMax={session.max_players}
                   courtPrice={session.court_price}
                   onUpdate={fetchGameData}
+                  locked={paidCount > 0}
                 />
               )}
             </CardContent>

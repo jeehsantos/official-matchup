@@ -215,6 +215,7 @@ interface SettingsModalProps {
   currentPlayerCount: number;
   onFormatChange: (newFormat: string) => void;
   isUpdating?: boolean;
+  hasPaidPlayers?: boolean;
 }
 
 const MATCH_FORMATS = ["1vs1", "2vs2", "3vs3", "4vs4", "5vs5"];
@@ -229,6 +230,7 @@ function SettingsModal({
   currentPlayerCount,
   onFormatChange,
   isUpdating,
+  hasPaidPlayers,
 }: SettingsModalProps) {
   const { theme, setTheme } = useTheme();
   const [selectedFormat, setSelectedFormat] = useState(gameMode);
@@ -285,37 +287,45 @@ function SettingsModal({
           </div>
 
           {/* Match Format */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase text-muted-foreground">
-              Match Format
-            </span>
-            {isOrganizer ? (
-              <Select 
-                value={selectedFormat} 
-                onValueChange={handleFormatChange}
-                disabled={isUpdating}
-              >
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue placeholder="Select format" />
-                </SelectTrigger>
-                <SelectContent className="z-[200]">
-                  {MATCH_FORMATS.map((format) => (
-                    <SelectItem 
-                      key={format} 
-                      value={format}
-                      disabled={getFormatDisabled(format)}
-                    >
-                      {format}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-muted border-border">
-                <span className="text-[10px] font-black uppercase">
-                  {gameMode}
-                </span>
-              </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase text-muted-foreground">
+                Match Format
+              </span>
+              {isOrganizer && !hasPaidPlayers ? (
+                <Select 
+                  value={selectedFormat} 
+                  onValueChange={handleFormatChange}
+                  disabled={isUpdating}
+                >
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Select format" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[200]">
+                    {MATCH_FORMATS.map((format) => (
+                      <SelectItem 
+                        key={format} 
+                        value={format}
+                        disabled={getFormatDisabled(format)}
+                      >
+                        {format}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-muted border-border">
+                  <span className="text-[10px] font-black uppercase">
+                    {gameMode}
+                  </span>
+                </div>
+              )}
+            </div>
+            {isOrganizer && hasPaidPlayers && (
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                <AlertTriangle size={12} className="text-warning shrink-0" />
+                Format cannot be changed after a player has paid.
+              </p>
             )}
           </div>
         </div>
@@ -726,6 +736,7 @@ export default function QuickGameLobby() {
         currentPlayerCount={players.length}
         onFormatChange={handleFormatChange}
         isUpdating={updateFormat.isPending}
+        hasPaidPlayers={players.some(p => p.paymentStatus === "paid")}
       />
 
       {/* Invite Friend Dialog */}

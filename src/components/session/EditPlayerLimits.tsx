@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Pencil, Users } from "lucide-react";
+import { Loader2, Pencil, Users, Info } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface EditPlayerLimitsProps {
   sessionId: string;
@@ -21,6 +27,7 @@ interface EditPlayerLimitsProps {
   currentMax: number;
   courtPrice: number;
   onUpdate: () => void;
+  locked?: boolean;
 }
 
 export function EditPlayerLimits({
@@ -29,6 +36,7 @@ export function EditPlayerLimits({
   currentMax,
   courtPrice,
   onUpdate,
+  locked = false,
 }: EditPlayerLimitsProps) {
   const [open, setOpen] = useState(false);
   const [minPlayers, setMinPlayers] = useState(currentMin);
@@ -86,6 +94,25 @@ export function EditPlayerLimits({
       setLoading(false);
     }
   };
+
+  if (locked) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" size="sm" className="mt-4 w-full opacity-60 cursor-not-allowed">
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit Player Limits
+              <Info className="h-4 w-4 ml-auto text-muted-foreground" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[250px] text-center">
+            <p>Player limits cannot be changed after a player has made a payment.</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

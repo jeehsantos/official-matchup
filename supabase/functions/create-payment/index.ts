@@ -93,10 +93,10 @@ serve(async (req) => {
     let courtAmountForThisPayerCents: number;
 
     if (sessionPaymentType === "split") {
-      // Split: each player pays their share
-      const maxPlayers = session.max_players || 1;
-      courtAmountForThisPayerCents = Math.ceil(fullCourtCostCents / maxPlayers);
-      console.log(`Split payment: ${fullCourtCostCents}c / ${maxPlayers} players = ${courtAmountForThisPayerCents}c per player`);
+      // Split: each player pays their share based on min_players
+      const minPlayers = session.min_players || 1;
+      courtAmountForThisPayerCents = Math.ceil(fullCourtCostCents / minPlayers);
+      console.log(`Split payment: ${fullCourtCostCents}c / ${minPlayers} players = ${courtAmountForThisPayerCents}c per player`);
     } else {
       // Single / Organizer pays full: payer covers remaining unfunded court amount
       // Check how much has already been paid by others
