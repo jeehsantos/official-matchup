@@ -12,6 +12,7 @@ import { isBefore, parseISO, addHours } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import { getSportCategoriesMap } from "@/lib/sport-category-utils";
 import { usePlatformFee } from "@/hooks/usePlatformFee";
+import { estimateServiceFee } from "@/lib/utils";
 
 type SportCategory = Database["public"]["Tables"]["sport_categories"]["Row"];
 
@@ -247,7 +248,7 @@ export default function Games() {
             ) : upcomingGames.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {upcomingGames.map((game) => (
-                  <GameCard key={game.id} {...game} serviceFee={playerFee} />
+                  <GameCard key={game.id} {...game} serviceFee={estimateServiceFee(game.price, playerFee)} />
                 ))}
               </div>
             ) : (
@@ -281,7 +282,7 @@ export default function Games() {
             ) : pastGames.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {pastGames.map((game) => (
-                  <GameCard key={game.id} {...game} serviceFee={playerFee} />
+                  <GameCard key={game.id} {...game} serviceFee={estimateServiceFee(game.price, playerFee)} />
                 ))}
               </div>
             ) : (
