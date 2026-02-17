@@ -1,183 +1,60 @@
 
-# Add Lobby Chat to Quick Game Lobby
 
-## Overview
+## Fix Session Price Display and Add Service Fee Visibility
 
-Implement a real-time chat system at the bottom of the Quick Game Lobby, allowing players who have joined the match to communicate with each other. Chat history will be automatically deleted when the session ends or the organizer cancels the lobby.
+### Problem
+1. The per-player price shown on `/games` cards and `/games/{id}` detail page divides `court_price` by `min_players`, but the backend (`create-payment`) divides by `max_players` for split payments. This causes a mismatch between displayed and actual charge.
+2. The platform service fee (from `platform_settings.player_fee`) is not shown anywhere on these pages, so users are surprised by the total at checkout.
 
-## What Will Be Added
+### Solution
 
-### For Players
-- **Lobby Chat**: A chat section at the bottom of the Quick Game Lobby page
-- **System Messages**: Automatic notifications (e.g., "Alex created the match")
-- **Player Messages**: Send and receive messages from other players in the lobby
-- **Real-time Updates**: Messages appear instantly for all players
+#### 1. Fix price calculation (Games.tsx + GameDetail.tsx)
 
-### Chat Rules
-- Only players who have joined the lobby can see and send messages
-- Chat history is deleted when:
-  - The match session is completed
-  - The organizer cancels/quits the lobby
-  - The scheduled date passes (automatic cleanup)
+For **split** payments: `court_price / max_players` (matching the backend).
+For **organizer pays full**: show the full `court_price` (only to the organizer).
 
----
+#### 2. Show service fee in price displays
 
-## Technical Implementation
+Use the existing `usePlatformFee` hook to fetch the service fee and display a breakdown:
+- **Court price** (per player share for split, full for organizer)
+- **Service fee** (the `player_fee` value)
+- **Total** = court share + service fee
 
-### Phase 1: Database Schema
+#### 3. File Changes
 
-Create a new table `quick_challenge_messages` to store lobby chat messages:
+**`src/pages/Games.tsx`**
+- Import `usePlatformFee` hook
+- Change line 166 from `session.court_price / (session.min_players || 1)` to `session.court_price / (session.max_players || 1)` for split, or full price for single
+- Pass service fee info or total price to `GameCard`
 
-| Column | Type | Purpose |
-|--------|------|---------|
-| id | UUID | Primary key |
-| challenge_id | UUID | Foreign key to quick_challenges |
-| sender_id | UUID | Foreign key to auth.users |
-| content | TEXT | Message content |
-| message_type | TEXT | 'system' or 'user' |
-| created_at | TIMESTAMPTZ | When the message was sent |
+**`src/components/cards/GameCard.tsx`**
+- Accept optional `serviceFee` prop
+- Display total (court share + service fee) instead of just court share
+- Show "per player" label for split payments
 
-**RLS Policies:**
-- Players who have joined the challenge can read messages for that challenge
-- Players can only insert messages for challenges they've joined
-- Only the sender can delete their own messages
-- No updates allowed (messages are immutable)
+**`src/pages/GameDetail.tsx`**
+- Import and use `usePlatformFee` hook
+- Fix `pricePerPlayer` on line 620 to use `max_players` instead of `min_players`
+- Update all price displays to show breakdown: Court price, Service fee, Total
+- Update payment button labels to show the correct total
+- Fix `handleMakePayment` credits comparison on line 421 to use correct per-player amount
+- Fix rescue join text on line 762
 
-**Realtime:**
-- Enable realtime for the table so messages appear instantly
+### Technical Details
 
-### Phase 2: Backend - Auto-Cleanup Function
+The `usePlatformFee` hook already exists and returns `{ playerFee, managerFeePercentage, isLoading }`. The `playerFee` is the fixed service fee per transaction.
 
-Create a database function and trigger to delete chat messages when a challenge status changes to 'completed' or 'cancelled':
+Key lines to update:
+- `Games.tsx:166` -- price calculation
+- `GameDetail.tsx:420-421` -- credits comparison uses wrong divisor
+- `GameDetail.tsx:438` -- same wrong calculation
+- `GameDetail.tsx:620` -- pricePerPlayer definition
+- `GameDetail.tsx:762` -- rescue join price text
+- `GameDetail.tsx:924-935` -- organizer payment display
+- `GameDetail.tsx:954` -- pay button label
+- `GameDetail.tsx:982` -- split price display
+- `GameDetail.tsx:1000` -- split pay button label
+- `GameCard.tsx` -- price display in card
 
-```sql
--- Function to clean up chat when challenge ends
-CREATE OR REPLACE FUNCTION cleanup_challenge_chat()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.status IN ('completed', 'cancelled') AND OLD.status NOT IN ('completed', 'cancelled') THEN
-    DELETE FROM quick_challenge_messages WHERE challenge_id = NEW.id;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+No database changes required. No edge function changes required.
 
--- Trigger on quick_challenges
-CREATE TRIGGER trigger_cleanup_challenge_chat
-AFTER UPDATE ON quick_challenges
-FOR EACH ROW
-EXECUTE FUNCTION cleanup_challenge_chat();
-```
-
-### Phase 3: Create Lobby Chat Hook
-
-Create a new hook `src/hooks/useLobbyChatMessages.ts` to manage chat messages:
-
-**Features:**
-- Fetch messages for a specific challenge
-- Real-time subscription to new messages
-- Send message mutation
-- System message creation (when player joins/leaves)
-
-```typescript
-// Hook interface
-export function useLobbyChatMessages(challengeId: string) {
-  // Returns:
-  // - messages: array of chat messages
-  // - isLoading: loading state
-  // - sendMessage: function to send a message
-  // - sendSystemMessage: function to send system notifications
-}
-```
-
-### Phase 4: Create LobbyChatPanel Component
-
-Create `src/components/quick-challenge/LobbyChatPanel.tsx`:
-
-**Based on Reference Design:**
-- Left side: Chat messages area with scroll
-- Right side: Player count badge + Match status badge + Arena Rules link
-- Bottom: Input field with placeholder "Send a message to the group..."
-
-**Layout (from reference image):**
-```text
-+--------------------------------------------------+
-| SYSTEM: Alex Silva created the group.            |
-| ALEX SILVA: Let's win team!                      |
-|                                                  |
-| [Send a message to the group...]                 |
-+----------------------------------+---------------+
-                                   | 4/10 PLAYERS  |
-                                   | MATCH CONFIRMED|
-                                   | ARENA RULES 👥 |
-                                   +---------------+
-```
-
-**Component Props:**
-```typescript
-interface LobbyChatPanelProps {
-  challengeId: string;
-  currentUserId: string;
-  totalSlots: number;
-  filledSlots: number;
-  isMatchFull: boolean;
-}
-```
-
-### Phase 5: Update QuickGameLobby.tsx
-
-Modify the footer section to include the chat panel:
-
-**Current Footer (lines 610-646):**
-- Shows player count and status badges
-
-**Updated Footer:**
-- Replace with `LobbyChatPanel` component that includes:
-  - Chat messages area on the left
-  - Status badges on the right
-  - Message input at the bottom
-
----
-
-## File Changes Summary
-
-| File | Action | Description |
-|------|--------|-------------|
-| Database Migration | Create | Add `quick_challenge_messages` table with RLS |
-| Database Migration | Create | Add cleanup trigger for chat messages |
-| `src/hooks/useLobbyChatMessages.ts` | Create | Hook for fetching/sending chat messages |
-| `src/components/quick-challenge/LobbyChatPanel.tsx` | Create | Chat panel component |
-| `src/pages/QuickGameLobby.tsx` | Modify | Replace footer with chat panel |
-
----
-
-## User Experience Flow
-
-1. **Player joins lobby** -> System message appears: "[Player] joined the match"
-2. **Player sends message** -> Message appears for all players in real-time
-3. **Other players see** -> Messages update instantly via Supabase Realtime
-4. **Match completes/cancelled** -> All chat history is automatically deleted
-
----
-
-## Design Details (Matching Reference Image)
-
-### Chat Message Styling
-- **System messages**: Highlighted in blue/cyan color with "SYSTEM:" prefix
-- **User messages**: Yellow/gold username, white/light message text
-- **Font size**: Small (10-11px) for compact display
-
-### Footer Layout
-- **Height**: ~128px (h-32)
-- **Left section**: Chat messages + input (flex-1)
-- **Right section**: Status badges (1/3 width on mobile, 1/2 on desktop)
-
-### Input Field
-- Dark background with subtle border
-- Placeholder: "Send a message to the group..."
-- No send button (Enter key to send)
-
-### Status Section
-- Player count badge: "4/10 PLAYERS"
-- Match status badge: "MATCH CONFIRMED" (green, only when full)
-- "Arena Rules" link with Users icon
