@@ -27,6 +27,7 @@ interface GameCardProps {
   maxPlayers: number;
   state: SessionState;
   isPaid?: boolean;
+  serviceFee?: number;
 }
 
 export function GameCard({
@@ -44,7 +45,9 @@ export function GameCard({
   maxPlayers,
   state,
   isPaid = false,
+  serviceFee = 0,
 }: GameCardProps) {
+  const totalPrice = price + serviceFee;
   // Use sport category display name if available, otherwise fallback to "Sport TBD"
   const sportDisplayName = sportCategory?.display_name || "Sport TBD";
   
@@ -87,14 +90,14 @@ export function GameCard({
               <span>{time}</span>
             </div>
             <div className="flex items-center gap-2 font-semibold text-foreground">
-              {price === 0 ? (
+              {totalPrice === 0 ? (
                 <Badge className="bg-success text-success-foreground border-0 shadow-sm">
                   ✓ FREE
                 </Badge>
               ) : (
                 <>
                   <DollarSign className="h-4 w-4 shrink-0" />
-                  <span>${price.toFixed(2)}</span>
+                  <span>${totalPrice.toFixed(2)}</span>
                 </>
               )}
             </div>

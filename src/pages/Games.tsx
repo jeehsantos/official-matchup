@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { isBefore, parseISO, addHours } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import { getSportCategoriesMap } from "@/lib/sport-category-utils";
+import { usePlatformFee } from "@/hooks/usePlatformFee";
 
 type SportCategory = Database["public"]["Tables"]["sport_categories"]["Row"];
 
@@ -50,6 +51,7 @@ const isSessionCompleted = (sessionDate: string, startTime: string, durationMinu
 export default function Games() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { playerFee } = usePlatformFee();
   const [loading, setLoading] = useState(true);
   const [allGames, setAllGames] = useState<(GameData & { durationMinutes: number })[]>([]);
 
@@ -163,7 +165,9 @@ export default function Games() {
             date: new Date(session.session_date),
             time: session.start_time.slice(0, 5),
             endTime,
-            price: session.court_price / (session.min_players || 1),
+            price: session.payment_type === "single"
+              ? session.court_price
+              : session.court_price / (session.max_players || 1),
             currentPlayers: count || 0,
             minPlayers: session.min_players,
             maxPlayers: session.max_players,
@@ -243,7 +247,7 @@ export default function Games() {
             ) : upcomingGames.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {upcomingGames.map((game) => (
-                  <GameCard key={game.id} {...game} />
+                  <GameCard key={game.id} {...game} serviceFee={playerFee} />
                 ))}
               </div>
             ) : (
@@ -277,7 +281,7 @@ export default function Games() {
             ) : pastGames.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {pastGames.map((game) => (
-                  <GameCard key={game.id} {...game} />
+                  <GameCard key={game.id} {...game} serviceFee={playerFee} />
                 ))}
               </div>
             ) : (
