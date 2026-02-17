@@ -21,7 +21,8 @@ import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
 import { PaymentTypeSelector } from "@/components/booking/PaymentTypeSelector";
 import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/EquipmentSelector";
 import { useSportCategories } from "@/hooks/useSportCategories";
-import { usePlatformSettings } from "@/hooks/usePlatformSettings";
+import { usePlatformFee } from "@/hooks/usePlatformFee";
+import { estimateServiceFee } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
@@ -58,6 +59,7 @@ interface BookingWizardProps {
     paymentType: BookingPaymentType;
     equipment: SelectedEquipment[];
     sportCategoryId: string;
+    splitPlayers?: number;
   }) => void;
   sportType: SportType;
   courtPrice: number;
@@ -114,11 +116,14 @@ export function BookingWizard({
   const [selectedSportCategoryId, setSelectedSportCategoryId] = useState<string>("");
   // Step 3: Payment
   const [paymentType, setPaymentType] = useState<BookingPaymentType>("single");
+  const [splitPlayers, setSplitPlayers] = useState(6);
   const [submitting, setSubmitting] = useState(false);
   
   // Fetch sport categories from database
   const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
-  const { data: platformSettings } = usePlatformSettings();
+  
+  // Fetch admin-configured platform fee (read-only display)
+  const { playerFee: platformFee } = usePlatformFee();
 
   const isNewGroup = selectedGroupId === "new";
 
@@ -131,6 +136,7 @@ export function BookingWizard({
       setNewGroupName("");
       setSelectedSportCategoryId("");
       setPaymentType("single");
+      setSplitPlayers(6);
       fetchUserGroups();
     }
   }, [open]);
@@ -235,6 +241,7 @@ export function BookingWizard({
           paymentType,
           equipment: selectedEquipment,
           sportCategoryId: selectedSportCategoryId,
+          splitPlayers: paymentType === "split" ? splitPlayers : undefined,
         });
       } else {
         onConfirm({
@@ -243,6 +250,7 @@ export function BookingWizard({
           paymentType,
           equipment: selectedEquipment,
           sportCategoryId: selectedSportCategoryId,
+          splitPlayers: paymentType === "split" ? splitPlayers : undefined,
         });
       }
     } catch (error: any) {
@@ -275,9 +283,19 @@ export function BookingWizard({
     (sum, item) => sum + item.quantity * item.pricePerUnit, 
     0
   );
-  const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
-  const subtotal = courtPrice + equipmentTotal;
-  const totalPrice = subtotal + serviceFee;
+  const courtTotal = courtPrice + equipmentTotal;
+  // Service fee includes platform fee + estimated Stripe processing fee (display only, backend is authoritative)
+  const serviceFee = estimateServiceFee(courtTotal, platformFee);
+  const totalPrice = courtTotal + serviceFee;
+  const perPlayerPrice = paymentType === "split" && splitPlayers > 0
+    ? Math.ceil((courtTotal / splitPlayers) * 100) / 100
+    : null;
+  const perPlayerServiceFee = perPlayerPrice !== null
+    ? estimateServiceFee(perPlayerPrice, platformFee)
+    : null;
+  const perPlayerTotal = perPlayerPrice !== null && perPlayerServiceFee !== null
+    ? perPlayerPrice + perPlayerServiceFee
+    : null;
 
   const progress = (currentStep / STEPS.length) * 100;
 
@@ -357,7 +375,14 @@ export function BookingWizard({
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 font-semibold text-primary">
                 <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                <span className="text-base sm:text-lg">${totalPrice.toFixed(2)}</span>
+                <div className="text-right">
+                  <span className="text-base sm:text-lg">${totalPrice.toFixed(2)}</span>
+                  {perPlayerTotal !== null && (
+                    <p className="text-[10px] sm:text-xs font-normal text-muted-foreground">
+                      ${perPlayerTotal.toFixed(2)}/player
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -544,7 +569,7 @@ export function BookingWizard({
               {/* Price Summary */}
               <div className="space-y-3">
                 <h4 className="font-semibold">Booking Summary</h4>
-                <div className="bg-muted/50 rounded-xl p-4 border border-border space-y-2">
+              <div className="bg-muted/50 rounded-xl p-4 border border-border space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>Court rental</span>
                     <span>${courtPrice.toFixed(2)}</span>
@@ -557,7 +582,7 @@ export function BookingWizard({
                   ))}
                   {serviceFee > 0 && (
                     <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Platform service fee</span>
+                      <span>Service fee</span>
                       <span>${serviceFee.toFixed(2)}</span>
                     </div>
                   )}
@@ -573,10 +598,49 @@ export function BookingWizard({
               {/* Payment Type Selection */}
               <PaymentTypeSelector
                 paymentType={paymentType}
-                onPaymentTypeChange={setPaymentType}
+                onPaymentTypeChange={(type) => {
+                  setPaymentType(type);
+                  if (type === "single") setSplitPlayers(6);
+                }}
                 courtPrice={totalPrice}
                 paymentTiming={paymentTiming}
               />
+
+              {/* Number of players - only when split is selected */}
+              {paymentType === "split" && (
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Number of Players
+                  </Label>
+                  <Input
+                    type="number"
+                    min={2}
+                    value={splitPlayers}
+                    onChange={(e) => setSplitPlayers(Math.max(2, Number(e.target.value)))}
+                    className="h-12"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This sets the minimum players required. Each player pays their share to confirm.
+                  </p>
+                  {perPlayerTotal !== null && (
+                    <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span>Court share per player</span>
+                        <span>${perPlayerPrice!.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Service fee per player</span>
+                        <span>${perPlayerServiceFee!.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between font-semibold text-sm border-t border-primary/20 pt-1 mt-1">
+                        <span>Total per player</span>
+                        <span className="text-primary">${perPlayerTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Group info */}
               {selectedGroupId && selectedGroupId !== "new" && (

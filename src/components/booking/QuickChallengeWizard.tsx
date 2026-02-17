@@ -11,6 +11,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/EquipmentSelector";
+import { usePlatformFee } from "@/hooks/usePlatformFee";
+import { estimateServiceFee } from "@/lib/utils";
 import { toast } from "sonner";
 import { 
   FileText, 
@@ -86,6 +88,7 @@ export function QuickChallengeWizard({
   const [currentStep, setCurrentStep] = useState(1);
   const [rulesAccepted, setRulesAccepted] = useState(false);
   const [paymentType, setPaymentType] = useState<BookingPaymentType>("split");
+  const { playerFee: platformFee } = usePlatformFee();
 
   // Reset state when modal opens
   const handleOpenChange = (isOpen: boolean) => {
@@ -138,7 +141,6 @@ export function QuickChallengeWizard({
     return `${hour12}:${minutes} ${ampm}`;
   };
 
-  // Calculate equipment total
   const equipmentTotal = selectedEquipment.reduce(
     (sum, item) => sum + item.quantity * item.pricePerUnit, 
     0
@@ -147,15 +149,16 @@ export function QuickChallengeWizard({
   const platformFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
 
   const totalPrice = courtPrice + equipmentTotal;
-  const splitBasePerPlayer = Math.ceil((totalPrice / totalPlayers) * 100) / 100;
-  const splitTotalPerPlayer = splitBasePerPlayer + platformFee;
-  const fullAmountTotal = totalPrice + platformFee;
+  const pricePerPlayer = Math.ceil((totalPrice / totalPlayers) * 100) / 100;
+  const perPlayerServiceFee = estimateServiceFee(pricePerPlayer, platformFee);
+  const perPlayerTotal = pricePerPlayer + perPlayerServiceFee;
+  const totalWithFees = totalPrice + estimateServiceFee(totalPrice, platformFee);
 
   const progress = (currentStep / STEPS.length) * 100;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="w-[calc(100vw-16px)] sm:w-[calc(100vw-32px)] max-w-md sm:max-w-lg h-[calc(100dvh-165px)] sm:h-auto sm:max-h-[78dvh] flex flex-col p-0 gap-0">
+      <DialogContent className="w-[calc(100vw-16px)] sm:w-[calc(100vw-32px)] max-w-md sm:max-w-lg h-[calc(100dvh-100px)] sm:h-[85dvh] sm:max-h-[700px] flex flex-col p-0 gap-0 overflow-hidden">
         {/* Header with progress */}
         <div className="sticky top-0 z-10 bg-background border-b border-border p-3 sm:p-4">
           <DialogHeader className="mb-3 sm:mb-4">
@@ -231,7 +234,12 @@ export function QuickChallengeWizard({
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 font-semibold text-primary">
                 <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                <span className="text-base sm:text-lg">${totalPrice.toFixed(2)}</span>
+                <div className="text-right">
+                  <span className="text-base sm:text-lg">${totalWithFees.toFixed(2)}</span>
+                  <p className="text-[10px] sm:text-xs font-normal text-muted-foreground">
+                    ${perPlayerTotal.toFixed(2)}/player
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -319,7 +327,7 @@ export function QuickChallengeWizard({
                     <Label htmlFor="single" className="flex-1 cursor-pointer">
                       <span className="font-medium">Pay Full Amount</span>
                       <p className="text-sm text-muted-foreground mt-1">
-                        You pay the full amount (${fullAmountTotal.toFixed(2)}) upfront, including a ${platformFee.toFixed(2)} platform fee. Other players join for free.
+                        You pay the entire court fee (${totalWithFees.toFixed(2)}) upfront. Other players join for free.
                       </p>
                     </Label>
                   </div>
@@ -333,7 +341,7 @@ export function QuickChallengeWizard({
                     <Label htmlFor="split" className="flex-1 cursor-pointer">
                       <span className="font-medium">Split Between Players</span>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Each player pays ${splitTotalPerPlayer.toFixed(2)} (${splitBasePerPlayer.toFixed(2)} game fee + ${platformFee.toFixed(2)} platform fee) when they join ({totalPlayers} players total).
+                        Each player pays ${perPlayerTotal.toFixed(2)} (incl. service fee) when they join ({totalPlayers} players total).
                       </p>
                     </Label>
                   </div>
@@ -352,18 +360,18 @@ export function QuickChallengeWizard({
                     <span>${equipmentTotal.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm">
-                  <span>Platform Fee</span>
-                  <span>${platformFee.toFixed(2)}</span>
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Service fee (per player)</span>
+                  <span>${perPlayerServiceFee.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between font-semibold pt-2 border-t border-border">
                   <span>Total</span>
-                  <span className="text-primary">${(totalPrice + platformFee).toFixed(2)}</span>
+                  <span className="text-primary">${totalWithFees.toFixed(2)}</span>
                 </div>
                 {paymentType === "split" && (
                   <div className="flex justify-between text-sm text-muted-foreground pt-1">
-                    <span>Per Player</span>
-                    <span>${splitTotalPerPlayer.toFixed(2)}</span>
+                    <span>Per Player (incl. service fee)</span>
+                    <span>${perPlayerTotal.toFixed(2)}</span>
                   </div>
                 )}
               </div>

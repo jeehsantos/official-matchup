@@ -3,11 +3,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -19,7 +18,6 @@ serve(async (req) => {
       throw new Error("Session ID is required");
     }
 
-    // Retrieve authenticated user
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       throw new Error("No authorization header provided");
@@ -37,7 +35,6 @@ serve(async (req) => {
     }
     const userId = userData.user.id;
 
-    // Use service role for admin operations
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -67,7 +64,7 @@ serve(async (req) => {
     let creditsAdded = 0;
 
     if (payment) {
-      // Check if payment was already transferred to venue owner
+      // Block cancellation if payment already transferred to venue
       if (payment.status === "transferred" && payment.transferred_at) {
         throw new Error("Cannot cancel - payment has already been transferred to venue owner");
       }
@@ -76,7 +73,6 @@ serve(async (req) => {
       const amountToCredit = Number(payment.amount) - Number(payment.paid_with_credits || 0);
       
       if (amountToCredit > 0) {
-        // Add credits using the database function
         const { data: newBalance, error: creditError } = await supabaseAdmin.rpc(
           "add_user_credits",
           {
@@ -96,9 +92,32 @@ serve(async (req) => {
         creditsAdded = amountToCredit;
       }
 
-      // Update payment status to indicate it was cancelled/refunded
-      // This prevents any future transfer attempts
-      // Use 'refunded' for payments with cash, 'cancelled' for credit-only payments
+      // Create held_credit_liability for the court-share portion
+      // court_share = total payment value (amount + credits used) - platform_fee
+      const totalPaymentValue = Number(payment.amount) + Number(payment.paid_with_credits || 0);
+      const platformFee = Number(payment.platform_fee || 0);
+      const courtShareCents = Math.round(Math.max(0, totalPaymentValue - platformFee) * 100);
+
+      if (courtShareCents > 0) {
+        const { error: liabilityError } = await supabaseAdmin
+          .from("held_credit_liabilities")
+          .insert({
+            user_id: userId,
+            amount_cents: courtShareCents,
+            source_session_id: sessionId,
+            source_payment_id: payment.id,
+            status: "HELD",
+          });
+
+        if (liabilityError) {
+          console.error("Error creating liability:", liabilityError);
+          // Non-fatal: log but don't block cancellation
+        } else {
+          console.log(`Liability created: ${courtShareCents} cents for user ${userId}`);
+        }
+      }
+
+      // Update payment status
       const newStatus = amountToCredit > 0 ? "refunded" : "cancelled";
       const { error: updateError } = await supabaseAdmin
         .from("payments")

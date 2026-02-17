@@ -7,184 +7,190 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Platform fee is now read from metadata (set during create-payment)
-// Fallback to $1.50 if not present for backward compatibility
-const DEFAULT_PLATFORM_FEE = 1.50;
-
+/**
+ * verify-payment polls DB state first (webhook is source of truth).
+ * If DB still shows "pending", falls back to checking Stripe API directly
+ * and processes the payment inline — resilient against webhook delays.
+ */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseClient = createClient(
+  const supabaseAdmin = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
 
   try {
-    const { checkoutSessionId, sessionId, userId } = await req.json();
+    const { sessionId, userId, checkoutSessionId } = await req.json();
 
-    if (!checkoutSessionId && !sessionId) {
-      throw new Error("Checkout session ID or session ID is required");
+    if (!sessionId || !userId) {
+      throw new Error("sessionId and userId are required");
     }
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2024-12-18.acacia",
-    });
+    // Check payment status from DB (set by webhook)
+    const { data: payment, error: paymentError } = await supabaseAdmin
+      .from("payments")
+      .select("id, status, amount, paid_with_credits, paid_at, stripe_payment_intent_id")
+      .eq("session_id", sessionId)
+      .eq("user_id", userId)
+      .maybeSingle();
 
-    let paymentSuccessful = false;
-    let paymentIntentId: string | null = null;
-    let amountPaid = 0;
-    let platformFee = DEFAULT_PLATFORM_FEE;
-    let actualUserId = userId;
-    let actualSessionId = sessionId;
-
-    if (checkoutSessionId) {
-      const checkoutSession = await stripe.checkout.sessions.retrieve(checkoutSessionId);
-      
-      if (checkoutSession.payment_status === "paid") {
-        paymentSuccessful = true;
-        paymentIntentId = checkoutSession.payment_intent as string;
-        amountPaid = (checkoutSession.amount_total || 0) / 100;
-        actualUserId = checkoutSession.metadata?.user_id || userId;
-        actualSessionId = checkoutSession.metadata?.session_id || sessionId;
-        // Read platform fee from metadata (set during create-payment)
-        const metadataFee = checkoutSession.metadata?.platform_fee;
-        platformFee = metadataFee ? parseFloat(metadataFee) : DEFAULT_PLATFORM_FEE;
-      }
+    if (paymentError) {
+      throw new Error("Failed to fetch payment status");
     }
 
-    if (!paymentSuccessful) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        message: "Payment not completed" 
+    const isAlreadyCompleted = payment?.status === "completed" || payment?.status === "transferred";
+
+    // If already completed by webhook, return immediately
+    if (isAlreadyCompleted) {
+      const { data: player } = await supabaseAdmin
+        .from("session_players")
+        .select("is_confirmed")
+        .eq("session_id", sessionId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      return new Response(JSON.stringify({
+        success: true,
+        status: payment.status,
+        isConfirmed: player?.is_confirmed === true,
+        payment: {
+          amount: payment.amount,
+          paidWithCredits: payment.paid_with_credits,
+          paidAt: payment.paid_at,
+        },
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
     }
 
-    // Update payment record in database
-    const { data: existingPayment } = await supabaseClient
-      .from("payments")
-      .select("id")
-      .eq("session_id", actualSessionId)
-      .eq("user_id", actualUserId)
-      .maybeSingle();
+    // --- FALLBACK: Check Stripe directly if webhook hasn't processed yet ---
+    if (checkoutSessionId && payment?.status === "pending") {
+      console.log("DB still pending, checking Stripe directly for:", checkoutSessionId);
 
-    if (existingPayment) {
-      // Update existing payment
-      await supabaseClient
-        .from("payments")
-        .update({
-          status: "completed",
-          paid_at: new Date().toISOString(),
-          stripe_payment_intent_id: paymentIntentId,
-          platform_fee: platformFee,
-        })
-        .eq("id", existingPayment.id);
-    } else {
-      // Create new payment record
-      await supabaseClient
-        .from("payments")
-        .insert({
-          session_id: actualSessionId,
-          user_id: actualUserId,
-          amount: amountPaid,
-          status: "completed",
-          paid_at: new Date().toISOString(),
-          stripe_payment_intent_id: paymentIntentId,
-          platform_fee: platformFee,
-        });
-    }
-
-    // Update court_availability payment status
-    const { data: session } = await supabaseClient
-      .from("sessions")
-      .select("id")
-      .eq("id", actualSessionId)
-      .single();
-
-    if (session) {
-      await supabaseClient
-        .from("court_availability")
-        .update({ payment_status: "completed" })
-        .eq("booked_by_session_id", actualSessionId);
-    }
-
-    // Update session_players to confirmed after successful payment
-    const { error: playerUpdateError } = await supabaseClient
-      .from("session_players")
-      .update({ 
-        is_confirmed: true, 
-        confirmed_at: new Date().toISOString() 
-      })
-      .eq("session_id", actualSessionId)
-      .eq("user_id", actualUserId);
-
-    if (playerUpdateError) {
-      console.error("Error updating session player:", playerUpdateError);
-    }
-
-    // Trigger payment transfer to venue owner after confirmation
-    if (!playerUpdateError) {
-      try {
-        const transferResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/transfer-payment`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          },
-          body: JSON.stringify({
-            sessionId: actualSessionId,
-            userId: actualUserId,
-          }),
-        });
-
-        const transferResult = await transferResponse.json();
-        if (!transferResult.success) {
-          console.error("Payment transfer failed:", transferResult.error);
-          // Don't fail the payment verification - transfer can be retried
-        } else {
-          console.log("Payment transferred to venue owner:", transferResult);
-        }
-      } catch (transferError) {
-        console.error("Error calling transfer-payment function:", transferError);
-        // Don't fail the payment verification - transfer can be retried
-      }
-    }
-
-    // Process referral credit for the paying user (if they were referred)
-    try {
-      const { data: referralResult } = await supabaseClient.rpc("process_referral_credit", {
-        p_referred_user_id: actualUserId,
+      const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+        apiVersion: "2024-12-18.acacia",
       });
-      if (referralResult) {
-        console.log("Referral credit awarded for user:", actualUserId);
+
+      const checkoutSession = await stripe.checkout.sessions.retrieve(checkoutSessionId);
+
+      if (checkoutSession.payment_status === "paid") {
+        console.log("Stripe confirms payment — processing inline");
+
+        const metadata = checkoutSession.metadata || {};
+        // Support both old and new metadata field names
+        const serviceFeeCents = parseFloat(metadata.service_fee || metadata.platform_fee || "0");
+        const serviceFeeDollars = serviceFeeCents / 100;
+        const totalChargeDollars = (checkoutSession.amount_total || 0) / 100;
+        const creditsApplied = parseFloat(metadata.credits_applied || "0");
+        const paymentIntentId = checkoutSession.payment_intent as string;
+
+        // Update payment record
+        await supabaseAdmin
+          .from("payments")
+          .update({
+            amount: totalChargeDollars,
+            paid_with_credits: creditsApplied,
+            platform_fee: serviceFeeDollars,
+            status: "completed",
+            paid_at: new Date().toISOString(),
+            stripe_payment_intent_id: paymentIntentId,
+          })
+          .eq("session_id", sessionId)
+          .eq("user_id", userId);
+
+        // Confirm player participation
+        await supabaseAdmin
+          .from("session_players")
+          .update({
+            is_confirmed: true,
+            confirmed_at: new Date().toISOString(),
+          })
+          .eq("session_id", sessionId)
+          .eq("user_id", userId);
+
+        // Update court availability payment status
+        await supabaseAdmin
+          .from("court_availability")
+          .update({ payment_status: "completed" })
+          .eq("booked_by_session_id", sessionId);
+
+        // Process referral credit (non-fatal)
+        try {
+          await supabaseAdmin.rpc("process_referral_credit", {
+            p_referred_user_id: userId,
+          });
+        } catch (refErr) {
+          console.error("Referral credit error (non-fatal):", refErr);
+        }
+
+        // Recalculate session
+        try {
+          const { data: rpcResult } = await supabaseAdmin.rpc("recalculate_and_maybe_confirm_session", {
+            p_session_id: sessionId,
+          });
+          const result = rpcResult as any;
+          if (result?.session_confirmed) {
+            console.log("Session confirmed via verify fallback — triggering payout");
+            await fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/payout-session`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                },
+                body: JSON.stringify({ sessionId }),
+              }
+            );
+          }
+        } catch (rpcErr) {
+          console.error("Session recalculation error (non-fatal):", rpcErr);
+        }
+
+        console.log("Payment processed via verify fallback:", {
+          sessionId,
+          userId,
+          totalCharge: totalChargeDollars,
+          serviceFee: serviceFeeDollars,
+        });
+
+        return new Response(JSON.stringify({
+          success: true,
+          status: "completed",
+          isConfirmed: true,
+          payment: {
+            amount: totalChargeDollars,
+            paidWithCredits: creditsApplied,
+            paidAt: new Date().toISOString(),
+          },
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
       }
-    } catch (refError) {
-      console.error("Error processing referral credit:", refError);
-      // Don't fail payment verification for referral errors
     }
 
-    console.log("Payment verified and recorded:", {
-      sessionId: actualSessionId,
-      userId: actualUserId,
-      amount: amountPaid,
-      playerConfirmed: !playerUpdateError,
-    });
-
-    return new Response(JSON.stringify({ 
-      success: true,
-      message: "Payment verified and recorded",
-      sessionId: actualSessionId,
+    // Not yet completed
+    return new Response(JSON.stringify({
+      success: false,
+      status: payment?.status || "not_found",
+      isConfirmed: false,
+      payment: payment ? {
+        amount: payment.amount,
+        paidWithCredits: payment.paid_with_credits,
+        paidAt: payment.paid_at,
+      } : null,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error("Error verifying payment:", errorMessage);
+    console.error("Error in verify-payment:", errorMessage);
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,

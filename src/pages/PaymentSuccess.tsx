@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,24 +13,53 @@ export default function PaymentSuccess() {
   const { user } = useAuth();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [countdown, setCountdown] = useState(5);
+  const pollCount = useRef(0);
 
   const sessionId = searchParams.get("session_id");
-  const paymentType = searchParams.get("type");
   const checkoutSessionId = searchParams.get("checkout_session_id");
+  const paymentType = searchParams.get("type");
 
+  // Poll DB for payment confirmation (webhook is source of truth)
   useEffect(() => {
-    if (sessionId && user) {
-      verifyPayment();
-    }
+    if (!sessionId || !user) return;
+
+    const pollInterval = setInterval(async () => {
+      pollCount.current += 1;
+
+      try {
+        const { data, error } = await supabase.functions.invoke("verify-payment", {
+          body: { sessionId, userId: user.id, checkoutSessionId },
+        });
+
+        if (error) throw error;
+
+        if (data?.success) {
+          clearInterval(pollInterval);
+          setStatus("success");
+        } else if (pollCount.current >= 30) {
+          // After ~60 seconds of polling, give up
+          clearInterval(pollInterval);
+          setStatus("error");
+        }
+      } catch (err) {
+        console.error("Poll error:", err);
+        if (pollCount.current >= 30) {
+          clearInterval(pollInterval);
+          setStatus("error");
+        }
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
   }, [sessionId, user]);
 
+  // Countdown + redirect on success
   useEffect(() => {
     if (status === "success") {
       const timer = setInterval(() => {
         setCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(timer);
-            // Redirect based on payment type
             if (paymentType === "at_booking") {
               navigate("/home");
             } else {
@@ -41,33 +70,9 @@ export default function PaymentSuccess() {
           return prev - 1;
         });
       }, 1000);
-
       return () => clearInterval(timer);
     }
   }, [status, navigate, sessionId, paymentType]);
-
-  const verifyPayment = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke("verify-payment", {
-        body: {
-          checkoutSessionId,
-          sessionId,
-          userId: user?.id,
-        },
-      });
-
-      if (error) throw error;
-
-      if (data?.success) {
-        setStatus("success");
-      } else {
-        setStatus("error");
-      }
-    } catch (error) {
-      console.error("Error verifying payment:", error);
-      setStatus("error");
-    }
-  };
 
   const handleContinue = () => {
     if (paymentType === "at_booking") {
@@ -88,9 +93,9 @@ export default function PaymentSuccess() {
                   <Loader2 className="h-10 w-10 text-primary animate-spin" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold mb-2">Verifying Payment</h2>
+                  <h2 className="text-xl font-semibold mb-2">Processing Payment…</h2>
                   <p className="text-muted-foreground">
-                    Please wait while we confirm your payment...
+                    Confirming your payment. This may take a few moments.
                   </p>
                 </div>
               </>

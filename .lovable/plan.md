@@ -1,183 +1,92 @@
 
-# Add Lobby Chat to Quick Game Lobby
 
-## Overview
+## Include Stripe Processing Fee in Service Fee
 
-Implement a real-time chat system at the bottom of the Quick Game Lobby, allowing players who have joined the match to communicate with each other. Chat history will be automatically deleted when the session ends or the organizer cancels the lobby.
+### Problem
+The platform currently charges players only `court_amount + platform_fee`, but Stripe deducts ~2.9% + 30c from the collected amount. The platform absorbs this cost, losing money on every transaction.
 
-## What Will Be Added
+### Solution
+Calculate an estimated Stripe fee on the backend and bundle it into the single "Service fee" shown to users. The user sees:
+- **Court price**: $X
+- **Service fee**: $Y (internally = platform_fee + estimated_stripe_fee)
+- **Total**: $Z
 
-### For Players
-- **Lobby Chat**: A chat section at the bottom of the Quick Game Lobby page
-- **System Messages**: Automatic notifications (e.g., "Alex created the match")
-- **Player Messages**: Send and receive messages from other players in the lobby
-- **Real-time Updates**: Messages appear instantly for all players
+No separate "Stripe fee" line is ever shown. Payout logic is NOT touched.
 
-### Chat Rules
-- Only players who have joined the lobby can see and send messages
-- Chat history is deleted when:
-  - The match session is completed
-  - The organizer cancels/quits the lobby
-  - The scheduled date passes (automatic cleanup)
+### Stripe Fee Estimation Formula
+NZ Stripe rates are typically 2.9% + 30c. To ensure full cost coverage, we use a "gross-up" formula:
 
----
-
-## Technical Implementation
-
-### Phase 1: Database Schema
-
-Create a new table `quick_challenge_messages` to store lobby chat messages:
-
-| Column | Type | Purpose |
-|--------|------|---------|
-| id | UUID | Primary key |
-| challenge_id | UUID | Foreign key to quick_challenges |
-| sender_id | UUID | Foreign key to auth.users |
-| content | TEXT | Message content |
-| message_type | TEXT | 'system' or 'user' |
-| created_at | TIMESTAMPTZ | When the message was sent |
-
-**RLS Policies:**
-- Players who have joined the challenge can read messages for that challenge
-- Players can only insert messages for challenges they've joined
-- Only the sender can delete their own messages
-- No updates allowed (messages are immutable)
-
-**Realtime:**
-- Enable realtime for the table so messages appear instantly
-
-### Phase 2: Backend - Auto-Cleanup Function
-
-Create a database function and trigger to delete chat messages when a challenge status changes to 'completed' or 'cancelled':
-
-```sql
--- Function to clean up chat when challenge ends
-CREATE OR REPLACE FUNCTION cleanup_challenge_chat()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.status IN ('completed', 'cancelled') AND OLD.status NOT IN ('completed', 'cancelled') THEN
-    DELETE FROM quick_challenge_messages WHERE challenge_id = NEW.id;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger on quick_challenges
-CREATE TRIGGER trigger_cleanup_challenge_chat
-AFTER UPDATE ON quick_challenges
-FOR EACH ROW
-EXECUTE FUNCTION cleanup_challenge_chat();
-```
-
-### Phase 3: Create Lobby Chat Hook
-
-Create a new hook `src/hooks/useLobbyChatMessages.ts` to manage chat messages:
-
-**Features:**
-- Fetch messages for a specific challenge
-- Real-time subscription to new messages
-- Send message mutation
-- System message creation (when player joins/leaves)
-
-```typescript
-// Hook interface
-export function useLobbyChatMessages(challengeId: string) {
-  // Returns:
-  // - messages: array of chat messages
-  // - isLoading: loading state
-  // - sendMessage: function to send a message
-  // - sendSystemMessage: function to send system notifications
-}
-```
-
-### Phase 4: Create LobbyChatPanel Component
-
-Create `src/components/quick-challenge/LobbyChatPanel.tsx`:
-
-**Based on Reference Design:**
-- Left side: Chat messages area with scroll
-- Right side: Player count badge + Match status badge + Arena Rules link
-- Bottom: Input field with placeholder "Send a message to the group..."
-
-**Layout (from reference image):**
 ```text
-+--------------------------------------------------+
-| SYSTEM: Alex Silva created the group.            |
-| ALEX SILVA: Let's win team!                      |
-|                                                  |
-| [Send a message to the group...]                 |
-+----------------------------------+---------------+
-                                   | 4/10 PLAYERS  |
-                                   | MATCH CONFIRMED|
-                                   | ARENA RULES 👥 |
-                                   +---------------+
+total_charge = (court_amount + platform_fee + 0.30) / (1 - 0.029)
+estimated_stripe_fee = total_charge - court_amount - platform_fee
+service_fee = platform_fee + estimated_stripe_fee
 ```
 
-**Component Props:**
+This ensures that after Stripe takes its cut from `total_charge`, the platform retains at least `platform_fee`.
+
+### File Changes
+
+#### 1. Backend: `supabase/functions/create-payment/index.ts`
+
+**Current** (lines 72-73):
 ```typescript
-interface LobbyChatPanelProps {
-  challengeId: string;
-  currentUserId: string;
-  totalSlots: number;
-  filledSlots: number;
-  isMatchFull: boolean;
-}
+const serviceFeeDollars = Number(platformSettings?.player_fee ?? 0);
+const serviceFeeCents = Math.round(serviceFeeDollars * 100);
 ```
 
-### Phase 5: Update QuickGameLobby.tsx
+**New**: After computing `remainingCourtAmountCents` (line 149), calculate the gross-up:
 
-Modify the footer section to include the chat panel:
+```typescript
+// Stripe NZ: 2.9% + 30c
+const STRIPE_PERCENT = 0.029;
+const STRIPE_FIXED_CENTS = 30;
 
-**Current Footer (lines 610-646):**
-- Shows player count and status badges
+const platformFeeCents = Math.round(Number(platformSettings?.player_fee ?? 0) * 100);
+const subtotalBeforeStripe = remainingCourtAmountCents + platformFeeCents;
+const grossTotalCents = Math.ceil((subtotalBeforeStripe + STRIPE_FIXED_CENTS) / (1 - STRIPE_PERCENT));
+const estimatedStripeFeeCents = grossTotalCents - subtotalBeforeStripe;
+const serviceFeeCents = platformFeeCents + estimatedStripeFeeCents;
+const totalChargeCents = remainingCourtAmountCents + serviceFeeCents;
+```
 
-**Updated Footer:**
-- Replace with `LobbyChatPanel` component that includes:
-  - Chat messages area on the left
-  - Status badges on the right
-  - Message input at the bottom
+- Remove the early `serviceFeeCents` calculation at line 73 (it's now computed after credits).
+- Use a single Stripe Checkout line item with `unit_amount = totalChargeCents` (court booking + service fee combined), or keep two line items: court amount + service fee.
+- Update metadata to include the new `service_fee` and `total_charge`.
+- Update the response to return `serviceFee: serviceFeeCents / 100` and `total: totalChargeCents / 100`.
+- For credits-only payments, no Stripe fee is needed (no change to that path).
 
----
+#### 2. Frontend: `src/hooks/usePlatformFee.ts`
 
-## File Changes Summary
+No changes needed. The frontend already fetches `playerFee` for display, but since the task says "do NOT calculate any fee in the frontend," the GameDetail page should ideally show the backend-returned breakdown. However, for the pre-payment display (before the user clicks "Pay"), the frontend still needs an estimate. We will keep using `playerFee` from this hook but add a note that the actual charge comes from the backend.
 
-| File | Action | Description |
-|------|--------|-------------|
-| Database Migration | Create | Add `quick_challenge_messages` table with RLS |
-| Database Migration | Create | Add cleanup trigger for chat messages |
-| `src/hooks/useLobbyChatMessages.ts` | Create | Hook for fetching/sending chat messages |
-| `src/components/quick-challenge/LobbyChatPanel.tsx` | Create | Chat panel component |
-| `src/pages/QuickGameLobby.tsx` | Modify | Replace footer with chat panel |
+**Alternative approach**: Add a lightweight edge function or RPC that returns the estimated total for a given session, so the frontend never calculates fees. However, this adds latency and complexity. For now, the frontend will show the platform fee as an approximate "Service fee" label, and the actual Stripe checkout will reflect the true gross-up total from the backend. The button label will say "Make Payment" without a specific dollar amount, or we accept a minor discrepancy between the displayed estimate and the actual charge.
 
----
+**Recommended approach**: Keep the frontend estimate using `playerFee` for display consistency, but update the button to not show a specific amount (just "Make Payment"), since the backend determines the final total. The Stripe Checkout page will show the authoritative amount.
 
-## User Experience Flow
+Actually, to keep UX clean and match the requirement "Display Court price: $X, Service fee: $Y, Total: $Z" accurately, we should compute the same gross-up formula on the frontend for display purposes only. This keeps the display in sync with what the backend will charge.
 
-1. **Player joins lobby** -> System message appears: "[Player] joined the match"
-2. **Player sends message** -> Message appears for all players in real-time
-3. **Other players see** -> Messages update instantly via Supabase Realtime
-4. **Match completes/cancelled** -> All chat history is automatically deleted
+#### 3. Frontend: `src/pages/GameDetail.tsx`
 
----
+- Replace `playerFee` usage with a computed `serviceFee` that includes estimated Stripe cost using the same formula.
+- Update all price display sections (lines 936-946, 971, 999-1001, 1020) to use the new `serviceFee`.
+- Update `handleMakePayment` credit comparison (line 425) to use the new total.
 
-## Design Details (Matching Reference Image)
+#### 4. Frontend: `src/pages/Games.tsx` and `src/components/cards/GameCard.tsx`
 
-### Chat Message Styling
-- **System messages**: Highlighted in blue/cyan color with "SYSTEM:" prefix
-- **User messages**: Yellow/gold username, white/light message text
-- **Font size**: Small (10-11px) for compact display
+- Update the per-player price card to include the estimated Stripe fee in the displayed total.
 
-### Footer Layout
-- **Height**: ~128px (h-32)
-- **Left section**: Chat messages + input (flex-1)
-- **Right section**: Status badges (1/3 width on mobile, 1/2 on desktop)
+### Implementation Sequence
 
-### Input Field
-- Dark background with subtle border
-- Placeholder: "Send a message to the group..."
-- No send button (Enter key to send)
+1. Update `create-payment` edge function with gross-up Stripe fee calculation
+2. Create a small utility function `estimateServiceFee(courtAmountDollars, platformFeeDollars)` in `src/lib/utils.ts` for frontend display
+3. Update `GameDetail.tsx` to use the utility for display
+4. Update `Games.tsx` and `GameCard.tsx` to use the utility for display
+5. Deploy the edge function
 
-### Status Section
-- Player count badge: "4/10 PLAYERS"
-- Match status badge: "MATCH CONFIRMED" (green, only when full)
-- "Arena Rules" link with Users icon
+### What Does NOT Change
+- Payout logic (`payout-session`) -- untouched
+- `stripe-webhook` -- untouched
+- `verify-payment` -- untouched
+- Database schema -- no changes
+- Credits-only payment path -- no Stripe fee applied (correct behavior)
+

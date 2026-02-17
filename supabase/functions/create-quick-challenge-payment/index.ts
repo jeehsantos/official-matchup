@@ -24,27 +24,32 @@ serve(async (req) => {
       throw new Error("Challenge ID is required");
     }
 
-    // Get authorization header for user context
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       throw new Error("Authorization required");
     }
 
-    // Get user from auth header
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
+      { global: { headers: { Authorization: authHeader } } }
     );
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       throw new Error("User not authenticated");
     }
+
+    // Fetch admin-configured platform fee — NEVER hardcode
+    const { data: platformSettings } = await supabaseAdmin
+      .from("platform_settings")
+      .select("player_fee, manager_fee_percentage")
+      .eq("is_active", true)
+      .limit(1)
+      .single();
+
+    const playerFeeDollars = Number(platformSettings?.player_fee ?? 0);
+    const playerFeeCents = Math.round(playerFeeDollars * 100);
 
     // Fetch challenge with venue info
     const { data: challenge, error: challengeError } = await supabaseAdmin
@@ -91,21 +96,10 @@ serve(async (req) => {
 
     const venue = challenge.venues;
     const pricePerPlayer = challenge.price_per_player || 0;
-    const amountCents = Math.round(pricePerPlayer * 100);
+    const courtShareCents = Math.round(pricePerPlayer * 100);
 
-    // Fetch platform settings from DB
-    const { data: platformSettings } = await supabaseAdmin
-      .from("platform_settings")
-      .select("player_fee, is_active")
-      .limit(1)
-      .maybeSingle();
-
-    const playerFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 1.5) : 0;
-    const playerFeeCents = Math.round(playerFee * 100);
-
-
-    if (amountCents <= 0) {
-      // Free challenge - mark as paid immediately
+    if (courtShareCents <= 0) {
+      // Free challenge - mark as paid immediately (no platform fee)
       await supabaseAdmin
         .from("quick_challenge_players")
         .update({
@@ -119,6 +113,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         success: true,
         message: "Free challenge - confirmed!",
+        platformFee: 0,
+        courtShare: 0,
+        total: 0,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -127,7 +124,6 @@ serve(async (req) => {
 
     // --- CREDITS PAYMENT FLOW ---
     if (useCredits) {
-      // Check user's credit balance
       const { data: creditBalance, error: creditError } = await supabaseAdmin
         .rpc("get_user_credits", { p_user_id: user.id });
 
@@ -142,7 +138,7 @@ serve(async (req) => {
         throw new Error("Insufficient credits");
       }
 
-      // Deduct credits
+      // Deduct credits (no platform fee for credits-only)
       const { data: useResult, error: useError } = await supabaseAdmin
         .rpc("use_user_credits", {
           p_user_id: user.id,
@@ -156,7 +152,6 @@ serve(async (req) => {
         throw new Error("Failed to deduct credits");
       }
 
-      // Mark player as paid
       await supabaseAdmin
         .from("quick_challenge_players")
         .update({
@@ -172,6 +167,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         success: true,
         message: `Payment of $${pricePerPlayer.toFixed(2)} completed using your credits.`,
+        platformFee: 0,
+        courtShare: pricePerPlayer,
+        total: pricePerPlayer,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -179,6 +177,16 @@ serve(async (req) => {
     }
 
     // --- STRIPE PAYMENT FLOW ---
+    // Gross-up formula to cover Stripe processing fees (NZ: 2.9% + 30c)
+    const STRIPE_PERCENT = 0.029;
+    const STRIPE_FIXED_CENTS = 30;
+
+    const subtotalBeforeStripe = courtShareCents + playerFeeCents;
+    const grossTotalCents = Math.ceil((subtotalBeforeStripe + STRIPE_FIXED_CENTS) / (1 - STRIPE_PERCENT));
+    const estimatedStripeFeeCents = grossTotalCents - subtotalBeforeStripe;
+    const serviceFeeCents = playerFeeCents + estimatedStripeFeeCents;
+    const totalChargeCents = courtShareCents + serviceFeeCents;
+
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2024-12-18.acacia",
     });
@@ -197,9 +205,7 @@ serve(async (req) => {
       challenge.scheduled_date ? `on ${challenge.scheduled_date}` : "",
     ].filter(Boolean).join(" - ");
 
-    const appliedPlayerFeeCents = Math.min(playerFeeCents, amountCents);
-    const baseAmountCents = amountCents - appliedPlayerFeeCents;
-
+    // Two line items: court price + service fee
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         price_data: {
@@ -208,27 +214,27 @@ serve(async (req) => {
             name: `Quick Match: ${challenge.game_mode}`,
             description,
           },
-          unit_amount: baseAmountCents,
+          unit_amount: courtShareCents,
         },
         quantity: 1,
       },
     ];
 
-    if (appliedPlayerFeeCents > 0) {
+    // Add service fee as separate line item (only if > 0)
+    if (serviceFeeCents > 0) {
       lineItems.push({
         price_data: {
           currency: "nzd",
           product_data: {
-            name: "Platform Service Fee",
+            name: "Service Fee",
+            description: "Service fee",
           },
-          unit_amount: appliedPlayerFeeCents,
+          unit_amount: serviceFeeCents,
         },
         quantity: 1,
       });
     }
 
-    const stripeAccountId = venue?.stripe_account_id;
-    
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       line_items: lineItems,
@@ -240,21 +246,14 @@ serve(async (req) => {
         player_record_id: playerRecord.id,
         user_id: user.id,
         type: "quick_challenge",
+        service_fee: serviceFeeCents.toString(),
+        court_share: courtShareCents.toString(),
+        total_charge: totalChargeCents.toString(),
+        venue_stripe_account_id: venue?.stripe_account_id || "",
       },
     };
 
-    if (stripeAccountId) {
-      const applicationFee = appliedPlayerFeeCents;
-      sessionParams.payment_intent_data = {
-        application_fee_amount: applicationFee,
-        transfer_data: {
-          destination: stripeAccountId,
-        },
-      };
-      console.log(`Stripe Connect destination charge - Account: ${stripeAccountId}, Fee: $${applicationFee / 100}`);
-    } else {
-      console.log("No Stripe Connect account - platform receives full payment");
-    }
+    console.log(`Quick challenge checkout: court=${courtShareCents}c, serviceFee=${serviceFeeCents}c, total=${totalChargeCents}c`);
 
     const checkoutSession = await stripe.checkout.sessions.create(sessionParams);
 
@@ -270,6 +269,9 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       url: checkoutSession.url,
       checkoutSessionId: checkoutSession.id,
+      serviceFee: serviceFeeCents / 100,
+      courtShare: pricePerPlayer,
+      total: totalChargeCents / 100,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
