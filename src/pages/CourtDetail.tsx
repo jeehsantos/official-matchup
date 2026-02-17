@@ -653,6 +653,7 @@ export default function CourtDetail() {
     paymentType: "single" | "split";
     equipment: SelectedEquipment[];
     sportCategoryId: string;
+    splitPlayers?: number;
   }) => {
     const { groupId, isNewGroup, paymentType, equipment, sportCategoryId } = data;
     // Update selected equipment from wizard
@@ -691,7 +692,7 @@ export default function CourtDetail() {
           start_time: startTime,
           duration_minutes: totalDuration,
           court_price: totalPrice,
-          min_players: 6,
+          min_players: data.paymentType === "split" && data.splitPlayers ? data.splitPlayers : 6,
           max_players: court.capacity,
           payment_deadline: paymentDeadline.toISOString(),
           state: "protected",
