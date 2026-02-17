@@ -54,12 +54,12 @@ Deno.serve(async (req) => {
   try {
     if (event.type === "checkout.session.completed") {
       await handleCheckoutCompleted(event, supabaseAdmin);
+    } else if (event.type === "payment_intent.succeeded") {
+      await handlePaymentIntentSucceeded(event, supabaseAdmin);
     }
-    // Add more event types here as needed
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`Error processing ${event.type}:`, msg);
-    // Return 200 to acknowledge receipt even on processing errors
     return new Response(JSON.stringify({ received: true, error: msg }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -72,6 +72,51 @@ Deno.serve(async (req) => {
   });
 });
 
+// ── payment_intent.succeeded: store actual Stripe fee ──────────────────────
+async function handlePaymentIntentSucceeded(
+  event: Stripe.Event,
+  supabaseAdmin: ReturnType<typeof createClient>
+) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent;
+  const piId = paymentIntent.id;
+
+  // Retrieve the PI with the latest charge expanded to get balance_transaction
+  let stripeFeeActual: number | null = null;
+  let stripeNetAmount: number | null = null;
+
+  try {
+    const pi = await stripe.paymentIntents.retrieve(piId, {
+      expand: ["latest_charge.balance_transaction"],
+    });
+
+    const charge = pi.latest_charge as Stripe.Charge | null;
+    if (charge) {
+      const bt = charge.balance_transaction as Stripe.BalanceTransaction | null;
+      if (bt) {
+        stripeFeeActual = bt.fee; // in cents
+        stripeNetAmount = bt.net; // in cents
+      }
+    }
+  } catch (err) {
+    console.error("Failed to retrieve balance_transaction (non-fatal):", err);
+  }
+
+  if (stripeFeeActual !== null) {
+    // Store fee in dollars on the payment row (convert from cents)
+    const { error } = await supabaseAdmin
+      .from("payments")
+      .update({ stripe_fee_actual: stripeFeeActual / 100 })
+      .eq("stripe_payment_intent_id", piId);
+
+    if (error) {
+      console.error("Failed to store stripe_fee_actual:", error);
+    } else {
+      console.log("Stored stripe_fee_actual:", stripeFeeActual / 100, "for PI:", piId);
+    }
+  }
+}
+
+// ── checkout.session.completed ─────────────────────────────────────────────
 async function handleCheckoutCompleted(
   event: Stripe.Event,
   supabaseAdmin: ReturnType<typeof createClient>
@@ -94,10 +139,7 @@ async function handleSessionPayment(
   supabaseAdmin: ReturnType<typeof createClient>
 ) {
   const sessionId = metadata.session_id;
-  const userId = metadata.user_id;
-  const creditsApplied = parseFloat(metadata.credits_applied || "0");
-  const platformFeeCents = parseFloat(metadata.platform_fee || "0");
-  const platformFeeDollars = platformFeeCents / 100;
+  const userId = metadata.payer_user_id || metadata.user_id;
   const paymentIntentId = session.payment_intent as string;
 
   if (!sessionId || !userId) {
@@ -117,12 +159,23 @@ async function handleSessionPayment(
     return;
   }
 
-  // amount_total includes court share + platform fee
-  const totalChargeDollars = (session.amount_total || 0) / 100;
+  // Read snapshot values from metadata (set by create-payment)
+  const courtAmountSnapshot = parseFloat(metadata.court_amount || "0") / 100;
+  const serviceFeeSnapshot = parseFloat(metadata.service_fee || "0") / 100;
+  const totalChargeSnapshot = parseFloat(metadata.total_charge || "0") / 100;
+  const paymentTypeSnapshot = metadata.payment_type || null;
 
-  // Upsert payment record
-  // amount = total charge (including platform fee) for correct payout math:
-  // payout courtShare = amount - platform_fee
+  // Fallback: use amount_total if total_charge not in metadata
+  const totalChargeDollars = totalChargeSnapshot > 0
+    ? totalChargeSnapshot
+    : (session.amount_total || 0) / 100;
+
+  // Legacy fields for backward compat
+  const creditsApplied = parseFloat(metadata.credits_applied || "0");
+  const platformFeeCents = parseFloat(metadata.platform_fee || metadata.service_fee || "0");
+  const platformFeeDollars = platformFeeCents / 100;
+
+  // Upsert payment record with snapshots
   await supabaseAdmin
     .from("payments")
     .upsert(
@@ -132,6 +185,9 @@ async function handleSessionPayment(
         amount: totalChargeDollars,
         paid_with_credits: creditsApplied,
         platform_fee: platformFeeDollars,
+        court_amount: courtAmountSnapshot > 0 ? courtAmountSnapshot : null,
+        service_fee: serviceFeeSnapshot > 0 ? serviceFeeSnapshot : null,
+        payment_type_snapshot: paymentTypeSnapshot,
         status: "completed",
         paid_at: new Date().toISOString(),
         stripe_payment_intent_id: paymentIntentId,
@@ -139,15 +195,32 @@ async function handleSessionPayment(
       { onConflict: "session_id,user_id" }
     );
 
-  // Confirm player participation
-  await supabaseAdmin
-    .from("session_players")
-    .update({
-      is_confirmed: true,
-      confirmed_at: new Date().toISOString(),
-    })
-    .eq("session_id", sessionId)
-    .eq("user_id", userId);
+  // Determine payment mode for confirmation logic
+  const isSplit = paymentTypeSnapshot === "split";
+  const isOrganizerPaysFull = paymentTypeSnapshot === "single";
+
+  if (isSplit) {
+    // Split: confirm this payer's participation
+    await supabaseAdmin
+      .from("session_players")
+      .update({
+        is_confirmed: true,
+        confirmed_at: new Date().toISOString(),
+      })
+      .eq("session_id", sessionId)
+      .eq("user_id", userId);
+  } else {
+    // Organizer pays full: confirm organizer's participation only
+    // (other players are not auto-confirmed)
+    await supabaseAdmin
+      .from("session_players")
+      .update({
+        is_confirmed: true,
+        confirmed_at: new Date().toISOString(),
+      })
+      .eq("session_id", sessionId)
+      .eq("user_id", userId);
+  }
 
   // Update court availability payment status
   await supabaseAdmin
@@ -205,7 +278,9 @@ async function handleSessionPayment(
     sessionId,
     userId,
     totalCharge: totalChargeDollars,
-    platformFee: platformFeeDollars,
+    courtAmount: courtAmountSnapshot,
+    serviceFee: serviceFeeSnapshot,
+    paymentType: paymentTypeSnapshot,
     paymentIntentId,
   });
 }

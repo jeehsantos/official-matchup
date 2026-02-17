@@ -700,13 +700,17 @@ export type Database = {
       payments: {
         Row: {
           amount: number
+          court_amount: number | null
           created_at: string
           id: string
           paid_at: string | null
           paid_with_credits: number | null
+          payment_type_snapshot: string | null
           platform_fee: number | null
+          service_fee: number | null
           session_id: string
           status: Database["public"]["Enums"]["payment_status"]
+          stripe_fee_actual: number | null
           stripe_payment_intent_id: string | null
           stripe_transfer_id: string | null
           transfer_amount: number | null
@@ -716,13 +720,17 @@ export type Database = {
         }
         Insert: {
           amount: number
+          court_amount?: number | null
           created_at?: string
           id?: string
           paid_at?: string | null
           paid_with_credits?: number | null
+          payment_type_snapshot?: string | null
           platform_fee?: number | null
+          service_fee?: number | null
           session_id: string
           status?: Database["public"]["Enums"]["payment_status"]
+          stripe_fee_actual?: number | null
           stripe_payment_intent_id?: string | null
           stripe_transfer_id?: string | null
           transfer_amount?: number | null
@@ -732,13 +740,17 @@ export type Database = {
         }
         Update: {
           amount?: number
+          court_amount?: number | null
           created_at?: string
           id?: string
           paid_at?: string | null
           paid_with_credits?: number | null
+          payment_type_snapshot?: string | null
           platform_fee?: number | null
+          service_fee?: number | null
           session_id?: string
           status?: Database["public"]["Enums"]["payment_status"]
+          stripe_fee_actual?: number | null
           stripe_payment_intent_id?: string | null
           stripe_transfer_id?: string | null
           transfer_amount?: number | null
