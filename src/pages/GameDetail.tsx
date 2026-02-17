@@ -20,6 +20,7 @@ import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { getSportCategory } from "@/lib/sport-category-utils";
 import { usePlatformFee } from "@/hooks/usePlatformFee";
+import { estimateServiceFee } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -422,7 +423,8 @@ export default function GameDetail() {
     const courtShare = session.payment_type === "single"
       ? gameData.session.court_price
       : gameData.session.court_price / (gameData.session.max_players || 1);
-    const totalAmount = courtShare + playerFee;
+    const estServiceFee = estimateServiceFee(courtShare, playerFee);
+    const totalAmount = courtShare + estServiceFee;
     if (credits >= totalAmount && !loadingCredits) {
       setShowCreditsModal(true);
       return;
@@ -443,7 +445,8 @@ export default function GameDetail() {
       const courtShare = session.payment_type === "single"
         ? gameData.session.court_price
         : gameData.session.court_price / (gameData.session.max_players || 1);
-      const totalAmount = courtShare + playerFee;
+      const estServiceFee = estimateServiceFee(courtShare, playerFee);
+      const totalAmount = courtShare + estServiceFee;
       
       if (method === "credits") {
         // If credits cover the full amount, process with credits only
@@ -628,7 +631,8 @@ const getGoogleMapsUrl = (address: string): string => {
   const pricePerPlayer = session.payment_type === "single"
     ? session.court_price
     : session.court_price / (session.max_players || 1);
-  const totalPerPlayer = pricePerPlayer + playerFee;
+  const serviceFee = estimateServiceFee(pricePerPlayer, playerFee);
+  const totalPerPlayer = pricePerPlayer + serviceFee;
   const isOrganizer = group.organizer_id === user.id;
   const isPlayerInGame = players.some(p => p.user_id === user.id);
   const isInWaitingList = waitingList.some(p => p.user_id === user.id);
@@ -933,17 +937,17 @@ const getGoogleMapsUrl = (address: string): string => {
                           <>
                             <p className="font-semibold text-success">Paid & Confirmed</p>
                             <p className="text-sm text-muted-foreground">
-                              Court price: ${session.court_price.toFixed(2)} + Service fee: ${playerFee.toFixed(2)}
+                              Court price: ${session.court_price.toFixed(2)} + Service fee: ${serviceFee.toFixed(2)}
                             </p>
-                            <p className="text-sm font-semibold">Total: ${(session.court_price + playerFee).toFixed(2)}</p>
+                            <p className="text-sm font-semibold">Total: ${(session.court_price + serviceFee).toFixed(2)}</p>
                           </>
                         ) : (
                           <>
                             <p className="font-semibold text-warning">Payment Pending</p>
                             <p className="text-sm text-muted-foreground">
-                              Court price: ${session.court_price.toFixed(2)} + Service fee: ${playerFee.toFixed(2)}
+                              Court price: ${session.court_price.toFixed(2)} + Service fee: ${serviceFee.toFixed(2)}
                             </p>
-                            <p className="text-sm font-semibold">Total: ${(session.court_price + playerFee).toFixed(2)}</p>
+                            <p className="text-sm font-semibold">Total: ${(session.court_price + serviceFee).toFixed(2)}</p>
                           </>
                         )
                       ) : (
@@ -968,7 +972,7 @@ const getGoogleMapsUrl = (address: string): string => {
                           disabled={actionLoading}
                         >
                           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Pay Now - ${(session.court_price + playerFee).toFixed(2)}
+                          Pay Now - ${(session.court_price + serviceFee).toFixed(2)}
                         </Button>
                       )
                     )}
@@ -998,7 +1002,7 @@ const getGoogleMapsUrl = (address: string): string => {
                       <p className="text-sm text-muted-foreground">Price per player</p>
                       <p className="text-2xl font-bold">${totalPerPlayer.toFixed(2)}</p>
                       <p className="text-xs text-muted-foreground">
-                        Court: ${pricePerPlayer.toFixed(2)} + Service fee: ${playerFee.toFixed(2)}
+                        Court: ${pricePerPlayer.toFixed(2)} + Service fee: ${serviceFee.toFixed(2)}
                       </p>
                     </div>
                   </div>
