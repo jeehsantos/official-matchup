@@ -177,8 +177,15 @@ serve(async (req) => {
     }
 
     // --- STRIPE PAYMENT FLOW ---
-    // Total charge = court share + platform fee
-    const totalChargeCents = courtShareCents + playerFeeCents;
+    // Gross-up formula to cover Stripe processing fees (NZ: 2.9% + 30c)
+    const STRIPE_PERCENT = 0.029;
+    const STRIPE_FIXED_CENTS = 30;
+
+    const subtotalBeforeStripe = courtShareCents + playerFeeCents;
+    const grossTotalCents = Math.ceil((subtotalBeforeStripe + STRIPE_FIXED_CENTS) / (1 - STRIPE_PERCENT));
+    const estimatedStripeFeeCents = grossTotalCents - subtotalBeforeStripe;
+    const serviceFeeCents = playerFeeCents + estimatedStripeFeeCents;
+    const totalChargeCents = courtShareCents + serviceFeeCents;
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2024-12-18.acacia",
@@ -198,7 +205,7 @@ serve(async (req) => {
       challenge.scheduled_date ? `on ${challenge.scheduled_date}` : "",
     ].filter(Boolean).join(" - ");
 
-    // Separate line items for transparency
+    // Two line items: court price + service fee
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         price_data: {
@@ -213,23 +220,21 @@ serve(async (req) => {
       },
     ];
 
-    // Add platform fee as separate line item (only if > 0)
-    if (playerFeeCents > 0) {
+    // Add service fee as separate line item (only if > 0)
+    if (serviceFeeCents > 0) {
       lineItems.push({
         price_data: {
           currency: "nzd",
           product_data: {
-            name: "Platform Fee",
+            name: "Service Fee",
             description: "Service fee",
           },
-          unit_amount: playerFeeCents,
+          unit_amount: serviceFeeCents,
         },
         quantity: 1,
       });
     }
 
-    // Platform receives all funds; transfers happen after session confirmation
-    // DO NOT set transfer_data.destination here
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       line_items: lineItems,
@@ -241,14 +246,14 @@ serve(async (req) => {
         player_record_id: playerRecord.id,
         user_id: user.id,
         type: "quick_challenge",
-        platform_fee: playerFeeCents.toString(),
+        service_fee: serviceFeeCents.toString(),
         court_share: courtShareCents.toString(),
         total_charge: totalChargeCents.toString(),
         venue_stripe_account_id: venue?.stripe_account_id || "",
       },
     };
 
-    console.log(`Quick challenge checkout: court=${courtShareCents}c, fee=${playerFeeCents}c, total=${totalChargeCents}c`);
+    console.log(`Quick challenge checkout: court=${courtShareCents}c, serviceFee=${serviceFeeCents}c, total=${totalChargeCents}c`);
 
     const checkoutSession = await stripe.checkout.sessions.create(sessionParams);
 
@@ -264,7 +269,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       url: checkoutSession.url,
       checkoutSessionId: checkoutSession.id,
-      platformFee: playerFeeDollars,
+      serviceFee: serviceFeeCents / 100,
       courtShare: pricePerPlayer,
       total: totalChargeCents / 100,
     }), {
