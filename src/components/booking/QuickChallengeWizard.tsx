@@ -29,6 +29,7 @@ import {
   CheckCircle2
 } from "lucide-react";
 import type { Equipment } from "@/hooks/useVenueEquipment";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 
 type BookingPaymentType = "single" | "split";
 
@@ -144,6 +145,9 @@ export function QuickChallengeWizard({
     (sum, item) => sum + item.quantity * item.pricePerUnit, 
     0
   );
+  const { data: platformSettings } = usePlatformSettings();
+  const platformFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
+
   const totalPrice = courtPrice + equipmentTotal;
   const pricePerPlayer = Math.ceil((totalPrice / totalPlayers) * 100) / 100;
   const perPlayerServiceFee = estimateServiceFee(pricePerPlayer, platformFee);

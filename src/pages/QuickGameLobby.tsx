@@ -9,6 +9,7 @@ import { cn, estimateServiceFee } from "@/lib/utils";
 import { usePlatformFee } from "@/hooks/usePlatformFee";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Loader2,
@@ -439,6 +440,10 @@ export default function QuickGameLobby() {
     () => players.some((p) => p.isMe),
     [players]
   );
+
+  const platformFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
+  const challengePricePerPlayer = challenge?.price_per_player || 0;
+  const gameFeePerPlayer = Math.max(0, challengePricePerPlayer - platformFee);
 
   // Handlers - use 0-based slot positions to match database
   const handleJoinSlot = (team: TeamSide, slotPosition: number) => {
@@ -1023,6 +1028,11 @@ export default function QuickGameLobby() {
                 </span>
               )}
             </div>
+            {challengePricePerPlayer > 0 && (
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                ${gameFeePerPlayer.toFixed(2)} game fee + ${platformFee.toFixed(2)} platform fee
+              </p>
+            )}
           </div>
         </div>
 

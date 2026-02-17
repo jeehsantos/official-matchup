@@ -18,6 +18,7 @@ import { checkProfileComplete } from "@/lib/profile-utils";
 import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
 import { useUserCredits } from "@/hooks/useUserCredits";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { getSportCategory } from "@/lib/sport-category-utils";
 import { usePlatformFee } from "@/hooks/usePlatformFee";
 import { estimateServiceFee } from "@/lib/utils";
@@ -439,7 +440,7 @@ export default function GameDetail() {
     creditsToUse?: number
   ) => {
     if (!gameData || !id || !user) return;
-    
+
     setActionLoading(true);
     try {
       const courtShare = session.payment_type === "single"
@@ -480,7 +481,6 @@ export default function GameDetail() {
         // Partial credits - proceed to Stripe with credits applied
         await processCardPayment(true, creditsToUse);
       } else {
-        // Pay with card only
         await processCardPayment(false);
       }
     } catch (error) {
@@ -953,7 +953,7 @@ const getGoogleMapsUrl = (address: string): string => {
                       ) : (
                         <>
                           <p className="font-semibold text-success">Covered by Organizer</p>
-                          <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                          <p className="text-sm text-muted-foreground">Total: ${singleTotal.toFixed(2)}</p>
                         </>
                       )}
                     </div>

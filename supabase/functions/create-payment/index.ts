@@ -75,7 +75,6 @@ serve(async (req) => {
     // Calculate full court cost (court price + equipment if any)
     let fullCourtCostCents = Math.round(session.court_price * 100);
 
-    // Fetch booking equipment if any
     const { data: bookingEquipment } = await supabaseAdmin
       .from("booking_equipment")
       .select("*, equipment_inventory(*)")
@@ -170,14 +169,10 @@ serve(async (req) => {
       // Confirm player participation
       await supabaseAdmin
         .from("session_players")
-        .update({
-          is_confirmed: true,
-          confirmed_at: new Date().toISOString(),
-        })
+        .update({ is_confirmed: true, confirmed_at: new Date().toISOString() })
         .eq("session_id", sessionId)
         .eq("user_id", user.id);
 
-      // Update court availability payment status
       await supabaseAdmin
         .from("court_availability")
         .update({ payment_status: "completed" })
@@ -288,7 +283,6 @@ serve(async (req) => {
 
     console.log(`Checkout created: ${checkoutSession.id} | Court: ${remainingCourtAmountCents}c, Fee: ${serviceFeeCents}c, Total: ${totalChargeCents}c, Credits: ${creditsToApply}, Mode: ${sessionPaymentType}`);
 
-    // Create pending payment record
     await supabaseAdmin
       .from("payments")
       .upsert({

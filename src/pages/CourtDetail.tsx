@@ -38,6 +38,7 @@ import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/
 import { checkProfileComplete } from "@/lib/profile-utils";
 import { useVenueEquipment } from "@/hooks/useVenueEquipment";
 import { useUserCredits } from "@/hooks/useUserCredits";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
 import { PaymentTimingChoice } from "@/components/booking/PaymentTimingChoice";
 import { HoldCountdown } from "@/components/booking/HoldCountdown";
@@ -165,6 +166,7 @@ export default function CourtDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  const { data: platformSettings } = usePlatformSettings();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
   
@@ -851,8 +853,10 @@ export default function CourtDetail() {
       const courtPriceCalc = courtRate * hours;
       const equipmentTotal = equipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0);
       const totalPrice = courtPriceCalc + equipmentTotal;
+      const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
+      const splitPricePerPlayer = Math.ceil((totalPrice / quickGameConfig.totalPlayers) * 100) / 100;
       const pricePerPlayer = paymentType === "split" 
-        ? Math.ceil((totalPrice / quickGameConfig.totalPlayers) * 100) / 100 
+        ? splitPricePerPlayer + serviceFee
         : 0;
 
       // Create quick_challenges record
