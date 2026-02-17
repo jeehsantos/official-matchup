@@ -28,6 +28,7 @@ interface GameCardProps {
   state: SessionState;
   isPaid?: boolean;
   serviceFee?: number;
+  linkTo?: string;
 }
 
 export function GameCard({
@@ -46,13 +47,14 @@ export function GameCard({
   state,
   isPaid = false,
   serviceFee = 0,
+  linkTo,
 }: GameCardProps) {
   const totalPrice = price + serviceFee;
   // Use sport category display name if available, otherwise fallback to "Sport TBD"
   const sportDisplayName = sportCategory?.display_name || "Sport TBD";
   
   return (
-    <Link to={`/games/${id}`}>
+    <Link to={linkTo || `/games/${id}`}>
       <Card className="overflow-hidden hover:shadow-card-hover transition-shadow duration-200 h-full">
         <CardContent className="p-4 space-y-3">
           {/* Header */}

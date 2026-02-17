@@ -1006,15 +1006,22 @@ export default function QuickGameLobby() {
                 Invite Friend
               </Button>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Total:
-              </span>
-              <span className="text-sm font-black uppercase tracking-widest text-primary">
-                ${challenge.price_per_player != null
-                  ? (challenge.price_per_player + estimateServiceFee(challenge.price_per_player, playerFee)).toFixed(2)
-                  : "0.00"}
-              </span>
+            <div className="flex flex-col items-center gap-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Total:
+                </span>
+                <span className="text-sm font-black uppercase tracking-widest text-primary">
+                  ${challenge.price_per_player != null
+                    ? (challenge.price_per_player + estimateServiceFee(challenge.price_per_player, playerFee)).toFixed(2)
+                    : "0.00"}
+                </span>
+              </div>
+              {challenge.price_per_player > 0 && (
+                <span className="text-[9px] text-muted-foreground">
+                  Court price ${challenge.price_per_player.toFixed(2)} + Service fee ${estimateServiceFee(challenge.price_per_player, playerFee).toFixed(2)}
+                </span>
+              )}
             </div>
           </div>
         </div>
