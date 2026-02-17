@@ -369,6 +369,8 @@ export default function CourtDetail() {
         },
         (payload) => {
           console.log('Hold changed:', payload);
+          // Skip refetch if the booking wizard is open to avoid disrupting the user
+          if (showGroupModal || showQuickChallengeWizard) return;
           // Refetch availability when holds change
           if (court.venues && selectedDate) {
             fetchAvailability(court.venues.id, court.id, selectedDate);
@@ -380,7 +382,7 @@ export default function CourtDetail() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [court?.id, court?.venues, selectedDate, fetchAvailability]);
+  }, [court?.id, court?.venues, selectedDate, fetchAvailability, showGroupModal, showQuickChallengeWizard]);
 
   // Real-time subscription for availability updates
   useEffect(() => {
@@ -398,6 +400,8 @@ export default function CourtDetail() {
         },
         (payload) => {
           console.log('Availability changed:', payload);
+          // Skip refetch if the booking wizard is open to avoid disrupting the user
+          if (showGroupModal || showQuickChallengeWizard) return;
           // Refetch availability when changes occur
           if (court.venues && selectedDate) {
             fetchAvailability(court.venues.id, court.id, selectedDate);
@@ -409,7 +413,7 @@ export default function CourtDetail() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [court?.id, court?.venues, selectedDate, fetchAvailability]);
+  }, [court?.id, court?.venues, selectedDate, fetchAvailability, showGroupModal, showQuickChallengeWizard]);
 
   // Convert time string to minutes for comparison
   const timeToMinutes = (time: string): number => {
