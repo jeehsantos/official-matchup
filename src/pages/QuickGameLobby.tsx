@@ -5,7 +5,8 @@ import { useQuickChallenges, useJoinChallenge, useCancelChallenge, useUpdateChal
 import { useQuickChallengePayment } from "@/hooks/useQuickChallengePayment";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/hooks/useTheme";
-import { cn } from "@/lib/utils";
+import { cn, estimateServiceFee } from "@/lib/utils";
+import { usePlatformFee } from "@/hooks/usePlatformFee";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -351,6 +352,7 @@ export default function QuickGameLobby() {
   const updateFormat = useUpdateChallengeFormat();
   const { isPaying, initiatePayment, verifyPayment } = useQuickChallengePayment();
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  const { playerFee } = usePlatformFee();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isQuitDialogOpen, setIsQuitDialogOpen] = useState(false);
@@ -454,9 +456,11 @@ export default function QuickGameLobby() {
     if (!id || !challenge) return;
 
     const pricePerPlayer = challenge.price_per_player || 0;
+    const estServiceFee = estimateServiceFee(pricePerPlayer, playerFee);
+    const totalAmount = pricePerPlayer + estServiceFee;
 
     // If user has enough credits to cover the full amount, show credits modal
-    if (pricePerPlayer > 0 && credits >= pricePerPlayer && !loadingCredits) {
+    if (pricePerPlayer > 0 && credits >= totalAmount && !loadingCredits) {
       setShowCreditsModal(true);
       return;
     }
@@ -1004,10 +1008,12 @@ export default function QuickGameLobby() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Price:
+                Total:
               </span>
               <span className="text-sm font-black uppercase tracking-widest text-primary">
-                ${challenge.price_per_player?.toFixed(2) || "0.00"}
+                ${challenge.price_per_player != null
+                  ? (challenge.price_per_player + estimateServiceFee(challenge.price_per_player, playerFee)).toFixed(2)
+                  : "0.00"}
               </span>
             </div>
           </div>
@@ -1060,7 +1066,7 @@ export default function QuickGameLobby() {
         open={showCreditsModal}
         onOpenChange={setShowCreditsModal}
         userCredits={credits}
-        sessionCost={challenge.price_per_player || 0}
+        sessionCost={(challenge.price_per_player || 0) + estimateServiceFee(challenge.price_per_player || 0, playerFee)}
         onSelectPaymentMethod={handleSelectPaymentMethod}
         isLoading={isPaying}
       />
