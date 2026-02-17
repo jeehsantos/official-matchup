@@ -16,6 +16,7 @@ interface QuickChallengeSummaryCardProps {
     scheduledTime?: string;
     courtImage?: string | null;
     pricePerPlayer: number;
+    totalPrice?: number;
     totalSlots: number;
     playersCount: number;
   };
@@ -141,7 +142,7 @@ export function QuickChallengeSummaryCard({
           </div>
           {challenge.pricePerPlayer > 0 && (
             <span className="font-semibold text-primary">
-              ${challenge.pricePerPlayer.toFixed(2)}
+              ${(challenge.totalPrice ?? challenge.pricePerPlayer).toFixed(2)}
             </span>
           )}
         </div>

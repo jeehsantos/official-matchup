@@ -16,6 +16,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { QuickGameModal } from "@/components/quick-challenge/QuickGameModal";
 import { QuickChallengeSummaryCard } from "@/components/quick-challenge/QuickChallengeSummaryCard";
 import { useQuickChallenges } from "@/hooks/useQuickChallenges";
+import { usePlatformFee } from "@/hooks/usePlatformFee";
+import { estimateServiceFee } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +54,7 @@ interface RescueGame {
 export default function Discover() {
   const { user, isLoading } = useAuth();
   const isMobile = useIsMobile();
+  const { playerFee } = usePlatformFee();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { preferredSports } = useUserProfile();
@@ -424,9 +427,15 @@ export default function Discover() {
     });
   }, [rescueGames, selectedSport, selectedCourtType, selectedCity, searchQuery, normalizedPreferredSports]);
 
-  // Filter quick challenges based on search and preferred sports
+  // Filter quick challenges based on search, preferred sports, and exclude joined
   const filteredChallenges = useMemo(() => {
-    let filtered = quickChallenges;
+    let filtered = quickChallenges.filter((challenge) => {
+      // Hide challenges the user has already joined
+      if (user && challenge.quick_challenge_players?.some((p) => p.user_id === user.id)) {
+        return false;
+      }
+      return true;
+    });
     
     // Auto-filter by preferred sports when preferred filter is selected
     if (selectedSport === "preferred" && normalizedPreferredSports.length > 0) {
@@ -587,7 +596,7 @@ export default function Discover() {
             ) : filteredRescueGames.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredRescueGames.map((game) => (
-                  <GameCard key={game.id} {...game} />
+                  <GameCard key={game.id} {...game} serviceFee={estimateServiceFee(game.price, playerFee)} />
                 ))}
               </div>
             ) : (
@@ -637,6 +646,7 @@ export default function Discover() {
                         scheduledTime: challenge.scheduled_time || undefined,
                         courtImage: challenge.courts?.photo_url || challenge.venues?.photo_url || "/placeholder.svg",
                         pricePerPlayer: challenge.price_per_player,
+                        totalPrice: challenge.price_per_player + estimateServiceFee(challenge.price_per_player, playerFee),
                         totalSlots: challenge.total_slots,
                         playersCount: challenge.quick_challenge_players?.length || 0,
                       }}
