@@ -47,7 +47,6 @@ Deno.serve(async (req) => {
 
     if (!venue?.stripe_account_id) {
       console.log("No Stripe Connect account for venue — platform retains funds");
-      // Mark all completed payments as transferred with 0 amount
       await supabaseAdmin
         .from("payments")
         .update({
@@ -69,7 +68,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2. Fetch eligible payments: completed, not yet transferred, player still in session
+    // 2. Fetch eligible payments: completed, not yet transferred
     const { data: payments, error: paymentsError } = await supabaseAdmin
       .from("payments")
       .select("*")
@@ -84,10 +83,7 @@ Deno.serve(async (req) => {
     if (!payments || payments.length === 0) {
       console.log("No eligible payments to transfer for session:", sessionId);
       return new Response(
-        JSON.stringify({
-          success: true,
-          message: "No payments to transfer",
-        }),
+        JSON.stringify({ success: true, message: "No payments to transfer" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -103,7 +99,6 @@ Deno.serve(async (req) => {
       (confirmedPlayers || []).map((p) => p.user_id)
     );
 
-    // Filter to only payments whose players are still confirmed
     const eligiblePayments = payments.filter((p) =>
       confirmedUserIds.has(p.user_id)
     );
@@ -116,23 +111,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 4. Calculate total venue payout: sum(amount - platform_fee) for card portions only
-    // amount field = card amount charged (does not include credits portion)
-    // platform_fee = platform's cut from each payment
+    // 4. Calculate venue payout: SUM of court_amount snapshots only
+    // Platform retains service_fee by NOT including it in the transfer
     let totalTransferCents = 0;
     const paymentIds: string[] = [];
 
     for (const payment of eligiblePayments) {
-      const cardAmount = Number(payment.amount);
-      const platformFee = Number(payment.platform_fee || 0);
-      const courtShare = Math.max(0, cardAmount - platformFee);
-      totalTransferCents += Math.round(courtShare * 100);
+      // Use court_amount snapshot; fall back to (amount - platform_fee) for legacy rows
+      const courtAmount = payment.court_amount != null
+        ? Number(payment.court_amount)
+        : Math.max(0, Number(payment.amount) - Number(payment.platform_fee || 0));
+
+      totalTransferCents += Math.round(courtAmount * 100);
       paymentIds.push(payment.id);
     }
 
     if (totalTransferCents <= 0) {
-      console.log("No amount to transfer after platform fees");
-      // Mark as transferred with 0
+      console.log("No amount to transfer after calculations");
       await supabaseAdmin
         .from("payments")
         .update({
@@ -143,10 +138,7 @@ Deno.serve(async (req) => {
         .in("id", paymentIds);
 
       return new Response(
-        JSON.stringify({
-          success: true,
-          message: "No amount to transfer after fees",
-        }),
+        JSON.stringify({ success: true, message: "No amount to transfer" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -169,22 +161,21 @@ Deno.serve(async (req) => {
       },
     });
 
-    // 6. Mark all included payments as transferred
-    const transferAmountPerPayment = eligiblePayments.map((p) => {
-      const courtShare = Math.max(0, Number(p.amount) - Number(p.platform_fee || 0));
-      return { id: p.id, amount: courtShare };
-    });
+    // 6. Mark each payment as transferred with its individual court_amount
+    for (const payment of eligiblePayments) {
+      const courtAmount = payment.court_amount != null
+        ? Number(payment.court_amount)
+        : Math.max(0, Number(payment.amount) - Number(payment.platform_fee || 0));
 
-    for (const item of transferAmountPerPayment) {
       await supabaseAdmin
         .from("payments")
         .update({
           status: "transferred",
           transferred_at: new Date().toISOString(),
           stripe_transfer_id: transfer.id,
-          transfer_amount: item.amount,
+          transfer_amount: courtAmount,
         })
-        .eq("id", item.id);
+        .eq("id", payment.id);
     }
 
     console.log("Session payout completed:", {
