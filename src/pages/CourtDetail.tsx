@@ -198,6 +198,9 @@ export default function CourtDetail() {
   // Refs to prevent race conditions during state restoration
   const isRestoringRef = useRef(false);
   const hasRestoredRef = useRef(false);
+  
+  // Ref to track if wizard is open (avoids stale closure in real-time subscriptions)
+  const wizardOpenRef = useRef(false);
 
   // Function declarations first (before useEffects that use them)
   const fetchCourt = useCallback(async () => {
@@ -330,6 +333,11 @@ export default function CourtDetail() {
   }, [availabilityData, availabilityLoading, toast]);
 
   // Reset selected slots when date changes - but NOT during restoration
+  // NOTE: releaseHold is intentionally excluded from deps to avoid clearing slots
+  // when holdId changes (which changes releaseHold's identity).
+  const releaseHoldRef = useRef(releaseHold);
+  releaseHoldRef.current = releaseHold;
+
   useEffect(() => {
     // Skip reset during restoration
     if (isRestoringRef.current) return;
@@ -338,8 +346,9 @@ export default function CourtDetail() {
     setSelectedSlots([]);
     setSelectedEquipment([]);
     // Release any existing hold when date changes
-    releaseHold();
-  }, [selectedDate, releaseHold]);
+    releaseHoldRef.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
 
   // Track presence when slots are selected
   useEffect(() => {
@@ -352,6 +361,11 @@ export default function CourtDetail() {
     const endTime = getEndTime();
     trackSelection(startTime, endTime);
   }, [selectedSlots, trackSelection]);
+
+  // Keep wizardOpenRef in sync with wizard state
+  useEffect(() => {
+    wizardOpenRef.current = showGroupModal || showQuickChallengeWizard;
+  }, [showGroupModal, showQuickChallengeWizard]);
 
   // Subscribe to booking_holds changes for real-time updates
   useEffect(() => {
@@ -369,9 +383,8 @@ export default function CourtDetail() {
         },
         (payload) => {
           console.log('Hold changed:', payload);
-          // Skip refetch if the booking wizard is open to avoid disrupting the user
-          if (showGroupModal || showQuickChallengeWizard) return;
-          // Refetch availability when holds change
+          // Use ref to avoid stale closure — state may not be updated yet
+          if (wizardOpenRef.current) return;
           if (court.venues && selectedDate) {
             fetchAvailability(court.venues.id, court.id, selectedDate);
           }
@@ -382,7 +395,7 @@ export default function CourtDetail() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [court?.id, court?.venues, selectedDate, fetchAvailability, showGroupModal, showQuickChallengeWizard]);
+  }, [court?.id, court?.venues, selectedDate, fetchAvailability]);
 
   // Real-time subscription for availability updates
   useEffect(() => {
@@ -400,9 +413,8 @@ export default function CourtDetail() {
         },
         (payload) => {
           console.log('Availability changed:', payload);
-          // Skip refetch if the booking wizard is open to avoid disrupting the user
-          if (showGroupModal || showQuickChallengeWizard) return;
-          // Refetch availability when changes occur
+          // Use ref to avoid stale closure — state may not be updated yet
+          if (wizardOpenRef.current) return;
           if (court.venues && selectedDate) {
             fetchAvailability(court.venues.id, court.id, selectedDate);
           }
@@ -413,7 +425,7 @@ export default function CourtDetail() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [court?.id, court?.venues, selectedDate, fetchAvailability, showGroupModal, showQuickChallengeWizard]);
+  }, [court?.id, court?.venues, selectedDate, fetchAvailability]);
 
   // Convert time string to minutes for comparison
   const timeToMinutes = (time: string): number => {
@@ -572,6 +584,9 @@ export default function CourtDetail() {
       return;
     }
 
+    // Mark wizard as "opening" before creating hold so real-time callbacks won't refetch
+    wizardOpenRef.current = true;
+
     // Create a hold on the slot before proceeding to wizard
     const dateStr = format(selectedDate, "yyyy-MM-dd");
     const startTime = getStartTime();
@@ -582,6 +597,8 @@ export default function CourtDetail() {
     const holdResult = await createHold(bookingCourtId, startDatetime, endDatetime);
 
     if (!holdResult.success) {
+      // Reset ref since wizard won't open
+      wizardOpenRef.current = false;
       // Hold failed - slot is taken
       if (holdResult.error === "SLOT_UNAVAILABLE") {
         toast({
