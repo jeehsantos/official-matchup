@@ -357,7 +357,6 @@ export default function ManagerCourtFormNew() {
           .insert([{
             venue_id: existingVenueId,
             name: data.name,
-            sport_type: "futsal" as any,
             ground_type: data.ground_type as any,
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
@@ -457,7 +456,6 @@ export default function ManagerCourtFormNew() {
           .insert([{
             venue_id: newVenueData.id,
             name: data.name,
-            sport_type: "futsal" as any,
             ground_type: data.ground_type as any,
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
