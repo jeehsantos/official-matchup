@@ -101,18 +101,7 @@ export default function Courts() {
     return ["all", ...surfaceTypes.map(s => s.name)];
   }, [surfaceTypes]);
 
-  useEffect(() => {
-    if (
-      !hasAppliedPreferredSportDefault &&
-      user &&
-      preferredSports.length > 0 &&
-      selectedSport === "all"
-    ) {
-      setSelectedSport("preferred");
-      setHasAppliedPreferredSportDefault(true);
-    }
-  }, [user, preferredSports, selectedSport, hasAppliedPreferredSportDefault]);
-
+  // Build sport filter options from user's preferred sports only
   const sportFilterOptions = useMemo(() => {
     const preferredSportSet = new Set(preferredSports);
     const preferredOptions = sportCategories
@@ -123,19 +112,32 @@ export default function Courts() {
         emoji: cat.icon || "🎯",
       }));
 
-    const missingPreferredOptions = preferredSports
-      .filter((sportName) => !preferredOptions.some((option) => option.value === sportName))
-      .map((sportName) => ({ value: sportName, label: sportName, emoji: "🎯" }));
+    // If only one preferred sport, just show that one
+    if (preferredOptions.length === 1) return preferredOptions;
 
-    return [
-      { value: "all", label: "All Sports", emoji: "🎯" },
-      ...(user && preferredSports.length > 0
-        ? [{ value: "preferred", label: "My Preferred Sports", emoji: "⭐" }]
-        : []),
-      ...preferredOptions,
-      ...missingPreferredOptions,
-    ];
-  }, [sportCategories, preferredSports, user]);
+    // Multiple preferred sports: show "All Sports" (meaning all preferred) + individual
+    if (preferredOptions.length > 1) {
+      return [
+        { value: "all", label: "All Sports", emoji: "🎯" },
+        ...preferredOptions,
+      ];
+    }
+
+    // Fallback: no preferred sports (shouldn't happen with profile gate)
+    return [{ value: "all", label: "All Sports", emoji: "🎯" }];
+  }, [sportCategories, preferredSports]);
+
+  // Auto-select default sport filter
+  useEffect(() => {
+    if (!hasAppliedPreferredSportDefault && preferredSports.length > 0) {
+      if (sportFilterOptions.length === 1) {
+        setSelectedSport(sportFilterOptions[0].value);
+      } else {
+        setSelectedSport("all");
+      }
+      setHasAppliedPreferredSportDefault(true);
+    }
+  }, [preferredSports, sportFilterOptions, hasAppliedPreferredSportDefault]);
 
   useEffect(() => {
     fetchCourts();
@@ -202,12 +204,11 @@ export default function Courts() {
         (c.allowed_sports && c.allowed_sports.includes(sportName))
       );
 
+    // "all" now means "all of my preferred sports"
     const matchesSport =
       selectedSport === "all"
-        ? true
-        : selectedSport === "preferred"
-          ? (!user || preferredSports.length === 0 || preferredSports.some((sport) => sportMatchesForCourt(sport)))
-          : sportMatchesForCourt(selectedSport);
+        ? (preferredSports.length === 0 || preferredSports.some((sport) => sportMatchesForCourt(sport)))
+        : sportMatchesForCourt(selectedSport);
 
     return matchesSearch && matchesGroundType && matchesVenueType && matchesCity && matchesSport;
   });
