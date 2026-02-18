@@ -1,183 +1,67 @@
 
-# Add Lobby Chat to Quick Game Lobby
 
-## Overview
+## Preferred Sports Filter Enhancement
 
-Implement a real-time chat system at the bottom of the Quick Game Lobby, allowing players who have joined the match to communicate with each other. Chat history will be automatically deleted when the session ends or the organizer cancels the lobby.
-
-## What Will Be Added
-
-### For Players
-- **Lobby Chat**: A chat section at the bottom of the Quick Game Lobby page
-- **System Messages**: Automatic notifications (e.g., "Alex created the match")
-- **Player Messages**: Send and receive messages from other players in the lobby
-- **Real-time Updates**: Messages appear instantly for all players
-
-### Chat Rules
-- Only players who have joined the lobby can see and send messages
-- Chat history is deleted when:
-  - The match session is completed
-  - The organizer cancels/quits the lobby
-  - The scheduled date passes (automatic cleanup)
+### Problem Summary
+1. Users can browse courts/games without completing their profile, leading to irrelevant results
+2. The sport filter shows a "My Preferred Sports" aggregate option instead of showing only the user's selected sports
+3. Caching issues cause stale preferred sports after profile updates
+4. No profile completion gate before browsing
 
 ---
 
-## Technical Implementation
+### Plan
 
-### Phase 1: Database Schema
+#### 1. Profile Completion Gate (ProtectedRoute Enhancement)
 
-Create a new table `quick_challenge_messages` to store lobby chat messages:
+Update `src/components/auth/ProtectedRoute.tsx` to accept an optional `requireCompleteProfile` prop. When enabled, it checks `useUserProfile()` for completeness and renders a friendly full-screen prompt (not a redirect) explaining that completing their profile gives them a better, personalized experience. The prompt includes a button to go to `/profile/edit`.
 
-| Column | Type | Purpose |
-|--------|------|---------|
-| id | UUID | Primary key |
-| challenge_id | UUID | Foreign key to quick_challenges |
-| sender_id | UUID | Foreign key to auth.users |
-| content | TEXT | Message content |
-| message_type | TEXT | 'system' or 'user' |
-| created_at | TIMESTAMPTZ | When the message was sent |
+Apply this gate to the following routes in `src/App.tsx`:
+- `/courts`
+- `/courts/:id`
+- `/discover`
+- `/games`
+- `/quick-games/:id`
 
-**RLS Policies:**
-- Players who have joined the challenge can read messages for that challenge
-- Players can only insert messages for challenges they've joined
-- Only the sender can delete their own messages
-- No updates allowed (messages are immutable)
+#### 2. Fix Sport Filter Options (Courts + Discover + MobileCourtFilters)
 
-**Realtime:**
-- Enable realtime for the table so messages appear instantly
+Replace the current filter logic that includes `{ value: "preferred", label: "My Preferred Sports" }` with a simpler approach:
 
-### Phase 2: Backend - Auto-Cleanup Function
+- If the user has preferred sports configured, the filter options show:
+  - "All Sports" (shows only the user's preferred sports, not every sport)
+  - Individual sport entries for each preferred sport (if more than one)
+- If only one preferred sport is configured, default to that single sport (no "All Sports" needed since there's only one)
+- Remove the "preferred" virtual filter value entirely
 
-Create a database function and trigger to delete chat messages when a challenge status changes to 'completed' or 'cancelled':
+This applies to:
+- `src/pages/Courts.tsx` (sportFilterOptions memo)
+- `src/pages/Discover.tsx` (sports memo)
+- `src/components/courts/MobileCourtFilters.tsx` (receives options as props, no change needed)
 
-```sql
--- Function to clean up chat when challenge ends
-CREATE OR REPLACE FUNCTION cleanup_challenge_chat()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.status IN ('completed', 'cancelled') AND OLD.status NOT IN ('completed', 'cancelled') THEN
-    DELETE FROM quick_challenge_messages WHERE challenge_id = NEW.id;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+The filtering logic for courts/games also changes: "all" now means "all of my preferred sports" (not every sport in the database).
 
--- Trigger on quick_challenges
-CREATE TRIGGER trigger_cleanup_challenge_chat
-AFTER UPDATE ON quick_challenges
-FOR EACH ROW
-EXECUTE FUNCTION cleanup_challenge_chat();
-```
+#### 3. Fix Caching Issue on Profile Update
 
-### Phase 3: Create Lobby Chat Hook
+Update `src/pages/ProfileEdit.tsx` to invalidate the `["user-profile"]` query cache after a successful save using `queryClient.invalidateQueries({ queryKey: ["user-profile"] })`. This ensures the preferred sports filter immediately reflects updates.
 
-Create a new hook `src/hooks/useLobbyChatMessages.ts` to manage chat messages:
+#### 4. Reduce staleTime for Profile Query
 
-**Features:**
-- Fetch messages for a specific challenge
-- Real-time subscription to new messages
-- Send message mutation
-- System message creation (when player joins/leaves)
-
-```typescript
-// Hook interface
-export function useLobbyChatMessages(challengeId: string) {
-  // Returns:
-  // - messages: array of chat messages
-  // - isLoading: loading state
-  // - sendMessage: function to send a message
-  // - sendSystemMessage: function to send system notifications
-}
-```
-
-### Phase 4: Create LobbyChatPanel Component
-
-Create `src/components/quick-challenge/LobbyChatPanel.tsx`:
-
-**Based on Reference Design:**
-- Left side: Chat messages area with scroll
-- Right side: Player count badge + Match status badge + Arena Rules link
-- Bottom: Input field with placeholder "Send a message to the group..."
-
-**Layout (from reference image):**
-```text
-+--------------------------------------------------+
-| SYSTEM: Alex Silva created the group.            |
-| ALEX SILVA: Let's win team!                      |
-|                                                  |
-| [Send a message to the group...]                 |
-+----------------------------------+---------------+
-                                   | 4/10 PLAYERS  |
-                                   | MATCH CONFIRMED|
-                                   | ARENA RULES 👥 |
-                                   +---------------+
-```
-
-**Component Props:**
-```typescript
-interface LobbyChatPanelProps {
-  challengeId: string;
-  currentUserId: string;
-  totalSlots: number;
-  filledSlots: number;
-  isMatchFull: boolean;
-}
-```
-
-### Phase 5: Update QuickGameLobby.tsx
-
-Modify the footer section to include the chat panel:
-
-**Current Footer (lines 610-646):**
-- Shows player count and status badges
-
-**Updated Footer:**
-- Replace with `LobbyChatPanel` component that includes:
-  - Chat messages area on the left
-  - Status badges on the right
-  - Message input at the bottom
+In `src/hooks/useUserProfile.ts`, reduce `staleTime` from 5 minutes to 30 seconds. This ensures profile changes propagate faster across the app without requiring manual invalidation for edge cases.
 
 ---
 
-## File Changes Summary
+### Technical Details
 
-| File | Action | Description |
-|------|--------|-------------|
-| Database Migration | Create | Add `quick_challenge_messages` table with RLS |
-| Database Migration | Create | Add cleanup trigger for chat messages |
-| `src/hooks/useLobbyChatMessages.ts` | Create | Hook for fetching/sending chat messages |
-| `src/components/quick-challenge/LobbyChatPanel.tsx` | Create | Chat panel component |
-| `src/pages/QuickGameLobby.tsx` | Modify | Replace footer with chat panel |
+**Files to modify:**
 
----
+| File | Change |
+|------|--------|
+| `src/components/auth/ProtectedRoute.tsx` | Add `requireCompleteProfile` prop, render profile completion prompt |
+| `src/App.tsx` | Wrap player-facing routes with `ProtectedRoute requireCompleteProfile` |
+| `src/pages/Courts.tsx` | Rewrite `sportFilterOptions` to only show user's preferred sports; change "all" to filter by preferred sports; remove "preferred" value |
+| `src/pages/Discover.tsx` | Same filter rewrite as Courts |
+| `src/pages/ProfileEdit.tsx` | Invalidate `user-profile` query after save |
+| `src/hooks/useUserProfile.ts` | Reduce staleTime to 30s |
 
-## User Experience Flow
+**No database changes required.** All logic is frontend filter behavior using existing profile data.
 
-1. **Player joins lobby** -> System message appears: "[Player] joined the match"
-2. **Player sends message** -> Message appears for all players in real-time
-3. **Other players see** -> Messages update instantly via Supabase Realtime
-4. **Match completes/cancelled** -> All chat history is automatically deleted
-
----
-
-## Design Details (Matching Reference Image)
-
-### Chat Message Styling
-- **System messages**: Highlighted in blue/cyan color with "SYSTEM:" prefix
-- **User messages**: Yellow/gold username, white/light message text
-- **Font size**: Small (10-11px) for compact display
-
-### Footer Layout
-- **Height**: ~128px (h-32)
-- **Left section**: Chat messages + input (flex-1)
-- **Right section**: Status badges (1/3 width on mobile, 1/2 on desktop)
-
-### Input Field
-- Dark background with subtle border
-- Placeholder: "Send a message to the group..."
-- No send button (Enter key to send)
-
-### Status Section
-- Player count badge: "4/10 PLAYERS"
-- Match status badge: "MATCH CONFIRMED" (green, only when full)
-- "Arena Rules" link with Users icon
