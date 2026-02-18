@@ -156,7 +156,7 @@ export default function ManagerAvailability() {
                               className="pl-6"
                             >
                               <div className="flex items-center gap-2">
-                                <SportIcon sport={court.sport_type} className="h-4 w-4" />
+                                <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-4 w-4" />
                                 <span>{court.name}</span>
                                 {court.parent_court_id && (
                                   <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">

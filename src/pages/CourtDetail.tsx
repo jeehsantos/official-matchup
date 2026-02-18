@@ -1209,8 +1209,8 @@ export default function CourtDetail() {
             <div className="px-4 lg:px-0">
               <div className="flex items-start gap-3 mb-3">
                 <Badge className="capitalize shrink-0">
-                  <SportIcon sport={court.sport_type} className="h-3 w-3 mr-1" />
-                  {court.sport_type}
+                  <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-3 w-3 mr-1" />
+                  {court.allowed_sports?.join(", ") || "Other"}
                 </Badge>
                 <Badge variant="outline" className="shrink-0">
                   {court.is_indoor ? "Indoor" : "Outdoor"}
@@ -1287,7 +1287,7 @@ export default function CourtDetail() {
                 </div>
               ) : (
                 <div className="aspect-video bg-muted flex items-center justify-center">
-                  <SportIcon sport={court.sport_type} className="h-16 w-16 text-muted-foreground" />
+                  <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-16 w-16 text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -1671,7 +1671,7 @@ export default function CourtDetail() {
                 </>
               ) : (
                 <div className="aspect-square rounded-xl bg-muted flex items-center justify-center">
-                  <SportIcon sport={court.sport_type} className="h-20 w-20 text-muted-foreground" />
+                  <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-20 w-20 text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -1800,7 +1800,7 @@ export default function CourtDetail() {
             open={showGroupModal}
             onOpenChange={setShowGroupModal}
             onConfirm={handleBookingConfirm}
-            sportType={court.sport_type}
+            sportType={(court.allowed_sports?.[0] || "other") as any}
             courtPrice={courtPrice}
             dayOfWeek={getDay(selectedDate)}
             startTime={getStartTime()}

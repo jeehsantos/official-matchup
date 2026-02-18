@@ -21,13 +21,10 @@ import { ArrowLeft, Loader2, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { Constants } from "@/integrations/supabase/types";
 
-const sportTypes = Constants.public.Enums.sport_type;
 
 const courtSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
-  sport_type: z.enum([...sportTypes] as [string, ...string[]]),
   capacity: z.number().min(1).max(100),
   hourly_rate: z.number().min(0),
   is_indoor: z.boolean(),
@@ -84,7 +81,6 @@ export default function ManagerCourtForm() {
       
       reset({
         name: data.name,
-        sport_type: data.sport_type,
         capacity: data.capacity,
         hourly_rate: Number(data.hourly_rate),
         is_indoor: data.is_indoor ?? false,
@@ -110,7 +106,6 @@ export default function ManagerCourtForm() {
           .from("courts")
           .update({
             name: data.name,
-            sport_type: data.sport_type as any,
             capacity: data.capacity,
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
@@ -128,7 +123,6 @@ export default function ManagerCourtForm() {
           .insert({
             venue_id: venueId,
             name: data.name,
-            sport_type: data.sport_type as any,
             capacity: data.capacity,
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
@@ -201,27 +195,6 @@ export default function ManagerCourtForm() {
                 )}
               </div>
 
-              <div>
-                <Label htmlFor="sport_type">Sport Type *</Label>
-                <Select
-                  value={watch("sport_type")}
-                  onValueChange={(value) => setValue("sport_type", value as any)}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select a sport" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sportTypes.map((sport) => (
-                      <SelectItem key={sport} value={sport} className="capitalize">
-                        {sport}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.sport_type && (
-                  <p className="text-sm text-destructive mt-1">{errors.sport_type.message}</p>
-                )}
-              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

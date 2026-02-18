@@ -200,8 +200,7 @@ export default function Courts() {
 
     const sportMatchesForCourt = (sportName: string) =>
       venueCourts.some(c =>
-        c.sport_type === sportName ||
-        (c.allowed_sports && c.allowed_sports.includes(sportName))
+        c.allowed_sports && c.allowed_sports.includes(sportName)
       );
 
     // "all" now means "all of my preferred sports"
