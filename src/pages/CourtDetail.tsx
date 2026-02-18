@@ -27,6 +27,7 @@ import {
   Users
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { format, getDay } from "date-fns";
@@ -73,6 +74,7 @@ interface AvailableCourt {
   ground_type: string | null;
   rules: string | null;
   photo_urls: string[] | null;
+  allowed_sports?: string[] | null;
 }
 
 type SlotStatus = "AVAILABLE" | "HELD" | "CONFIRMED";
@@ -165,6 +167,7 @@ export default function CourtDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  const { preferredSports } = useUserProfile();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
   
@@ -1136,6 +1139,30 @@ export default function CourtDetail() {
     return rate * (durationMinutes / 60);
   };
 
+  // Filter venue courts by user's preferred sports
+  const allVenueCourts = availabilityData?.venue_courts || [];
+  const venueCourts = useMemo(() => {
+    if (preferredSports.length === 0 || allVenueCourts.length <= 1) return allVenueCourts;
+    const filtered = allVenueCourts.filter(c => {
+      const courtSports = c.allowed_sports || [];
+      if (courtSports.length === 0) return true;
+      return courtSports.some(sport => preferredSports.includes(sport));
+    });
+    return filtered.length > 0 ? filtered : allVenueCourts;
+  }, [allVenueCourts, preferredSports]);
+
+  // Auto-select the first preferred-sport court if current selection is filtered out
+  useEffect(() => {
+    if (venueCourts.length > 0 && selectedCourtId) {
+      const currentInFiltered = venueCourts.some(c => c.id === selectedCourtId);
+      if (!currentInFiltered) {
+        setSelectedCourtId(venueCourts[0].id);
+        setSelectedSlots([]);
+        setCurrentImageIndex(0);
+      }
+    }
+  }, [venueCourts, selectedCourtId]);
+
   // Use public layout for unauthenticated users
   const Layout = user ? MobileLayout : PublicLayout;
   
@@ -1166,7 +1193,6 @@ export default function CourtDetail() {
   const courtPrice = calculatePrice(totalDuration);
   const equipmentTotal = getEquipmentTotal();
   const totalPrice = courtPrice + equipmentTotal;
-  const venueCourts = availabilityData?.venue_courts || [];
 
   return (
     <Layout>

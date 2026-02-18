@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,6 +21,7 @@ import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
 import { PaymentTypeSelector } from "@/components/booking/PaymentTypeSelector";
 import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/EquipmentSelector";
 import { useSportCategories } from "@/hooks/useSportCategories";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
@@ -115,8 +116,15 @@ export function BookingWizard({
   const [paymentType, setPaymentType] = useState<BookingPaymentType>("single");
   const [submitting, setSubmitting] = useState(false);
   
-  // Fetch sport categories from database
-  const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
+  // Fetch sport categories from database, filtered by preferred sports
+  const { data: allSportCategories = [], isLoading: loadingSports } = useSportCategories();
+  const { preferredSports } = useUserProfile();
+  
+  const sportCategories = useMemo(() => {
+    if (preferredSports.length === 0) return allSportCategories;
+    const filtered = allSportCategories.filter(cat => preferredSports.includes(cat.name));
+    return filtered.length > 0 ? filtered : allSportCategories;
+  }, [allSportCategories, preferredSports]);
 
   const isNewGroup = selectedGroupId === "new";
 

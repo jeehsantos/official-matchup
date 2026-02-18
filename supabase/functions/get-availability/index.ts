@@ -55,6 +55,7 @@ interface Court {
   rules: string | null;
   photo_urls: string[] | null;
   photo_url: string | null;
+  allowed_sports: string[] | null;
 }
 
 interface Venue {
@@ -70,6 +71,7 @@ interface AvailableCourt {
   ground_type: string | null;
   rules: string | null;
   photo_urls: string[] | null;
+  allowed_sports: string[] | null;
 }
 
 // Slot status: AVAILABLE | HELD | CONFIRMED
@@ -297,7 +299,7 @@ serve(async (req) => {
     // Fetch ALL active courts for this venue with full details
     const { data: venueCourts, error: courtsError } = await supabase
       .from("courts")
-      .select("id, name, hourly_rate, is_active, is_multi_court, parent_court_id, ground_type, rules, photo_urls, photo_url")
+      .select("id, name, hourly_rate, is_active, is_multi_court, parent_court_id, ground_type, rules, photo_urls, photo_url, allowed_sports")
       .eq("venue_id", venueId)
       .eq("is_active", true)
       .order("name", { ascending: true });
@@ -346,6 +348,7 @@ serve(async (req) => {
             ground_type: c.ground_type,
             rules: c.rules,
             photo_urls: c.photo_urls || (c.photo_url ? [c.photo_url] : []),
+            allowed_sports: c.allowed_sports || [],
           })),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -386,6 +389,7 @@ serve(async (req) => {
             ground_type: c.ground_type,
             rules: c.rules,
             photo_urls: c.photo_urls || (c.photo_url ? [c.photo_url] : []),
+            allowed_sports: c.allowed_sports || [],
           })),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -490,6 +494,7 @@ serve(async (req) => {
               ground_type: court.ground_type,
               rules: court.rules,
               photo_urls: court.photo_urls || (court.photo_url ? [court.photo_url] : []),
+              allowed_sports: court.allowed_sports || [],
             });
           }
         }
@@ -548,6 +553,7 @@ serve(async (req) => {
           ground_type: c.ground_type,
           rules: c.rules,
           photo_urls: c.photo_urls || (c.photo_url ? [c.photo_url] : []),
+          allowed_sports: c.allowed_sports || [],
         })),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
