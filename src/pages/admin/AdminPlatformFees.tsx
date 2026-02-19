@@ -19,6 +19,8 @@ function AdminPlatformFeesContent() {
   const [saving, setSaving] = useState(false);
   const [playerFee, setPlayerFee] = useState("1.50");
   const [managerFeePercentage, setManagerFeePercentage] = useState("0");
+  const [stripePercent, setStripePercent] = useState("2.9");
+  const [stripeFixed, setStripeFixed] = useState("0.30");
   const [isActive, setIsActive] = useState(true);
 
   const { data: settings, isLoading } = useQuery({
@@ -30,7 +32,7 @@ function AdminPlatformFeesContent() {
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      return data;
+      return data as any;
     },
   });
 
@@ -38,6 +40,8 @@ function AdminPlatformFeesContent() {
     if (settings) {
       setPlayerFee(settings.player_fee?.toString() || "1.50");
       setManagerFeePercentage(settings.manager_fee_percentage?.toString() || "0");
+      setStripePercent(settings.stripe_percent != null ? (settings.stripe_percent * 100).toString() : "2.9");
+      setStripeFixed(settings.stripe_fixed?.toString() || "0.30");
       setIsActive(settings.is_active ?? true);
     }
   }, [settings]);
@@ -45,6 +49,8 @@ function AdminPlatformFeesContent() {
   const handleSave = async () => {
     const fee = parseFloat(playerFee);
     const managerPct = parseFloat(managerFeePercentage);
+    const stripePct = parseFloat(stripePercent);
+    const stripeFix = parseFloat(stripeFixed);
     
     if (isNaN(fee) || fee < 0) {
       toast({ title: "Invalid amount", description: "Please enter a valid player fee amount.", variant: "destructive" });
@@ -54,15 +60,25 @@ function AdminPlatformFeesContent() {
       toast({ title: "Invalid percentage", description: "Manager fee must be between 0 and 100%.", variant: "destructive" });
       return;
     }
+    if (isNaN(stripePct) || stripePct < 0 || stripePct > 20) {
+      toast({ title: "Invalid Stripe percent", description: "Stripe percent must be between 0 and 20%.", variant: "destructive" });
+      return;
+    }
+    if (isNaN(stripeFix) || stripeFix < 0 || stripeFix > 5) {
+      toast({ title: "Invalid Stripe fixed fee", description: "Stripe fixed fee must be between $0 and $5.", variant: "destructive" });
+      return;
+    }
 
     setSaving(true);
     try {
       if (settings?.id) {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from("platform_settings")
           .update({
             player_fee: fee,
             manager_fee_percentage: managerPct,
+            stripe_percent: stripePct / 100,
+            stripe_fixed: stripeFix,
             is_active: isActive,
             updated_at: new Date().toISOString(),
           })
@@ -91,11 +107,17 @@ function AdminPlatformFeesContent() {
     );
   }
 
-  // Example calculation
+  // Example calculation with gross-up
   const exampleCourtPrice = 50;
   const examplePlayerFee = parseFloat(playerFee) || 0;
   const exampleManagerPct = parseFloat(managerFeePercentage) || 0;
-  const examplePlayerTotal = exampleCourtPrice + examplePlayerFee;
+  const exampleStripePct = (parseFloat(stripePercent) || 0) / 100;
+  const exampleStripeFix = parseFloat(stripeFixed) || 0;
+  const subtotalBeforeStripe = exampleCourtPrice + examplePlayerFee;
+  const grossTotal = Math.ceil(((subtotalBeforeStripe + exampleStripeFix) / (1 - exampleStripePct)) * 100) / 100;
+  const exampleStripeFee = +(grossTotal - subtotalBeforeStripe).toFixed(2);
+  const exampleServiceFee = examplePlayerFee + exampleStripeFee;
+  const examplePlayerTotal = exampleCourtPrice + exampleServiceFee;
   const exampleManagerDeduction = (exampleCourtPrice * exampleManagerPct) / 100;
   const exampleManagerPayout = exampleCourtPrice - exampleManagerDeduction;
   const examplePlatformRevenue = examplePlayerFee + exampleManagerDeduction;
@@ -156,6 +178,46 @@ function AdminPlatformFeesContent() {
               </div>
             </div>
 
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="stripePercent">Stripe Percent Fee (%)</Label>
+                <Input
+                  id="stripePercent"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="20"
+                  value={stripePercent}
+                  onChange={(e) => setStripePercent(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Stripe's percentage fee (e.g. 2.9 for 2.9%). Stored as decimal internally.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="stripeFixed">Stripe Fixed Fee ($)</Label>
+                <Input
+                  id="stripeFixed"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="5"
+                  value={stripeFixed}
+                  onChange={(e) => setStripeFixed(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Stripe's fixed fee per transaction in dollars (e.g. 0.30 for 30¢).
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3">
+              <p className="text-xs text-destructive">
+                ⚠️ Changes only affect new payments. Existing checkout sessions remain unchanged.
+              </p>
+            </div>
+
             <Button onClick={handleSave} disabled={saving}>
               {saving ? (
                 <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Saving...</>
@@ -184,8 +246,16 @@ function AdminPlatformFeesContent() {
                 <span className="font-medium">${exampleCourtPrice.toFixed(2)}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-border">
-                <span className="text-muted-foreground">Player service fee</span>
+                <span className="text-muted-foreground">Platform fee</span>
                 <span className="font-medium text-primary">+ ${examplePlayerFee.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-border">
+                <span className="text-muted-foreground">Estimated Stripe fee ({parseFloat(stripePercent) || 0}% + ${exampleStripeFix.toFixed(2)})</span>
+                <span className="font-medium text-primary">+ ${exampleStripeFee.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-border">
+                <span className="text-muted-foreground">Service fee (shown to player)</span>
+                <span className="font-medium">${exampleServiceFee.toFixed(2)}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-border font-semibold">
                 <span>Player pays (total)</span>
