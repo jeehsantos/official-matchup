@@ -20,7 +20,7 @@ import { useAuth } from "@/lib/auth-context";
 interface Court {
   id: string;
   name: string;
-  sport_type: string;
+  allowed_sports: string[] | null;
   capacity: number;
   hourly_rate: number;
   is_indoor: boolean;
@@ -130,7 +130,7 @@ export default function ManagerCourtsNew() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <SportIcon sport={court.sport_type as any} size="lg" />
+                      <SportIcon sport={court.allowed_sports?.[0] || "other"} size="lg" />
                     </div>
                   )}
                   <div className="absolute top-2 right-2 flex gap-2">
@@ -148,7 +148,7 @@ export default function ManagerCourtsNew() {
                     <div>
                       <h3 className="font-semibold">{court.name}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {getSportLabel(court.sport_type as any)}
+                        {getSportLabel(court.allowed_sports?.[0] || "other")}
                       </p>
                     </div>
                   </div>

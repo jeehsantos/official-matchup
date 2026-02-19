@@ -23,7 +23,7 @@ export function useUserProfile() {
       return data as Profile | null;
     },
     enabled: !!user,
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    staleTime: 1000 * 30, // Cache for 30 seconds
   });
 
   const profile = query.data ?? null;

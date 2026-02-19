@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,6 +21,7 @@ import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
 import { PaymentTypeSelector } from "@/components/booking/PaymentTypeSelector";
 import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/EquipmentSelector";
 import { useSportCategories } from "@/hooks/useSportCategories";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { usePlatformFee } from "@/hooks/usePlatformFee";
 import { estimateServiceFee } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -119,10 +120,16 @@ export function BookingWizard({
   const [splitPlayers, setSplitPlayers] = useState(6);
   const [submitting, setSubmitting] = useState(false);
   
-  // Fetch sport categories from database
-  const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
+  // Fetch sport categories from database, filtered by preferred sports
+  const { data: allSportCategories = [], isLoading: loadingSports } = useSportCategories();
+  const { preferredSports } = useUserProfile();
   
-  // Fetch admin-configured platform fee (read-only display)
+  const sportCategories = useMemo(() => {
+    if (preferredSports.length === 0) return allSportCategories;
+    const filtered = allSportCategories.filter(cat => preferredSports.includes(cat.name));
+    return filtered.length > 0 ? filtered : allSportCategories;
+  }, [allSportCategories, preferredSports]);
+   // Fetch admin-configured platform fee (read-only display)
   const { playerFee: platformFee } = usePlatformFee();
 
   const isNewGroup = selectedGroupId === "new";

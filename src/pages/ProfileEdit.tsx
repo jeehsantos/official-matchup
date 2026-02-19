@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { nzCities } from "@/data/nzLocations";
 import { useToast } from "@/hooks/use-toast";
 import { useSportCategories } from "@/hooks/useSportCategories";
+import { useQueryClient } from "@tanstack/react-query";
 import { NationalityCombobox } from "@/components/ui/nationality-combobox";
 import {
   Loader2,
@@ -37,6 +38,7 @@ export default function ProfileEdit() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileExists, setProfileExists] = useState(false);
@@ -130,6 +132,7 @@ export default function ProfileEdit() {
         if (error) throw error;
       }
 
+      await queryClient.invalidateQueries({ queryKey: ["user-profile"] });
       toast({
         title: "Profile updated",
         description: "Your profile has been saved successfully.",

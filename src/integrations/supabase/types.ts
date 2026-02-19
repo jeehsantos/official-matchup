@@ -298,7 +298,6 @@ export type Database = {
           photo_url: string | null
           photo_urls: string[] | null
           rules: string | null
-          sport_type: Database["public"]["Enums"]["sport_type"]
           updated_at: string
           venue_id: string
         }
@@ -319,7 +318,6 @@ export type Database = {
           photo_url?: string | null
           photo_urls?: string[] | null
           rules?: string | null
-          sport_type: Database["public"]["Enums"]["sport_type"]
           updated_at?: string
           venue_id: string
         }
@@ -340,7 +338,6 @@ export type Database = {
           photo_url?: string | null
           photo_urls?: string[] | null
           rules?: string | null
-          sport_type?: Database["public"]["Enums"]["sport_type"]
           updated_at?: string
           venue_id?: string
         }

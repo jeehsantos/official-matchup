@@ -27,6 +27,7 @@ import {
   Users
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { format, getDay } from "date-fns";
@@ -74,6 +75,7 @@ interface AvailableCourt {
   ground_type: string | null;
   rules: string | null;
   photo_urls: string[] | null;
+  allowed_sports?: string[] | null;
 }
 
 type SlotStatus = "AVAILABLE" | "HELD" | "CONFIRMED";
@@ -166,7 +168,7 @@ export default function CourtDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
-  const { data: platformSettings } = usePlatformSettings();
+  const { preferredSports } = useUserProfile();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
   
@@ -1164,6 +1166,38 @@ export default function CourtDetail() {
     return rate * (durationMinutes / 60);
   };
 
+  // Filter venue courts by user's preferred sports
+  const allVenueCourts = availabilityData?.venue_courts || [];
+  const venueCourts = useMemo(() => {
+    if (preferredSports.length === 0 || allVenueCourts.length <= 1) return allVenueCourts;
+
+    const filtered = allVenueCourts.filter(c => {
+      const courtSports = c.allowed_sports || [];
+      if (courtSports.length === 0) return true;
+      return courtSports.some(sport => preferredSports.includes(sport));
+    });
+
+    const courtsToShow = filtered.length > 0 ? filtered : allVenueCourts;
+    if (!selectedCourtId || courtsToShow.some(c => c.id === selectedCourtId)) {
+      return courtsToShow;
+    }
+
+    const selectedCourt = allVenueCourts.find(c => c.id === selectedCourtId);
+    return selectedCourt ? [selectedCourt, ...courtsToShow] : courtsToShow;
+  }, [allVenueCourts, preferredSports, selectedCourtId]);
+
+  // Only fall back if the currently selected court no longer exists in venue availability
+  useEffect(() => {
+    if (!selectedCourtId || allVenueCourts.length === 0) return;
+
+    const selectedCourtExists = allVenueCourts.some(c => c.id === selectedCourtId);
+    if (!selectedCourtExists) {
+      setSelectedCourtId(allVenueCourts[0].id);
+      setSelectedSlots([]);
+      setCurrentImageIndex(0);
+    }
+  }, [allVenueCourts, selectedCourtId]);
+
   // Use public layout for unauthenticated users
   const Layout = user ? MobileLayout : PublicLayout;
   
@@ -1194,7 +1228,6 @@ export default function CourtDetail() {
   const courtPrice = calculatePrice(totalDuration);
   const equipmentTotal = getEquipmentTotal();
   const totalPrice = courtPrice + equipmentTotal;
-  const venueCourts = availabilityData?.venue_courts || [];
 
   return (
     <Layout>
@@ -1237,8 +1270,8 @@ export default function CourtDetail() {
             <div className="px-4 lg:px-0">
               <div className="flex items-start gap-3 mb-3">
                 <Badge className="capitalize shrink-0">
-                  <SportIcon sport={court.sport_type} className="h-3 w-3 mr-1" />
-                  {court.sport_type}
+                  <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-3 w-3 mr-1" />
+                  {court.allowed_sports?.join(", ") || "Other"}
                 </Badge>
                 <Badge variant="outline" className="shrink-0">
                   {court.is_indoor ? "Indoor" : "Outdoor"}
@@ -1315,7 +1348,7 @@ export default function CourtDetail() {
                 </div>
               ) : (
                 <div className="aspect-video bg-muted flex items-center justify-center">
-                  <SportIcon sport={court.sport_type} className="h-16 w-16 text-muted-foreground" />
+                  <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-16 w-16 text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -1379,17 +1412,19 @@ export default function CourtDetail() {
             </div>
 
             {/* Venue Details: Allowed Sports + Amenities */}
-            {((court.venues?.amenities && court.venues.amenities.length > 0) || (court.allowed_sports && court.allowed_sports.length > 0)) && (
+            {(() => {
+              const displaySports = getSelectedCourt()?.allowed_sports || court.allowed_sports || [];
+              return ((court.venues?.amenities && court.venues.amenities.length > 0) || displaySports.length > 0) ? (
               <div className="px-4 lg:px-0 space-y-4">
                 {/* Allowed Sports */}
-                {court.allowed_sports && court.allowed_sports.length > 0 && (
+                {displaySports.length > 0 && (
                   <div>
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <span className="text-lg">🏅</span>
                       Sports Available
                     </h3>
                     <div className="flex flex-wrap gap-2">
-                      {court.allowed_sports.map((sport: string, i: number) => (
+                      {displaySports.map((sport: string, i: number) => (
                         <Badge key={i} variant="secondary" className="gap-1.5 py-1 px-3">
                           <SportIcon sport={sport} size="sm" className="w-5 h-5 text-xs" />
                           <span className="capitalize">{sport.replace(/_/g, " ")}</span>
@@ -1420,7 +1455,8 @@ export default function CourtDetail() {
                   </div>
                 )}
               </div>
-            )}
+              ) : null;
+            })()}
 
             {/* Court Rules - Dynamic based on selected court */}
             {(getSelectedCourt()?.rules || (court as any).rules) && (
@@ -1699,7 +1735,7 @@ export default function CourtDetail() {
                 </>
               ) : (
                 <div className="aspect-square rounded-xl bg-muted flex items-center justify-center">
-                  <SportIcon sport={court.sport_type} className="h-20 w-20 text-muted-foreground" />
+                  <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-20 w-20 text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -1828,7 +1864,7 @@ export default function CourtDetail() {
             open={showGroupModal}
             onOpenChange={setShowGroupModal}
             onConfirm={handleBookingConfirm}
-            sportType={court.sport_type}
+            sportType={(court.allowed_sports?.[0] || "other") as any}
             courtPrice={courtPrice}
             dayOfWeek={getDay(selectedDate)}
             startTime={getStartTime()}

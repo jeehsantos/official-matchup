@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2, Zap, Users } from "lucide-react";
 import { useSportCategories } from "@/hooks/useSportCategories";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { cn } from "@/lib/utils";
 
 interface QuickGameModalProps {
@@ -37,16 +38,24 @@ export function QuickGameModal({ open, onOpenChange }: QuickGameModalProps) {
   const [selectedMode, setSelectedMode] = useState<string>("");
   const [isRedirecting, setIsRedirecting] = useState(false);
 
-  const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
+  const { data: allSportCategories = [], isLoading: loadingSports } = useSportCategories();
+  const { preferredSports } = useUserProfile();
+
+  // Filter sport categories by user's preferred sports
+  const filteredCategories = useMemo(() => {
+    if (preferredSports.length === 0) return allSportCategories;
+    const filtered = allSportCategories.filter(cat => preferredSports.includes(cat.name));
+    return filtered.length > 0 ? filtered : allSportCategories;
+  }, [allSportCategories, preferredSports]);
 
   const sports = useMemo(() => {
-    return sportCategories.map(cat => ({
+    return filteredCategories.map(cat => ({
       value: cat.id,
       label: cat.display_name,
       name: cat.name,
       emoji: cat.icon || "🎯",
     }));
-  }, [sportCategories]);
+  }, [filteredCategories]);
 
   const handleFindCourts = () => {
     if (!selectedSport || !selectedMode) return;

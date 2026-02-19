@@ -151,11 +151,11 @@ export default function ManagerCourts() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center rounded-t-lg">
-                      <SportIcon sport={court.sport_type} className="h-12 w-12 text-muted-foreground" />
+                      <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-12 w-12 text-muted-foreground" />
                     </div>
                   )}
                   <Badge className="absolute top-2 left-2 capitalize">
-                    {court.sport_type}
+                    {court.allowed_sports?.join(", ") || "Other"}
                   </Badge>
                   {!court.is_active && (
                     <Badge variant="secondary" className="absolute top-2 right-2">

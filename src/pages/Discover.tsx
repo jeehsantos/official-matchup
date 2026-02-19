@@ -97,15 +97,8 @@ export default function Discover() {
     );
   }, [preferredSports, sportCategories]);
 
-  useEffect(() => {
-    if (!hasAppliedPreferredSportDefault && normalizedPreferredSports.length > 0 && selectedSport === "all") {
-      setSelectedSport("preferred");
-      setHasAppliedPreferredSportDefault(true);
-    }
-  }, [normalizedPreferredSports, selectedSport, hasAppliedPreferredSportDefault]);
-
   const selectedSportCategoryId = useMemo(() => {
-    if (selectedSport === "all" || selectedSport === "preferred") return undefined;
+    if (selectedSport === "all") return undefined;
     return sportCategories.find((cat) => cat.name === selectedSport)?.id;
   }, [selectedSport, sportCategories]);
 
@@ -115,7 +108,7 @@ export default function Discover() {
     status: "open",
   });
   
-  // Build sports dropdown from database ONLY
+  // Build sports dropdown from user's preferred sports only
   const sports = useMemo(() => {
     const preferredSportSet = new Set(normalizedPreferredSports);
     const preferredOptions = sportCategories
@@ -126,23 +119,32 @@ export default function Discover() {
         emoji: cat.icon || "🎯",
       }));
 
-    const missingPreferredOptions = normalizedPreferredSports
-      .filter((sportName) => !preferredOptions.some((option) => option.value === sportName))
-      .map((sportName) => ({
-        value: sportName,
-        label: sportName,
-        emoji: "🎯",
-      }));
+    // If only one preferred sport, just show that one
+    if (preferredOptions.length === 1) return preferredOptions;
 
-    return [
-      { value: "all", label: "All Sports", emoji: "🎯" },
-      ...(normalizedPreferredSports.length > 0
-        ? [{ value: "preferred", label: "My Preferred Sports", emoji: "⭐" }]
-        : []),
-      ...preferredOptions,
-      ...missingPreferredOptions,
-    ];
+    // Multiple preferred sports: show "All Sports" (meaning all preferred) + individual
+    if (preferredOptions.length > 1) {
+      return [
+        { value: "all", label: "All Sports", emoji: "🎯" },
+        ...preferredOptions,
+      ];
+    }
+
+    // Fallback: no preferred sports
+    return [{ value: "all", label: "All Sports", emoji: "🎯" }];
   }, [sportCategories, normalizedPreferredSports]);
+
+  // Auto-select default sport filter
+  useEffect(() => {
+    if (!hasAppliedPreferredSportDefault && normalizedPreferredSports.length > 0) {
+      if (sports.length === 1) {
+        setSelectedSport(sports[0].value);
+      } else {
+        setSelectedSport("all");
+      }
+      setHasAppliedPreferredSportDefault(true);
+    }
+  }, [normalizedPreferredSports, sports, hasAppliedPreferredSportDefault]);
   
   // Build court types dropdown from database ONLY
   const courtTypes = useMemo(() => {
@@ -412,10 +414,8 @@ export default function Discover() {
       // If explicit sport filter is set, use it; otherwise auto-filter by preferred sports
       const matchesSport =
         selectedSport === "all"
-          ? true
-          : selectedSport === "preferred"
-            ? (normalizedPreferredSports.length === 0 || normalizedPreferredSports.includes(game.sport))
-            : game.sport === selectedSport;
+          ? (normalizedPreferredSports.length === 0 || normalizedPreferredSports.includes(game.sport))
+          : game.sport === selectedSport;
       const matchesCourtType = selectedCourtType === "all" || game.groundType === selectedCourtType;
       const matchesCity = selectedCity === "all" || game.city === selectedCity;
       const matchesSearch = searchQuery === "" || 
@@ -437,8 +437,8 @@ export default function Discover() {
       return true;
     });
     
-    // Auto-filter by preferred sports when preferred filter is selected
-    if (selectedSport === "preferred" && normalizedPreferredSports.length > 0) {
+    // "all" now means "all of my preferred sports"
+    if (selectedSport === "all" && normalizedPreferredSports.length > 0) {
       filtered = filtered.filter((challenge) => {
         const sportName = challenge.sport_categories?.name || "";
         return normalizedPreferredSports.includes(sportName);
