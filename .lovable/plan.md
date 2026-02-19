@@ -1,153 +1,168 @@
+## Problem Summary
 
+When a court manager configures payment timing as "Before Session" with a specific hours-before deadline, the system does not enforce this deadline. Unpaid bookings remain in "pending" status indefinitely, blocking the slot from being rebooked.
 
-## Preferred Sports Filter Enhancement
+Two issues need fixing:
 
-### Problem Summary
-1. Users can browse courts/games without completing their profile, leading to irrelevant results
-2. The sport filter shows a "My Preferred Sports" aggregate option instead of showing only the user's selected sports
-3. Caching issues cause stale preferred sports after profile updates
-4. No profile completion gate before browsing
+1. **Payment deadline is hardcoded to 24 hours** instead of using the court's `payment_hours_before` setting
+2. **No automated enforcement** -- there is no background process that cancels unpaid bookings when the deadline passes
 
----
+## Plan
 
-### Plan
+### 1. Fix payment deadline calculation in CourtDetail.tsx
 
-#### 1. Profile Completion Gate (ProtectedRoute Enhancement)
-
-Update `src/components/auth/ProtectedRoute.tsx` to accept an optional `requireCompleteProfile` prop. When enabled, it checks `useUserProfile()` for completeness and renders a friendly full-screen prompt (not a redirect) explaining that completing their profile gives them a better, personalized experience. The prompt includes a button to go to `/profile/edit`.
-
-Apply this gate to the following routes in `src/App.tsx`:
-- `/courts`
-- `/courts/:id`
-- `/discover`
-- `/games`
-- `/quick-games/:id`
-
-#### 2. Fix Sport Filter Options (Courts + Discover + MobileCourtFilters)
-
-Replace the current filter logic that includes `{ value: "preferred", label: "My Preferred Sports" }` with a simpler approach:
-
-- If the user has preferred sports configured, the filter options show:
-  - "All Sports" (shows only the user's preferred sports, not every sport)
-  - Individual sport entries for each preferred sport (if more than one)
-- If only one preferred sport is configured, default to that single sport (no "All Sports" needed since there's only one)
-- Remove the "preferred" virtual filter value entirely
-
-This applies to:
-- `src/pages/Courts.tsx` (sportFilterOptions memo)
-- `src/pages/Discover.tsx` (sports memo)
-- `src/components/courts/MobileCourtFilters.tsx` (receives options as props, no change needed)
-
-The filtering logic for courts/games also changes: "all" now means "all of my preferred sports" (not every sport in the database).
-
-#### 3. Fix Caching Issue on Profile Update
-
-Update `src/pages/ProfileEdit.tsx` to invalidate the `["user-profile"]` query cache after a successful save using `queryClient.invalidateQueries({ queryKey: ["user-profile"] })`. This ensures the preferred sports filter immediately reflects updates.
-
-#### 4. Reduce staleTime for Profile Query
-
-In `src/hooks/useUserProfile.ts`, reduce `staleTime` from 5 minutes to 30 seconds. This ensures profile changes propagate faster across the app without requiring manual invalidation for edge cases.
-## Include Stripe Processing Fee in Service Fee
-
-### Problem
-The platform currently charges players only `court_amount + platform_fee`, but Stripe deducts ~2.9% + 30c from the collected amount. The platform absorbs this cost, losing money on every transaction.
-
-### Solution
-Calculate an estimated Stripe fee on the backend and bundle it into the single "Service fee" shown to users. The user sees:
-- **Court price**: $X
-- **Service fee**: $Y (internally = platform_fee + estimated_stripe_fee)
-- **Total**: $Z
-
-No separate "Stripe fee" line is ever shown. Payout logic is NOT touched.
-
-### Stripe Fee Estimation Formula
-NZ Stripe rates are typically 2.9% + 30c. To ensure full cost coverage, we use a "gross-up" formula:
-
-```text
-total_charge = (court_amount + platform_fee + 0.30) / (1 - 0.029)
-estimated_stripe_fee = total_charge - court_amount - platform_fee
-service_fee = platform_fee + estimated_stripe_fee
-```
-
-This ensures that after Stripe takes its cut from `total_charge`, the platform retains at least `platform_fee`.
-
-### File Changes
-
-#### 1. Backend: `supabase/functions/create-payment/index.ts`
-
-**Current** (lines 72-73):
-```typescript
-const serviceFeeDollars = Number(platformSettings?.player_fee ?? 0);
-const serviceFeeCents = Math.round(serviceFeeDollars * 100);
-```
-
-**New**: After computing `remainingCourtAmountCents` (line 149), calculate the gross-up:
+Currently (line 682-683):
 
 ```typescript
-// Stripe NZ: 2.9% + 30c
-const STRIPE_PERCENT = 0.029;
-const STRIPE_FIXED_CENTS = 30;
-
-const platformFeeCents = Math.round(Number(platformSettings?.player_fee ?? 0) * 100);
-const subtotalBeforeStripe = remainingCourtAmountCents + platformFeeCents;
-const grossTotalCents = Math.ceil((subtotalBeforeStripe + STRIPE_FIXED_CENTS) / (1 - STRIPE_PERCENT));
-const estimatedStripeFeeCents = grossTotalCents - subtotalBeforeStripe;
-const serviceFeeCents = platformFeeCents + estimatedStripeFeeCents;
-const totalChargeCents = remainingCourtAmountCents + serviceFeeCents;
+const paymentDeadline = new Date(slotDate);
+paymentDeadline.setHours(paymentDeadline.getHours() - 24);
 ```
 
-- Remove the early `serviceFeeCents` calculation at line 73 (it's now computed after credits).
-- Use a single Stripe Checkout line item with `unit_amount = totalChargeCents` (court booking + service fee combined), or keep two line items: court amount + service fee.
-- Update metadata to include the new `service_fee` and `total_charge`.
-- Update the response to return `serviceFee: serviceFeeCents / 100` and `total: totalChargeCents / 100`.
-- For credits-only payments, no Stripe fee is needed (no change to that path).
+This must use the court's actual `payment_hours_before` value and calculate from the session start datetime (not just the date):
 
-#### 2. Frontend: `src/hooks/usePlatformFee.ts`
+```typescript
+const sessionStart = new Date(`${dateStr}T${startTime}`);
+const hoursBeforeSession = court.payment_hours_before || 24;
+const paymentDeadline = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
+```
 
-No changes needed. The frontend already fetches `playerFee` for display, but since the task says "do NOT calculate any fee in the frontend," the GameDetail page should ideally show the backend-returned breakdown. However, for the pre-payment display (before the user clicks "Pay"), the frontend still needs an estimate. We will keep using `playerFee` from this hook but add a note that the actual charge comes from the backend.
+### 2. Create a database function to cancel expired unpaid bookings
 
-**Alternative approach**: Add a lightweight edge function or RPC that returns the estimated total for a given session, so the frontend never calculates fees. However, this adds latency and complexity. For now, the frontend will show the platform fee as an approximate "Service fee" label, and the actual Stripe checkout will reflect the true gross-up total from the backend. The button label will say "Make Payment" without a specific dollar amount, or we accept a minor discrepancy between the displayed estimate and the actual charge.
+A new RPC function `cancel_expired_unpaid_sessions` will:
 
-**Recommended approach**: Keep the frontend estimate using `playerFee` for display consistency, but update the button to not show a specific amount (just "Make Payment"), since the backend determines the final total. The Stripe Checkout page will show the authoritative amount.
+- Find sessions where:
+  - `payment_status = 'pending'` on `court_availability`
+  - The court has `payment_timing = 'before_session'`
+  - `NOW()` is past the session's `payment_deadline`
+  - Session is not already cancelled
+- For each expired session:
+  - Mark the session as cancelled (`is_cancelled = true`)
+  - Release the court slot (`is_booked = false`, clear booking references)
+  - Remove session players
+  - Clean up related chat conversations
 
-Actually, to keep UX clean and match the requirement "Display Court price: $X, Service fee: $Y, Total: $Z" accurately, we should compute the same gross-up formula on the frontend for display purposes only. This keeps the display in sync with what the backend will charge.
+### 3. Create a new edge function `cancel-expired-bookings`
 
-#### 3. Frontend: `src/pages/GameDetail.tsx`
+A lightweight edge function that calls the `cancel_expired_unpaid_sessions` RPC. This can be triggered via cron (similar to `expire-holds`).
 
-- Replace `playerFee` usage with a computed `serviceFee` that includes estimated Stripe cost using the same formula.
-- Update all price display sections (lines 936-946, 971, 999-1001, 1020) to use the new `serviceFee`.
-- Update `handleMakePayment` credit comparison (line 425) to use the new total.
+### 4. Schedule a cron job
 
-#### 4. Frontend: `src/pages/Games.tsx` and `src/components/cards/GameCard.tsx`
+Set up a `pg_cron` + `pg_net` schedule to call `cancel-expired-bookings` every 15 minutes, ensuring timely enforcement.
 
-### Technical Details
+### 5. Enforce "at_booking" payment for same-day rebookings
 
-**Files to modify:**
+When a user books a slot on the same day and the remaining time is less than the court's `payment_hours_before`, the booking flow should force `payment_timing = 'at_booking'` regardless of the court's default. This prevents a new "before_session" booking that would immediately be past its deadline.
 
-| File | Change |
-|------|--------|
-| `src/components/auth/ProtectedRoute.tsx` | Add `requireCompleteProfile` prop, render profile completion prompt |
-| `src/App.tsx` | Wrap player-facing routes with `ProtectedRoute requireCompleteProfile` |
-| `src/pages/Courts.tsx` | Rewrite `sportFilterOptions` to only show user's preferred sports; change "all" to filter by preferred sports; remove "preferred" value |
-| `src/pages/Discover.tsx` | Same filter rewrite as Courts |
-| `src/pages/ProfileEdit.tsx` | Invalidate `user-profile` query after save |
-| `src/hooks/useUserProfile.ts` | Reduce staleTime to 30s |
+This will be handled in:
 
-**No database changes required.** All logic is frontend filter behavior using existing profile data.
-- Update the per-player price card to include the estimated Stripe fee in the displayed total.
+- **CourtDetail.tsx**: Before opening the BookingWizard, check if the slot's session start minus `payment_hours_before` is already in the past. If so, override `paymentTiming` to `"at_booking"` and show a notice.
+- **BookingWizard.tsx**: Display an info alert when payment timing has been overridden.
 
-### Implementation Sequence
+### 6. Frontend notification for cancelled bookings (optional enhancement)
 
-1. Update `create-payment` edge function with gross-up Stripe fee calculation
-2. Create a small utility function `estimateServiceFee(courtAmountDollars, platformFeeDollars)` in `src/lib/utils.ts` for frontend display
-3. Update `GameDetail.tsx` to use the utility for display
-4. Update `Games.tsx` and `GameCard.tsx` to use the utility for display
-5. Deploy the edge function
+When a session is cancelled by the automated process, the database function will insert a notification into the `notifications` table for the organizer, warning them their booking was cancelled due to non-payment.  
+A warning in the session page should also be displayed to the organizer user before getting the booking session cancelled.
 
-### What Does NOT Change
-- Payout logic (`payout-session`) -- untouched
-- `stripe-webhook` -- untouched
-- `verify-payment` -- untouched
-- Database schema -- no changes
-- Credits-only payment path -- no Stripe fee applied (correct behavior)
+## Technical Details
 
+### Database migration (new function + cron)
+
+```sql
+CREATE OR REPLACE FUNCTION public.cancel_expired_unpaid_sessions()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_count INTEGER := 0;
+  v_session RECORD;
+BEGIN
+  FOR v_session IN
+    SELECT s.id AS session_id, s.group_id, ca.id AS ca_id,
+           g.organizer_id
+    FROM sessions s
+    JOIN court_availability ca ON ca.booked_by_session_id = s.id
+    JOIN courts c ON c.id = s.court_id
+    JOIN groups g ON g.id = s.group_id
+    WHERE s.is_cancelled = false
+      AND ca.is_booked = true
+      AND ca.payment_status = 'pending'
+      AND c.payment_timing = 'before_session'
+      AND s.payment_deadline < now()
+  LOOP
+    -- Release court slot
+    UPDATE court_availability
+    SET is_booked = false,
+        booked_by_session_id = NULL,
+        booked_by_group_id = NULL,
+        booked_by_user_id = NULL,
+        payment_status = 'pending'
+    WHERE id = v_session.ca_id;
+
+    -- Remove session players
+    DELETE FROM session_players WHERE session_id = v_session.session_id;
+
+    -- Cancel session
+    UPDATE sessions SET is_cancelled = true WHERE id = v_session.session_id;
+
+    -- Notify organizer
+    INSERT INTO notifications (user_id, type, title, message, data)
+    VALUES (
+      v_session.organizer_id,
+      'session_cancelled',
+      'Booking Cancelled - Payment Overdue',
+      'Your booking was automatically cancelled because payment was not received before the deadline.',
+      jsonb_build_object('session_id', v_session.session_id)
+    );
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  RETURN v_count;
+END;
+$$;
+```
+
+### Edge function: `supabase/functions/cancel-expired-bookings/index.ts`
+
+Calls `supabase.rpc("cancel_expired_unpaid_sessions")` and returns the count of cancelled sessions.
+
+### Cron schedule (via insert tool, not migration)
+
+```sql
+SELECT cron.schedule(
+  'cancel-expired-unpaid-bookings',
+  '*/15 * * * *',
+  $$ SELECT net.http_post(
+    url:='<functions_url>/cancel-expired-bookings',
+    headers:='{"Content-Type":"application/json","Authorization":"Bearer <anon_key>"}'::jsonb,
+    body:='{}'::jsonb
+  ) AS request_id; $$
+);
+```
+
+### Frontend override logic in CourtDetail.tsx
+
+Before opening the booking wizard, check:
+
+```typescript
+const sessionStart = new Date(`${dateStr}T${startTime}`);
+const hoursBeforeSession = court.payment_hours_before || 24;
+const deadlineTime = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
+const effectivePaymentTiming =
+  court.payment_timing === 'before_session' && new Date() >= deadlineTime
+    ? 'at_booking'
+    : court.payment_timing;
+```
+
+### Files to create/modify
+
+
+| File                                                        | Action                              |
+| ----------------------------------------------------------- | ----------------------------------- |
+| `supabase/migrations/...cancel_expired_unpaid_sessions.sql` | Create DB function                  |
+| `supabase/functions/cancel-expired-bookings/index.ts`       | New edge function                   |
+| `src/pages/CourtDetail.tsx` (lines 682-683)                 | Fix deadline calc + override timing |
+| `src/components/booking/BookingWizard.tsx`                  | Add alert for overridden timing     |
+| Cron job (via insert tool)                                  | Schedule every 15 minutes           |
