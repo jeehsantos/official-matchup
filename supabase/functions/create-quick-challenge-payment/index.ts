@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { calculateGrossUp } from "../_shared/feeCalc.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,13 +44,15 @@ serve(async (req) => {
     // Fetch admin-configured platform fee — NEVER hardcode
     const { data: platformSettings } = await supabaseAdmin
       .from("platform_settings")
-      .select("player_fee, manager_fee_percentage")
+      .select("player_fee, manager_fee_percentage, stripe_percent, stripe_fixed")
       .eq("is_active", true)
       .limit(1)
       .single();
 
     const playerFeeDollars = Number(platformSettings?.player_fee ?? 0);
     const playerFeeCents = Math.round(playerFeeDollars * 100);
+    const stripePercent = Number(platformSettings?.stripe_percent ?? 0.029);
+    const stripeFixedCents = Math.round(Number(platformSettings?.stripe_fixed ?? 0.30) * 100);
 
     // Fetch challenge with venue info
     const { data: challenge, error: challengeError } = await supabaseAdmin
@@ -177,15 +180,17 @@ serve(async (req) => {
     }
 
     // --- STRIPE PAYMENT FLOW ---
-    // Gross-up formula to cover Stripe processing fees (NZ: 2.9% + 30c)
-    const STRIPE_PERCENT = 0.029;
-    const STRIPE_FIXED_CENTS = 30;
-
-    const subtotalBeforeStripe = courtShareCents + playerFeeCents;
-    const grossTotalCents = Math.ceil((subtotalBeforeStripe + STRIPE_FIXED_CENTS) / (1 - STRIPE_PERCENT));
-    const estimatedStripeFeeCents = grossTotalCents - subtotalBeforeStripe;
-    const serviceFeeCents = playerFeeCents + estimatedStripeFeeCents;
-    const totalChargeCents = courtShareCents + serviceFeeCents;
+    // Use shared gross-up calculator with dynamic Stripe config
+    const {
+      estimatedStripeFeeCents,
+      serviceFeeCents,
+      totalChargeCents,
+    } = calculateGrossUp({
+      courtAmountCents: courtShareCents,
+      platformFeeCents: playerFeeCents,
+      stripePercent,
+      stripeFixedCents,
+    });
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2024-12-18.acacia",
@@ -243,12 +248,16 @@ serve(async (req) => {
       cancel_url: cancelUrl,
       metadata: {
         challenge_id: challengeId,
-        player_record_id: playerRecord.id,
         user_id: user.id,
-        type: "quick_challenge",
-        service_fee: serviceFeeCents.toString(),
-        court_share: courtShareCents.toString(),
+        court_amount: courtShareCents.toString(),
+        platform_fee_target: playerFeeCents.toString(),
+        stripe_fee_estimated: estimatedStripeFeeCents.toString(),
+        service_fee_total: serviceFeeCents.toString(),
         total_charge: totalChargeCents.toString(),
+        stripe_percent: stripePercent.toString(),
+        stripe_fixed_cents: stripeFixedCents.toString(),
+        type: "quick_challenge",
+        player_record_id: playerRecord.id,
         venue_stripe_account_id: venue?.stripe_account_id || "",
       },
     };
