@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { calculateGrossUp } from "../_shared/feeCalc.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,13 +65,15 @@ serve(async (req) => {
     // Fetch platform settings for dynamic fees — NEVER hardcode
     const { data: platformSettings } = await supabaseAdmin
       .from("platform_settings")
-      .select("player_fee, manager_fee_percentage")
+      .select("player_fee, manager_fee_percentage, stripe_percent, stripe_fixed")
       .eq("is_active", true)
       .limit(1)
       .single();
 
     const platformFeeDollars = Number(platformSettings?.player_fee ?? 0);
     const platformFeeCents = Math.round(platformFeeDollars * 100);
+    const stripePercent = Number(platformSettings?.stripe_percent ?? 0.029);
+    const stripeFixedCents = Math.round(Number(platformSettings?.stripe_fixed ?? 0.30) * 100);
 
     // Calculate full court cost (court price + equipment if any)
     let fullCourtCostCents = Math.round(session.court_price * 100);
@@ -101,15 +104,17 @@ serve(async (req) => {
       // Check how much has already been paid by others
       const { data: existingPayments } = await supabaseAdmin
         .from("payments")
-        .select("amount, paid_with_credits, status")
+        .select("amount, paid_with_credits, court_amount, status")
         .eq("session_id", sessionId)
         .in("status", ["completed", "transferred"]);
 
       let alreadyFundedCents = 0;
       if (existingPayments && existingPayments.length > 0) {
         alreadyFundedCents = existingPayments.reduce((sum, p) => {
-          // amount includes total charge (court share + fee), so subtract fee
-          const paidCourtShare = Math.round((p.amount + (p.paid_with_credits || 0)) * 100) - serviceFeeCents;
+          // Use court_amount if available, otherwise estimate from total minus service_fee
+          const paidCourtShare = p.court_amount
+            ? Math.round(p.court_amount * 100)
+            : Math.round((p.amount + (p.paid_with_credits || 0)) * 100);
           return sum + Math.max(0, paidCourtShare);
         }, 0);
       }
@@ -210,15 +215,17 @@ serve(async (req) => {
     }
 
     // --- STRIPE CARD PAYMENT ---
-    // Gross-up formula: ensure platform retains platform_fee after Stripe deducts ~2.9% + 30c
-    const STRIPE_PERCENT = 0.029;
-    const STRIPE_FIXED_CENTS = 30;
-
-    const subtotalBeforeStripe = remainingCourtAmountCents + platformFeeCents;
-    const grossTotalCents = Math.ceil((subtotalBeforeStripe + STRIPE_FIXED_CENTS) / (1 - STRIPE_PERCENT));
-    const estimatedStripeFeeCents = grossTotalCents - subtotalBeforeStripe;
-    const serviceFeeCents = platformFeeCents + estimatedStripeFeeCents;
-    const totalChargeCents = remainingCourtAmountCents + serviceFeeCents;
+    // Use shared gross-up calculator with dynamic Stripe config
+    const {
+      estimatedStripeFeeCents,
+      serviceFeeCents,
+      totalChargeCents,
+    } = calculateGrossUp({
+      courtAmountCents: remainingCourtAmountCents,
+      platformFeeCents,
+      stripePercent,
+      stripeFixedCents,
+    });
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2024-12-18.acacia",
@@ -267,11 +274,15 @@ serve(async (req) => {
       cancel_url: cancelUrl,
       metadata: {
         session_id: sessionId,
-        payer_user_id: user.id,
-        payment_type: sessionPaymentType,
-        service_fee: serviceFeeCents.toString(),
+        user_id: user.id,
         court_amount: remainingCourtAmountCents.toString(),
+        platform_fee_target: platformFeeCents.toString(),
+        stripe_fee_estimated: estimatedStripeFeeCents.toString(),
+        service_fee_total: serviceFeeCents.toString(),
         total_charge: totalChargeCents.toString(),
+        stripe_percent: stripePercent.toString(),
+        stripe_fixed_cents: stripeFixedCents.toString(),
+        payment_type: sessionPaymentType,
         credits_applied: creditsToApply.toString(),
         venue_stripe_account_id: venue.stripe_account_id || "",
       },
