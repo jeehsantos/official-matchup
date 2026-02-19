@@ -771,6 +771,8 @@ export type Database = {
           is_active: boolean
           manager_fee_percentage: number
           player_fee: number
+          stripe_fixed: number
+          stripe_percent: number
           updated_at: string
           updated_by: string | null
         }
@@ -779,6 +781,8 @@ export type Database = {
           is_active?: boolean
           manager_fee_percentage?: number
           player_fee?: number
+          stripe_fixed?: number
+          stripe_percent?: number
           updated_at?: string
           updated_by?: string | null
         }
@@ -787,6 +791,8 @@ export type Database = {
           is_active?: boolean
           manager_fee_percentage?: number
           player_fee?: number
+          stripe_fixed?: number
+          stripe_percent?: number
           updated_at?: string
           updated_by?: string | null
         }
