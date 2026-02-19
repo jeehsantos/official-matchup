@@ -88,7 +88,7 @@ export function QuickChallengeWizard({
   const [currentStep, setCurrentStep] = useState(1);
   const [rulesAccepted, setRulesAccepted] = useState(false);
   const [paymentType, setPaymentType] = useState<BookingPaymentType>("split");
-  const { playerFee: platformFee } = usePlatformFee();
+  // platformFee is computed below from usePlatformSettings
 
   // Reset state when modal opens
   const handleOpenChange = (isOpen: boolean) => {

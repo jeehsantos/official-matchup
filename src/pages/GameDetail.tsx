@@ -953,7 +953,7 @@ const getGoogleMapsUrl = (address: string): string => {
                       ) : (
                         <>
                           <p className="font-semibold text-success">Covered by Organizer</p>
-                          <p className="text-sm text-muted-foreground">Total: ${singleTotal.toFixed(2)}</p>
+                          <p className="text-sm text-muted-foreground">Total: ${(session.court_price + serviceFee).toFixed(2)}</p>
                         </>
                       )}
                     </div>

@@ -378,6 +378,8 @@ export default function QuickGameLobby() {
     return match ? parseInt(match[1], 10) : 5;
   }, [challenge?.game_mode]);
 
+  const { data: platformSettings } = usePlatformSettings();
+
   // Check if current user is the organizer
   const isOrganizer = useMemo(() => {
     if (!challenge || !user) return false;

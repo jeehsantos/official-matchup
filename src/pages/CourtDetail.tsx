@@ -172,6 +172,8 @@ export default function CourtDetail() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
   
+  const { data: platformSettings } = usePlatformSettings();
+  
   // Equipment state
   const [selectedEquipment, setSelectedEquipment] = useState<SelectedEquipment[]>([]);
   
