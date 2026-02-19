@@ -53,6 +53,12 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
+  const getDefaultPathForRole = (role: string | null) => {
+    if (role === "admin") return "/admin";
+    if (role === "court_manager") return "/manager";
+    return "/games";
+  };
+
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     const { error } = await lovable.auth.signInWithOAuth("google", {
@@ -111,10 +117,8 @@ export default function Auth() {
       if (redirectPath) {
         localStorage.removeItem('redirectAfterAuth');
         navigate(redirectPath, { replace: true });
-      } else if (userRole === "court_manager") {
-        navigate("/manager", { replace: true });
       } else {
-        navigate("/games", { replace: true });
+        navigate(getDefaultPathForRole(userRole), { replace: true });
       }
     }
   }, [user, userRole, isLoading, navigate]);
@@ -138,10 +142,8 @@ export default function Auth() {
       if (redirectPath) {
         localStorage.removeItem('redirectAfterAuth');
         navigate(redirectPath, { replace: true });
-      } else if (role === "court_manager") {
-        navigate("/manager", { replace: true });
       } else {
-        navigate("/games", { replace: true });
+        navigate(getDefaultPathForRole(role), { replace: true });
       }
     }
   };
@@ -201,10 +203,8 @@ export default function Auth() {
       if (redirectPath) {
         localStorage.removeItem('redirectAfterAuth');
         navigate(redirectPath, { replace: true });
-      } else if (data.role === "court_manager") {
-        navigate("/manager", { replace: true });
       } else {
-        navigate("/games", { replace: true });
+        navigate(getDefaultPathForRole(data.role), { replace: true });
       }
     }
   };

@@ -5,9 +5,11 @@ import { useQuickChallenges, useJoinChallenge, useCancelChallenge, useUpdateChal
 import { useQuickChallengePayment } from "@/hooks/useQuickChallengePayment";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/hooks/useTheme";
-import { cn } from "@/lib/utils";
+import { cn, estimateServiceFee } from "@/lib/utils";
+import { usePlatformFee } from "@/hooks/usePlatformFee";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Loader2,
@@ -215,6 +217,7 @@ interface SettingsModalProps {
   currentPlayerCount: number;
   onFormatChange: (newFormat: string) => void;
   isUpdating?: boolean;
+  hasPaidPlayers?: boolean;
 }
 
 const MATCH_FORMATS = ["1vs1", "2vs2", "3vs3", "4vs4", "5vs5"];
@@ -229,6 +232,7 @@ function SettingsModal({
   currentPlayerCount,
   onFormatChange,
   isUpdating,
+  hasPaidPlayers,
 }: SettingsModalProps) {
   const { theme, setTheme } = useTheme();
   const [selectedFormat, setSelectedFormat] = useState(gameMode);
@@ -285,37 +289,45 @@ function SettingsModal({
           </div>
 
           {/* Match Format */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase text-muted-foreground">
-              Match Format
-            </span>
-            {isOrganizer ? (
-              <Select 
-                value={selectedFormat} 
-                onValueChange={handleFormatChange}
-                disabled={isUpdating}
-              >
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue placeholder="Select format" />
-                </SelectTrigger>
-                <SelectContent className="z-[200]">
-                  {MATCH_FORMATS.map((format) => (
-                    <SelectItem 
-                      key={format} 
-                      value={format}
-                      disabled={getFormatDisabled(format)}
-                    >
-                      {format}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-muted border-border">
-                <span className="text-[10px] font-black uppercase">
-                  {gameMode}
-                </span>
-              </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase text-muted-foreground">
+                Match Format
+              </span>
+              {isOrganizer && !hasPaidPlayers ? (
+                <Select 
+                  value={selectedFormat} 
+                  onValueChange={handleFormatChange}
+                  disabled={isUpdating}
+                >
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Select format" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[200]">
+                    {MATCH_FORMATS.map((format) => (
+                      <SelectItem 
+                        key={format} 
+                        value={format}
+                        disabled={getFormatDisabled(format)}
+                      >
+                        {format}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-muted border-border">
+                  <span className="text-[10px] font-black uppercase">
+                    {gameMode}
+                  </span>
+                </div>
+              )}
+            </div>
+            {isOrganizer && hasPaidPlayers && (
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                <AlertTriangle size={12} className="text-warning shrink-0" />
+                Format cannot be changed after a player has paid.
+              </p>
             )}
           </div>
         </div>
@@ -341,6 +353,7 @@ export default function QuickGameLobby() {
   const updateFormat = useUpdateChallengeFormat();
   const { isPaying, initiatePayment, verifyPayment } = useQuickChallengePayment();
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  const { playerFee } = usePlatformFee();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isQuitDialogOpen, setIsQuitDialogOpen] = useState(false);
@@ -428,6 +441,10 @@ export default function QuickGameLobby() {
     [players]
   );
 
+  const platformFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
+  const challengePricePerPlayer = challenge?.price_per_player || 0;
+  const gameFeePerPlayer = Math.max(0, challengePricePerPlayer - platformFee);
+
   // Handlers - use 0-based slot positions to match database
   const handleJoinSlot = (team: TeamSide, slotPosition: number) => {
     if (!id || !user || hasUserJoined) return;
@@ -444,9 +461,11 @@ export default function QuickGameLobby() {
     if (!id || !challenge) return;
 
     const pricePerPlayer = challenge.price_per_player || 0;
+    const estServiceFee = estimateServiceFee(pricePerPlayer, playerFee);
+    const totalAmount = pricePerPlayer + estServiceFee;
 
     // If user has enough credits to cover the full amount, show credits modal
-    if (pricePerPlayer > 0 && credits >= pricePerPlayer && !loadingCredits) {
+    if (pricePerPlayer > 0 && credits >= totalAmount && !loadingCredits) {
       setShowCreditsModal(true);
       return;
     }
@@ -726,6 +745,7 @@ export default function QuickGameLobby() {
         currentPlayerCount={players.length}
         onFormatChange={handleFormatChange}
         isUpdating={updateFormat.isPending}
+        hasPaidPlayers={players.some(p => p.paymentStatus === "paid")}
       />
 
       {/* Invite Friend Dialog */}
@@ -991,14 +1011,28 @@ export default function QuickGameLobby() {
                 Invite Friend
               </Button>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Price:
-              </span>
-              <span className="text-sm font-black uppercase tracking-widest text-primary">
-                ${challenge.price_per_player?.toFixed(2) || "0.00"}
-              </span>
+            <div className="flex flex-col items-center gap-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Total:
+                </span>
+                <span className="text-sm font-black uppercase tracking-widest text-primary">
+                  ${challenge.price_per_player != null
+                    ? (challenge.price_per_player + estimateServiceFee(challenge.price_per_player, playerFee)).toFixed(2)
+                    : "0.00"}
+                </span>
+              </div>
+              {challenge.price_per_player > 0 && (
+                <span className="text-[9px] text-muted-foreground">
+                  Court price ${challenge.price_per_player.toFixed(2)} + Service fee ${estimateServiceFee(challenge.price_per_player, playerFee).toFixed(2)}
+                </span>
+              )}
             </div>
+            {challengePricePerPlayer > 0 && (
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                ${gameFeePerPlayer.toFixed(2)} game fee + ${platformFee.toFixed(2)} platform fee
+              </p>
+            )}
           </div>
         </div>
 
@@ -1049,7 +1083,7 @@ export default function QuickGameLobby() {
         open={showCreditsModal}
         onOpenChange={setShowCreditsModal}
         userCredits={credits}
-        sessionCost={challenge.price_per_player || 0}
+        sessionCost={(challenge.price_per_player || 0) + estimateServiceFee(challenge.price_per_player || 0, playerFee)}
         onSelectPaymentMethod={handleSelectPaymentMethod}
         isLoading={isPaying}
       />
