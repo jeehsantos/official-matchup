@@ -44,6 +44,7 @@ export default function ManagerCourtForm() {
   
   const [loading, setLoading] = useState(isEditing);
   const [submitting, setSubmitting] = useState(false);
+  const [venueAllowedSports, setVenueAllowedSports] = useState<string[]>([]);
 
   const {
     register,
@@ -68,6 +69,35 @@ export default function ManagerCourtForm() {
       fetchCourt();
     }
   }, [courtId, isEditing]);
+
+  useEffect(() => {
+    if (venueId) {
+      fetchVenueAllowedSports();
+    }
+  }, [venueId]);
+
+  const fetchVenueAllowedSports = async () => {
+    if (!venueId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("courts")
+        .select("allowed_sports")
+        .eq("venue_id", venueId)
+        .not("allowed_sports", "is", null);
+
+      if (error) throw error;
+
+      const uniqueSports = Array.from(
+        new Set((data || []).flatMap((court: { allowed_sports: string[] | null }) => court.allowed_sports || []))
+      );
+
+      setVenueAllowedSports(uniqueSports);
+    } catch (error) {
+      console.error("Error fetching venue allowed sports:", error);
+      setVenueAllowedSports([]);
+    }
+  };
 
   const fetchCourt = async () => {
     try {
@@ -129,6 +159,7 @@ export default function ManagerCourtForm() {
             is_active: data.is_active,
             photo_url: data.photo_url || null,
             rules: data.rules || null,
+            allowed_sports: venueAllowedSports,
           } as any);
 
         if (error) throw error;

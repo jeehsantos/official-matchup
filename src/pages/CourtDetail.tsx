@@ -1170,25 +1170,33 @@ export default function CourtDetail() {
   const allVenueCourts = availabilityData?.venue_courts || [];
   const venueCourts = useMemo(() => {
     if (preferredSports.length === 0 || allVenueCourts.length <= 1) return allVenueCourts;
+
     const filtered = allVenueCourts.filter(c => {
       const courtSports = c.allowed_sports || [];
       if (courtSports.length === 0) return true;
       return courtSports.some(sport => preferredSports.includes(sport));
     });
-    return filtered.length > 0 ? filtered : allVenueCourts;
-  }, [allVenueCourts, preferredSports]);
 
-  // Auto-select the first preferred-sport court if current selection is filtered out
-  useEffect(() => {
-    if (venueCourts.length > 0 && selectedCourtId) {
-      const currentInFiltered = venueCourts.some(c => c.id === selectedCourtId);
-      if (!currentInFiltered) {
-        setSelectedCourtId(venueCourts[0].id);
-        setSelectedSlots([]);
-        setCurrentImageIndex(0);
-      }
+    const courtsToShow = filtered.length > 0 ? filtered : allVenueCourts;
+    if (!selectedCourtId || courtsToShow.some(c => c.id === selectedCourtId)) {
+      return courtsToShow;
     }
-  }, [venueCourts, selectedCourtId]);
+
+    const selectedCourt = allVenueCourts.find(c => c.id === selectedCourtId);
+    return selectedCourt ? [selectedCourt, ...courtsToShow] : courtsToShow;
+  }, [allVenueCourts, preferredSports, selectedCourtId]);
+
+  // Only fall back if the currently selected court no longer exists in venue availability
+  useEffect(() => {
+    if (!selectedCourtId || allVenueCourts.length === 0) return;
+
+    const selectedCourtExists = allVenueCourts.some(c => c.id === selectedCourtId);
+    if (!selectedCourtExists) {
+      setSelectedCourtId(allVenueCourts[0].id);
+      setSelectedSlots([]);
+      setCurrentImageIndex(0);
+    }
+  }, [allVenueCourts, selectedCourtId]);
 
   // Use public layout for unauthenticated users
   const Layout = user ? MobileLayout : PublicLayout;
