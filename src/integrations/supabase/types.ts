@@ -1462,6 +1462,7 @@ export type Database = {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
       }
+      cancel_expired_unpaid_sessions: { Args: never; Returns: number }
       cancel_session_and_release_court: {
         Args: { session_id: string }
         Returns: boolean
@@ -1527,6 +1528,7 @@ export type Database = {
         | "slot_released"
         | "player_joined"
         | "group_invite"
+        | "session_cancelled"
       payment_status:
         | "pending"
         | "completed"
@@ -1688,6 +1690,7 @@ export const Constants = {
         "slot_released",
         "player_joined",
         "group_invite",
+        "session_cancelled",
       ],
       payment_status: [
         "pending",

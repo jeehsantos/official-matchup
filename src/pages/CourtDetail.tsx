@@ -678,9 +678,9 @@ export default function CourtDetail() {
 
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-      const slotDate = new Date(dateStr);
-      const paymentDeadline = new Date(slotDate);
-      paymentDeadline.setHours(paymentDeadline.getHours() - 24);
+      const sessionStart = new Date(`${dateStr}T${startTime}`);
+      const hoursBeforeSession = court.payment_hours_before ?? 24;
+      const paymentDeadline = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
 
       // Calculate price based on duration + equipment
       const hours = totalDuration / 60;
@@ -1227,6 +1227,21 @@ export default function CourtDetail() {
   }
 
   const totalDuration = getTotalDuration();
+
+  // Compute effective payment timing: if court uses 'before_session' but we're already
+  // within the payment window (deadline has passed), force 'at_booking'.
+  const effectivePaymentTiming = (() => {
+    if (!court || court.payment_timing !== "before_session" || !selectedDate) {
+      return court?.payment_timing ?? "at_booking";
+    }
+    const dateStr = format(selectedDate, "yyyy-MM-dd");
+    const startTime = getStartTime();
+    const sessionStart = new Date(`${dateStr}T${startTime}`);
+    const hoursBeforeSession = court.payment_hours_before ?? 24;
+    const deadline = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
+    return new Date() >= deadline ? "at_booking" : "before_session";
+  })() as "at_booking" | "before_session";
+
   const courtPrice = calculatePrice(totalDuration);
   const equipmentTotal = getEquipmentTotal();
   const totalPrice = courtPrice + equipmentTotal;
@@ -1880,7 +1895,7 @@ export default function CourtDetail() {
             equipment={venueEquipment}
             selectedEquipment={selectedEquipment}
             onEquipmentChange={setSelectedEquipment}
-            paymentTiming={court.payment_timing}
+            paymentTiming={effectivePaymentTiming}
           />
         )}
 
@@ -1901,7 +1916,7 @@ export default function CourtDetail() {
             equipment={venueEquipment}
             selectedEquipment={selectedEquipment}
             onEquipmentChange={setSelectedEquipment}
-            paymentTiming={court.payment_timing}
+            paymentTiming={effectivePaymentTiming}
             sportName={quickGameConfig.sportName}
             gameMode={quickGameConfig.gameMode}
             totalPlayers={quickGameConfig.totalPlayers}

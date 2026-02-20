@@ -562,6 +562,16 @@ export function BookingWizard({
           {/* Step 3: Payment & Finalization */}
           {currentStep === 3 && (
             <div className="space-y-5 animate-in fade-in duration-200">
+              {/* Payment timing override notice */}
+              {paymentTiming === "at_booking" && (
+                <div className="flex gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-warning" />
+                  <p>
+                    <span className="font-semibold">Immediate payment required.</span>{" "}
+                    This slot is within the court's payment window, so payment must be completed now to secure your booking.
+                  </p>
+                </div>
+              )}
               {/* Rules confirmation check */}
               {!rulesAccepted && (
                 <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive">
