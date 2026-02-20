@@ -168,7 +168,7 @@ export default function CourtDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
-  const { preferredSports } = useUserProfile();
+  const { preferredSports, isLoading: profileLoading } = useUserProfile();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
   
@@ -255,44 +255,44 @@ export default function CourtDetail() {
       const response = data as AvailabilityResponse;
       const venueCourts = response.venue_courts || [];
 
-      // One-time preferred-sport correction on initial load:
-      // If the URL court doesn't match preferred sports, silently switch and
-      // immediately fetch for the correct court — spinner stays visible the whole time.
-      if (
-        isInitialLoad &&
-        !hasAutoSelectedRef.current &&
-        preferredSports.length > 0 &&
-        venueCourts.length > 1
-      ) {
-        hasAutoSelectedRef.current = true;
-        const currentCourtSports = venueCourts.find(c => c.id === courtId)?.allowed_sports || [];
-        const currentMatchesPreferred =
-          currentCourtSports.length === 0 ||
-          currentCourtSports.some(s => preferredSports.includes(s));
+      // One-time preferred-sport correction on initial load.
+      // Only attempt if preferredSports is already loaded (non-empty check is done inside).
+      // If preferredSports hasn't loaded yet, we leave hasAutoSelectedRef=false so the
+      // separate preferredSports useEffect below can perform the correction once it arrives.
+      if (isInitialLoad && !hasAutoSelectedRef.current && venueCourts.length > 1) {
+        if (preferredSports.length > 0) {
+          // Sports are loaded — do the correction now
+          hasAutoSelectedRef.current = true;
+          const currentCourtSports = venueCourts.find(c => c.id === courtId)?.allowed_sports || [];
+          const currentMatchesPreferred =
+            currentCourtSports.length === 0 ||
+            currentCourtSports.some(s => preferredSports.includes(s));
 
-        if (!currentMatchesPreferred) {
-          const betterCourt = venueCourts.find(c => {
-            const sports = c.allowed_sports || [];
-            return sports.length === 0 || sports.some(s => preferredSports.includes(s));
-          });
-
-          if (betterCourt && betterCourt.id !== courtId) {
-            // Block the useEffect from re-triggering for this state change
-            isAutoSwitchingRef.current = true;
-            setSelectedCourtId(betterCourt.id);
-            setCurrentImageIndex(0);
-
-            // Fetch directly for the correct court while spinner is still visible
-            const { data: data2, error: error2 } = await supabase.functions.invoke("get-availability", {
-              body: { venueId, courtId: betterCourt.id, date: format(date, "yyyy-MM-dd") },
+          if (!currentMatchesPreferred) {
+            const betterCourt = venueCourts.find(c => {
+              const sports = c.allowed_sports || [];
+              return sports.length === 0 || sports.some(s => preferredSports.includes(s));
             });
-            isAutoSwitchingRef.current = false;
 
-            if (error2) throw error2;
-            setAvailabilityData(data2 as AvailabilityResponse);
-            return;
+            if (betterCourt && betterCourt.id !== courtId) {
+              isAutoSwitchingRef.current = true;
+              setSelectedCourtId(betterCourt.id);
+              setCurrentImageIndex(0);
+
+              const { data: data2, error: error2 } = await supabase.functions.invoke("get-availability", {
+                body: { venueId, courtId: betterCourt.id, date: format(date, "yyyy-MM-dd") },
+              });
+              isAutoSwitchingRef.current = false;
+
+              if (error2) throw error2;
+              setAvailabilityData(data2 as AvailabilityResponse);
+              return;
+            }
           }
+          // No switch needed — mark done
         }
+        // else: preferredSports not loaded yet; leave hasAutoSelectedRef=false
+        // The useEffect below will handle correction once preferredSports resolves
       }
 
       setAvailabilityData(response);
@@ -345,14 +345,57 @@ export default function CourtDetail() {
     }
   }, [id, fetchCourt]);
 
-  // Fetch availability when date or selected court changes
+  // Fetch availability when date or selected court changes.
+  // Wait for the profile to resolve first so preferredSports is accurate on the first fetch,
+  // enabling the inline correction path inside fetchAvailability (no flicker).
   useEffect(() => {
-    if (court?.venues && selectedDate && selectedCourtId) {
+    if (court?.venues && selectedDate && selectedCourtId && !profileLoading) {
       // Skip if we're mid auto-switch — fetchAvailability already handles the second fetch internally
       if (isAutoSwitchingRef.current) return;
       fetchAvailability(court.venues.id, selectedCourtId, selectedDate, !hasAutoSelectedRef.current);
     }
-  }, [court, selectedDate, selectedCourtId, fetchAvailability]);
+  }, [court, selectedDate, selectedCourtId, fetchAvailability, profileLoading]);
+
+  // Fallback correction: if preferredSports loaded AFTER the initial availability fetch
+  // (profile query resolves async), perform the court switch using already-fetched venue_courts.
+  useEffect(() => {
+    if (
+      hasAutoSelectedRef.current ||
+      preferredSports.length === 0 ||
+      !availabilityData ||
+      !court?.venues ||
+      !selectedDate ||
+      !selectedCourtId
+    ) return;
+
+    const venueCourts = availabilityData.venue_courts || [];
+    if (venueCourts.length <= 1) return;
+
+    hasAutoSelectedRef.current = true;
+
+    const currentCourtSports = venueCourts.find(c => c.id === selectedCourtId)?.allowed_sports || [];
+    const currentMatchesPreferred =
+      currentCourtSports.length === 0 ||
+      currentCourtSports.some(s => preferredSports.includes(s));
+
+    if (!currentMatchesPreferred) {
+      const betterCourt = venueCourts.find(c => {
+        const sports = c.allowed_sports || [];
+        return sports.length === 0 || sports.some(s => preferredSports.includes(s));
+      });
+
+      if (betterCourt && betterCourt.id !== selectedCourtId) {
+        // Switch to the correct court; fetchAvailability useEffect will re-fire and load it
+        isAutoSwitchingRef.current = true;
+        setAvailabilityLoading(true);
+        setSelectedCourtId(betterCourt.id);
+        setCurrentImageIndex(0);
+        fetchAvailability(court.venues.id, betterCourt.id, selectedDate).finally(() => {
+          isAutoSwitchingRef.current = false;
+        });
+      }
+    }
+  }, [preferredSports, availabilityData, selectedCourtId, court, selectedDate, fetchAvailability]);
 
   // Restore selected slots after availability loads - only if we're in restoration mode
   useEffect(() => {
@@ -1339,8 +1382,8 @@ export default function CourtDetail() {
             <div className="px-4 lg:px-0">
               <div className="flex items-start gap-3 mb-3">
                 <Badge className="capitalize shrink-0">
-                  <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-3 w-3 mr-1" />
-                  {court.allowed_sports?.join(", ") || "Other"}
+                  <SportIcon sport={(getSelectedCourt()?.allowed_sports?.[0] || court.allowed_sports?.[0] || "other")} className="h-3 w-3 mr-1" />
+                  {(getSelectedCourt()?.allowed_sports || court.allowed_sports)?.join(", ") || "Other"}
                 </Badge>
                 <Badge variant="outline" className="shrink-0">
                   {court.is_indoor ? "Indoor" : "Outdoor"}
@@ -1579,7 +1622,7 @@ export default function CourtDetail() {
                   Available Times for {format(selectedDate, "MMMM d")}
                 </h3>
                 
-                {availabilityLoading ? (
+                {(availabilityLoading || profileLoading) ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                     <span className="ml-2 text-muted-foreground">Loading availability...</span>
