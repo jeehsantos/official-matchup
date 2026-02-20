@@ -1,168 +1,111 @@
-## Problem Summary
 
-When a court manager configures payment timing as "Before Session" with a specific hours-before deadline, the system does not enforce this deadline. Unpaid bookings remain in "pending" status indefinitely, blocking the slot from being rebooked.
+## Root Cause
 
-Two issues need fixing:
+When navigating to `/courts/:id`, the flow is:
 
-1. **Payment deadline is hardcoded to 24 hours** instead of using the court's `payment_hours_before` setting
-2. **No automated enforcement** -- there is no background process that cancels unpaid bookings when the deadline passes
+1. `fetchCourt()` runs → sets `selectedCourtId` to the URL param's court ID (the main court)
+2. Availability loads → `availabilityData.venue_courts` returns all courts for the venue
+3. `venueCourts` is filtered by `preferredSports` (lines 1173–1189), but `selectedCourtId` is already pointing at the main court
+4. The existing fallback effect (line 1192) only resets `selectedCourtId` if the selected court is **entirely missing** from `allVenueCourts` — the main court IS in that list, so no correction happens
+5. Result: the UI renders with the main court selected (wrong sport), then the user must manually switch
 
-## Plan
+## Solution
 
-### 1. Fix payment deadline calculation in CourtDetail.tsx
+Introduce a **one-time "initial court selection" effect** that runs immediately after `availabilityData.venue_courts` first arrives. It will:
 
-Currently (line 682-683):
+1. Check if the currently-selected court matches any of the user's `preferredSports`
+2. If not, find the first court in `venue_courts` that does match
+3. If a better match is found, silently switch `selectedCourtId` before the component renders with data — preventing any visible flicker
 
-```typescript
-const paymentDeadline = new Date(slotDate);
-paymentDeadline.setHours(paymentDeadline.getHours() - 24);
-```
+A `hasAutoSelectedRef` ref guards this so it only runs on the first availability load (not on date changes, slot changes, or manual court switches).
 
-This must use the court's actual `payment_hours_before` value and calculate from the session start datetime (not just the date):
+### Why this is fast
 
-```typescript
-const sessionStart = new Date(`${dateStr}T${startTime}`);
-const hoursBeforeSession = court.payment_hours_before || 24;
-const paymentDeadline = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
-```
+- No extra network request — it uses data already returned by `get-availability` (`venue_courts` array already includes `allowed_sports` per court)
+- The switch happens synchronously within the same render cycle after the availability state update, so the user never sees the wrong court
 
-### 2. Create a database function to cancel expired unpaid bookings
+### Files to modify
 
-A new RPC function `cancel_expired_unpaid_sessions` will:
+**`src/pages/CourtDetail.tsx`** only — no backend changes needed.
 
-- Find sessions where:
-  - `payment_status = 'pending'` on `court_availability`
-  - The court has `payment_timing = 'before_session'`
-  - `NOW()` is past the session's `payment_deadline`
-  - Session is not already cancelled
-- For each expired session:
-  - Mark the session as cancelled (`is_cancelled = true`)
-  - Release the court slot (`is_booked = false`, clear booking references)
-  - Remove session players
-  - Clean up related chat conversations
-
-### 3. Create a new edge function `cancel-expired-bookings`
-
-A lightweight edge function that calls the `cancel_expired_unpaid_sessions` RPC. This can be triggered via cron (similar to `expire-holds`).
-
-### 4. Schedule a cron job
-
-Set up a `pg_cron` + `pg_net` schedule to call `cancel-expired-bookings` every 15 minutes, ensuring timely enforcement.
-
-### 5. Enforce "at_booking" payment for same-day rebookings
-
-When a user books a slot on the same day and the remaining time is less than the court's `payment_hours_before`, the booking flow should force `payment_timing = 'at_booking'` regardless of the court's default. This prevents a new "before_session" booking that would immediately be past its deadline.
-
-This will be handled in:
-
-- **CourtDetail.tsx**: Before opening the BookingWizard, check if the slot's session start minus `payment_hours_before` is already in the past. If so, override `paymentTiming` to `"at_booking"` and show a notice.
-- **BookingWizard.tsx**: Display an info alert when payment timing has been overridden.
-
-### 6. Frontend notification for cancelled bookings (optional enhancement)
-
-When a session is cancelled by the automated process, the database function will insert a notification into the `notifications` table for the organizer, warning them their booking was cancelled due to non-payment.  
-A warning in the session page should also be displayed to the organizer user before getting the booking session cancelled.
-
-## Technical Details
-
-### Database migration (new function + cron)
-
-```sql
-CREATE OR REPLACE FUNCTION public.cancel_expired_unpaid_sessions()
-RETURNS integer
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-DECLARE
-  v_count INTEGER := 0;
-  v_session RECORD;
-BEGIN
-  FOR v_session IN
-    SELECT s.id AS session_id, s.group_id, ca.id AS ca_id,
-           g.organizer_id
-    FROM sessions s
-    JOIN court_availability ca ON ca.booked_by_session_id = s.id
-    JOIN courts c ON c.id = s.court_id
-    JOIN groups g ON g.id = s.group_id
-    WHERE s.is_cancelled = false
-      AND ca.is_booked = true
-      AND ca.payment_status = 'pending'
-      AND c.payment_timing = 'before_session'
-      AND s.payment_deadline < now()
-  LOOP
-    -- Release court slot
-    UPDATE court_availability
-    SET is_booked = false,
-        booked_by_session_id = NULL,
-        booked_by_group_id = NULL,
-        booked_by_user_id = NULL,
-        payment_status = 'pending'
-    WHERE id = v_session.ca_id;
-
-    -- Remove session players
-    DELETE FROM session_players WHERE session_id = v_session.session_id;
-
-    -- Cancel session
-    UPDATE sessions SET is_cancelled = true WHERE id = v_session.session_id;
-
-    -- Notify organizer
-    INSERT INTO notifications (user_id, type, title, message, data)
-    VALUES (
-      v_session.organizer_id,
-      'session_cancelled',
-      'Booking Cancelled - Payment Overdue',
-      'Your booking was automatically cancelled because payment was not received before the deadline.',
-      jsonb_build_object('session_id', v_session.session_id)
-    );
-
-    v_count := v_count + 1;
-  END LOOP;
-
-  RETURN v_count;
-END;
-$$;
-```
-
-### Edge function: `supabase/functions/cancel-expired-bookings/index.ts`
-
-Calls `supabase.rpc("cancel_expired_unpaid_sessions")` and returns the count of cancelled sessions.
-
-### Cron schedule (via insert tool, not migration)
-
-```sql
-SELECT cron.schedule(
-  'cancel-expired-unpaid-bookings',
-  '*/15 * * * *',
-  $$ SELECT net.http_post(
-    url:='<functions_url>/cancel-expired-bookings',
-    headers:='{"Content-Type":"application/json","Authorization":"Bearer <anon_key>"}'::jsonb,
-    body:='{}'::jsonb
-  ) AS request_id; $$
-);
-```
-
-### Frontend override logic in CourtDetail.tsx
-
-Before opening the booking wizard, check:
+#### Change 1: Add a `hasAutoSelectedRef` guard (near other refs, ~line 209)
 
 ```typescript
-const sessionStart = new Date(`${dateStr}T${startTime}`);
-const hoursBeforeSession = court.payment_hours_before || 24;
-const deadlineTime = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
-const effectivePaymentTiming =
-  court.payment_timing === 'before_session' && new Date() >= deadlineTime
-    ? 'at_booking'
-    : court.payment_timing;
+// Prevents auto-selecting a preferred court more than once per page load
+const hasAutoSelectedRef = useRef(false);
 ```
 
-### Files to create/modify
+#### Change 2: Replace the existing "fallback" useEffect (lines 1192–1201) with an enhanced version that also performs the initial preferred-sport selection
 
+Replace:
+```typescript
+// Only fall back if the currently selected court no longer exists in venue availability
+useEffect(() => {
+  if (!selectedCourtId || allVenueCourts.length === 0) return;
 
-| File                                                        | Action                              |
-| ----------------------------------------------------------- | ----------------------------------- |
-| `supabase/migrations/...cancel_expired_unpaid_sessions.sql` | Create DB function                  |
-| `supabase/functions/cancel-expired-bookings/index.ts`       | New edge function                   |
-| `src/pages/CourtDetail.tsx` (lines 682-683)                 | Fix deadline calc + override timing |
-| `src/components/booking/BookingWizard.tsx`                  | Add alert for overridden timing     |
-| Cron job (via insert tool)                                  | Schedule every 15 minutes           |
+  const selectedCourtExists = allVenueCourts.some(c => c.id === selectedCourtId);
+  if (!selectedCourtExists) {
+    setSelectedCourtId(allVenueCourts[0].id);
+    setSelectedSlots([]);
+    setCurrentImageIndex(0);
+  }
+}, [allVenueCourts, selectedCourtId]);
+```
+
+With:
+```typescript
+useEffect(() => {
+  if (!selectedCourtId || allVenueCourts.length === 0) return;
+
+  // 1. Fallback: if selected court no longer exists, reset to first available
+  const selectedCourtExists = allVenueCourts.some(c => c.id === selectedCourtId);
+  if (!selectedCourtExists) {
+    setSelectedCourtId(allVenueCourts[0].id);
+    setSelectedSlots([]);
+    setCurrentImageIndex(0);
+    return;
+  }
+
+  // 2. One-time auto-selection: switch to a preferred-sport court on first load
+  if (hasAutoSelectedRef.current || preferredSports.length === 0 || allVenueCourts.length <= 1) return;
+
+  const currentCourt = allVenueCourts.find(c => c.id === selectedCourtId);
+  const currentCourtSports = currentCourt?.allowed_sports || [];
+  const currentMatchesPreferred =
+    currentCourtSports.length === 0 ||
+    currentCourtSports.some(s => preferredSports.includes(s));
+
+  if (!currentMatchesPreferred) {
+    // Find the first court in the list that matches preferred sports
+    const betterCourt = allVenueCourts.find(c => {
+      const sports = c.allowed_sports || [];
+      return sports.length === 0 || sports.some(s => preferredSports.includes(s));
+    });
+
+    if (betterCourt && betterCourt.id !== selectedCourtId) {
+      setSelectedCourtId(betterCourt.id);
+      setCurrentImageIndex(0);
+      // No need to clear slots — none are selected yet at this point in the flow
+    }
+  }
+
+  hasAutoSelectedRef.current = true;
+}, [allVenueCourts, selectedCourtId, preferredSports]);
+```
+
+### Why `hasAutoSelectedRef` prevents regressions
+
+- After the first load, `hasAutoSelectedRef.current = true`, so subsequent `allVenueCourts` updates (e.g. on date change) do NOT trigger another auto-switch
+- Manual court selection by the user is unaffected because the ref is already `true`
+- No performance impact: no additional fetches, no debouncing needed
+
+### Edge cases handled
+
+| Scenario | Behaviour |
+|---|---|
+| Main court matches preferred sport | No switch, ref set to `true` |
+| No preferred sports configured | No switch (guard at top) |
+| Only one court in venue | No switch (guard at top) |
+| No court in venue matches preferred sport | No switch (falls back to main court) |
+| User manually selects a different court | Unaffected (ref already `true`) |
+| Date change triggers new availability fetch | Unaffected (ref already `true`) |
