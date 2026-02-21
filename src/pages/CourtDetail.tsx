@@ -781,7 +781,7 @@ export default function CourtDetail() {
           available_date: dateStr,
           start_time: startTime,
           end_time: endTime,
-          is_booked: true,
+          is_booked: court.payment_timing !== "at_booking",
           booked_by_user_id: user.id,
           booked_by_group_id: groupId,
           booked_by_session_id: session.id,

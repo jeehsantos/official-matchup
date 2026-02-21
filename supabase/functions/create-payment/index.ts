@@ -180,7 +180,7 @@ serve(async (req) => {
 
       await supabaseAdmin
         .from("court_availability")
-        .update({ payment_status: "completed" })
+        .update({ payment_status: "completed", is_booked: true })
         .eq("booked_by_session_id", sessionId);
 
       // Apply held credit liabilities for this user

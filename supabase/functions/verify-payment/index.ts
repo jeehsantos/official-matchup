@@ -115,7 +115,7 @@ serve(async (req) => {
         // Update court availability payment status
         await supabaseAdmin
           .from("court_availability")
-          .update({ payment_status: "completed" })
+          .update({ payment_status: "completed", is_booked: true })
           .eq("booked_by_session_id", sessionId);
 
         // Process referral credit (non-fatal)
