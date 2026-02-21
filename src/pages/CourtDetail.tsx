@@ -911,7 +911,10 @@ export default function CourtDetail() {
       const totalPrice = courtPriceCalc + equipmentTotal;
       const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
       const splitPricePerPlayer = Math.ceil((totalPrice / quickGameConfig.totalPlayers) * 100) / 100;
-      const pricePerPlayer = paymentType === "split" 
+      
+      // For at_booking courts, force single payment (organizer pays full, price_per_player = 0)
+      const effectivePT = court.payment_timing === "at_booking" ? "single" : paymentType;
+      const pricePerPlayer = effectivePT === "split" 
         ? splitPricePerPlayer + serviceFee
         : 0;
 
@@ -926,7 +929,7 @@ export default function CourtDetail() {
           scheduled_date: dateStr,
           scheduled_time: startTime,
           total_slots: quickGameConfig.totalPlayers,
-          price_per_player: paymentType === "split" ? pricePerPlayer : 0,
+          price_per_player: effectivePT === "split" ? pricePerPlayer : 0,
           status: "open",
           created_by: user.id,
         })
@@ -973,7 +976,7 @@ export default function CourtDetail() {
           user_id: user.id,
           team: "left",
           slot_position: 0,
-          payment_status: paymentType === "single" ? "pending" : "pending",
+          payment_status: "pending",
         });
 
       if (playerError) {
@@ -983,12 +986,59 @@ export default function CourtDetail() {
       // Clear quick game state
       sessionStorage.removeItem("quickGameConfig");
 
+      // If at_booking, redirect to Stripe for payment
+      if (court.payment_timing === "at_booking") {
+        try {
+          const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-quick-challenge-payment", {
+            body: {
+              challengeId: challenge.id,
+              origin: window.location.origin,
+              useCredits: false,
+            },
+          });
+
+          if (paymentError) throw paymentError;
+
+          if (paymentData?.url) {
+            const isInIframe = window.self !== window.top;
+            if (isInIframe) {
+              const opened = window.open(paymentData.url, "_blank", "noopener,noreferrer");
+              if (!opened) window.location.href = paymentData.url;
+            } else {
+              window.location.href = paymentData.url;
+            }
+            return;
+          }
+
+          if (paymentData?.success && !paymentData?.url) {
+            // Free challenge or credits-only — already confirmed
+            toast({
+              title: "Challenge Created & Paid!",
+              description: paymentData.message || "Your spot has been confirmed.",
+            });
+            navigate(`/quick-games/${challenge.id}`);
+            return;
+          }
+
+          throw new Error("No checkout URL returned");
+        } catch (payErr: any) {
+          console.error("Payment error:", payErr);
+          toast({
+            title: "Challenge created but payment failed",
+            description: payErr?.message || "Please go to the lobby to complete payment.",
+            variant: "destructive",
+          });
+          navigate(`/quick-games/${challenge.id}`);
+          return;
+        }
+      }
+
+      // Non at_booking: navigate normally
       toast({
         title: "Quick Challenge Created!",
         description: `Your ${quickGameConfig.gameMode} challenge is now open for players to join.`,
       });
 
-      // Navigate to discover page with quick games filter
       navigate("/discover?tab=quickgames");
 
     } catch (error: any) {

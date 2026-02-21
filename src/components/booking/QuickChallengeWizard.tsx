@@ -26,7 +26,8 @@ import {
   DollarSign,
   Package,
   Users,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 import type { Equipment } from "@/hooks/useVenueEquipment";
 import { usePlatformSettings } from "@/hooks/usePlatformSettings";
@@ -87,7 +88,8 @@ export function QuickChallengeWizard({
 }: QuickChallengeWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [rulesAccepted, setRulesAccepted] = useState(false);
-  const [paymentType, setPaymentType] = useState<BookingPaymentType>("split");
+  const isAtBooking = paymentTiming === "at_booking";
+  const [paymentType, setPaymentType] = useState<BookingPaymentType>(isAtBooking ? "single" : "split");
   // platformFee is computed below from usePlatformSettings
 
   // Reset state when modal opens
@@ -95,7 +97,7 @@ export function QuickChallengeWizard({
     if (isOpen) {
       setCurrentStep(1);
       setRulesAccepted(false);
-      setPaymentType("split");
+      setPaymentType(isAtBooking ? "single" : "split");
     }
     onOpenChange(isOpen);
   };
@@ -307,45 +309,72 @@ export function QuickChallengeWizard({
           {/* Step 3: Payment */}
           {currentStep === 3 && (
             <div className="space-y-5 animate-in fade-in duration-200">
+              {/* Payment Required Banner for at_booking courts */}
+              {isAtBooking && (
+                <div className="flex gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl">
+                  <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-medium text-amber-900 dark:text-amber-100">Payment Required at Booking</p>
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      This court requires the organizer to pay the full amount now. You'll be redirected to complete payment after confirming.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-3">
                 <h4 className="font-semibold flex items-center gap-2">
                   <CreditCard className="h-5 w-5 text-primary" />
                   Payment Method
                 </h4>
                 
-                <RadioGroup
-                  value={paymentType}
-                  onValueChange={(val) => setPaymentType(val as BookingPaymentType)}
-                  className="space-y-3"
-                >
-                  <div className={`flex items-start gap-3 p-4 rounded-lg border transition-colors ${
-                    paymentType === "single" 
-                      ? "border-primary bg-primary/5" 
-                      : "border-border hover:border-primary/50"
-                  }`}>
-                    <RadioGroupItem value="single" id="single" className="mt-1" />
-                    <Label htmlFor="single" className="flex-1 cursor-pointer">
-                      <span className="font-medium">Pay Full Amount</span>
+                {isAtBooking ? (
+                  /* At booking: organizer must pay full — no choice */
+                  <div className="flex items-start gap-3 p-4 rounded-lg border border-primary bg-primary/5">
+                    <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <span className="font-medium">Organizer Pays Full Amount</span>
                       <p className="text-sm text-muted-foreground mt-1">
-                        You pay the entire court fee (${totalWithFees.toFixed(2)}) upfront. Other players join for free.
+                        You pay the entire court fee (${totalWithFees.toFixed(2)}) now. Other players join for free.
                       </p>
-                    </Label>
+                    </div>
                   </div>
-                  
-                  <div className={`flex items-start gap-3 p-4 rounded-lg border transition-colors ${
-                    paymentType === "split" 
-                      ? "border-primary bg-primary/5" 
-                      : "border-border hover:border-primary/50"
-                  }`}>
-                    <RadioGroupItem value="split" id="split" className="mt-1" />
-                    <Label htmlFor="split" className="flex-1 cursor-pointer">
-                      <span className="font-medium">Split Between Players</span>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Each player pays ${perPlayerTotal.toFixed(2)} (incl. service fee) when they join ({totalPlayers} players total).
-                      </p>
-                    </Label>
-                  </div>
-                </RadioGroup>
+                ) : (
+                  /* Before session: let user choose */
+                  <RadioGroup
+                    value={paymentType}
+                    onValueChange={(val) => setPaymentType(val as BookingPaymentType)}
+                    className="space-y-3"
+                  >
+                    <div className={`flex items-start gap-3 p-4 rounded-lg border transition-colors ${
+                      paymentType === "single" 
+                        ? "border-primary bg-primary/5" 
+                        : "border-border hover:border-primary/50"
+                    }`}>
+                      <RadioGroupItem value="single" id="single" className="mt-1" />
+                      <Label htmlFor="single" className="flex-1 cursor-pointer">
+                        <span className="font-medium">Pay Full Amount</span>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          You pay the entire court fee (${totalWithFees.toFixed(2)}) upfront. Other players join for free.
+                        </p>
+                      </Label>
+                    </div>
+                    
+                    <div className={`flex items-start gap-3 p-4 rounded-lg border transition-colors ${
+                      paymentType === "split" 
+                        ? "border-primary bg-primary/5" 
+                        : "border-border hover:border-primary/50"
+                    }`}>
+                      <RadioGroupItem value="split" id="split" className="mt-1" />
+                      <Label htmlFor="split" className="flex-1 cursor-pointer">
+                        <span className="font-medium">Split Between Players</span>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Each player pays ${perPlayerTotal.toFixed(2)} (incl. service fee) when they join ({totalPlayers} players total).
+                        </p>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                )}
               </div>
 
               {/* Price Summary */}
@@ -420,12 +449,12 @@ export function QuickChallengeWizard({
                 {submitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating...
+                    {isAtBooking ? "Processing..." : "Creating..."}
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="h-4 w-4 mr-2" />
-                    Create Challenge
+                    {isAtBooking ? "Pay & Create Challenge" : "Create Challenge"}
                   </>
                 )}
               </Button>
