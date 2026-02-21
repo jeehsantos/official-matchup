@@ -41,7 +41,7 @@ import { useVenueEquipment } from "@/hooks/useVenueEquipment";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
-import { PaymentTimingChoice } from "@/components/booking/PaymentTimingChoice";
+
 import { HoldCountdown } from "@/components/booking/HoldCountdown";
 import { SlotStatusBadge } from "@/components/booking/SlotStatusBadge";
 import { useBookingHold } from "@/hooks/useBookingHold";
@@ -136,7 +136,7 @@ export default function CourtDetail() {
   const [showProfileAlert, setShowProfileAlert] = useState(false);
   const [profileMissingFields, setProfileMissingFields] = useState<string[]>([]);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
-  const [showPaymentTimingChoice, setShowPaymentTimingChoice] = useState(false);
+  
   const [pendingPaymentSessionId, setPendingPaymentSessionId] = useState<string | null>(null);
   const [pendingPaymentAmount, setPendingPaymentAmount] = useState<number>(0);
   
@@ -840,17 +840,22 @@ export default function CourtDetail() {
 
       // Check if court requires payment at booking
       if (court.payment_timing === "at_booking") {
-        // Store session ID and amount for payment processing
+        // Store session ID for payment processing
         setPendingPaymentSessionId(session.id);
         setPendingPaymentAmount(totalPrice);
 
         toast({
           title: isNewGroup ? "Group created!" : "Booking reserved!",
-          description: "Choose when to complete your payment...",
+          description: "Redirecting to payment...",
         });
 
-        // Show pay now/later choice dialog
-        setShowPaymentTimingChoice(true);
+        // Go directly to credits check or Stripe payment
+        const totalCost = totalPrice;
+        if (credits >= totalCost && !loadingCredits) {
+          setShowCreditsModal(true);
+        } else {
+          await processCourtPayment(session.id, false);
+        }
         return;
       } else {
         toast({
@@ -1066,48 +1071,6 @@ export default function CourtDetail() {
     }
   };
 
-  // Handler for pay now/later choice
-  const handlePaymentTimingChoice = async (choice: "now" | "later") => {
-    if (!pendingPaymentSessionId || !court) return;
-
-    setBooking(true);
-    try {
-      if (choice === "now") {
-        // User chose to pay now - check for credits first
-        const totalCost = court.hourly_rate + selectedEquipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0);
-        if (credits >= totalCost && !loadingCredits) {
-          setShowPaymentTimingChoice(false);
-          setShowCreditsModal(true);
-        } else {
-          // No credits, proceed directly to Stripe
-          setShowPaymentTimingChoice(false);
-          await processCourtPayment(pendingPaymentSessionId, false);
-        }
-      } else {
-        // User chose to pay later - booking is already created with pending status
-        setShowPaymentTimingChoice(false);
-        setPendingPaymentSessionId(null);
-        setPendingPaymentAmount(0);
-        
-        toast({
-          title: "Booking Reserved!",
-          description: "Your court is reserved. Complete payment from the game details page before the session starts.",
-        });
-        
-        // Navigate to the game details page
-        navigate(`/games`);
-      }
-    } catch (error) {
-      console.error("Error processing payment choice:", error);
-      toast({
-        title: "Error",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setBooking(false);
-    }
-  };
 
   const processCourtPayment = async (sessionId: string, useCredits: boolean, creditsAmount?: number) => {
     if (!court) return;
@@ -1996,14 +1959,6 @@ export default function CourtDetail() {
           />
         )}
 
-        {/* Pay Now/Later Choice Modal */}
-        <PaymentTimingChoice
-          open={showPaymentTimingChoice}
-          onOpenChange={setShowPaymentTimingChoice}
-          onChoice={handlePaymentTimingChoice}
-          isLoading={booking}
-          totalAmount={pendingPaymentAmount}
-        />
       </div>
     </Layout>
   );
