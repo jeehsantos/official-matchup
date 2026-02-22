@@ -912,11 +912,13 @@ export default function CourtDetail() {
       const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
       const splitPricePerPlayer = Math.ceil((totalPrice / quickGameConfig.totalPlayers) * 100) / 100;
       
-      // For at_booking courts, force single payment (organizer pays full, price_per_player = 0)
+      // For at_booking courts, force single payment (organizer pays full amount)
       const effectivePT = court.payment_timing === "at_booking" ? "single" : paymentType;
+      // For single payment (organizer pays all), store full court price so the edge function
+      // knows to charge Stripe. For split, store per-player share + service fee.
       const pricePerPlayer = effectivePT === "split" 
         ? splitPricePerPlayer + serviceFee
-        : 0;
+        : totalPrice;
 
       // Create quick_challenges record
       const { data: challenge, error: challengeError } = await supabase
@@ -929,7 +931,7 @@ export default function CourtDetail() {
           scheduled_date: dateStr,
           scheduled_time: startTime,
           total_slots: quickGameConfig.totalPlayers,
-          price_per_player: effectivePT === "split" ? pricePerPlayer : 0,
+          price_per_player: pricePerPlayer,
           status: "open",
           created_by: user.id,
         })
