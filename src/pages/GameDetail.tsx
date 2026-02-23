@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { checkProfileComplete } from "@/lib/profile-utils";
 import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
+import { PaymentDeadlineWarning } from "@/components/booking/PaymentDeadlineWarning";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { getSportCategory } from "@/lib/sport-category-utils";
@@ -1036,6 +1037,11 @@ const getGoogleMapsUrl = (address: string): string => {
               )}
             </CardContent>
           </Card>
+
+          {/* Payment Deadline Warning - shown to organizer with pending payment */}
+          {isOrganizer && !isGamePast && !currentPlayerPayment?.isPaid && session.payment_deadline && (
+            <PaymentDeadlineWarning paymentDeadline={session.payment_deadline} />
+          )}
 
           {/* Player Count with Organizer Edit */}
           <Card>

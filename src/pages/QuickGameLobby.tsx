@@ -28,6 +28,7 @@ import {
   X } from
 "lucide-react";
 import { format } from "date-fns";
+import { PaymentDeadlineWarning } from "@/components/booking/PaymentDeadlineWarning";
 import { LobbyChatPanel } from "@/components/quick-challenge/LobbyChatPanel";
 import { InviteFriendDialog } from "@/components/quick-challenge/InviteFriendDialog";
 import {
@@ -971,6 +972,19 @@ export default function QuickGameLobby() {
               </span>
             </div>
           </button>
+
+          {/* Payment Deadline Warning for organizer */}
+          {(() => {
+            if (!isOrganizer || !challenge.courts?.payment_hours_before || !challenge.scheduled_date || !challenge.scheduled_time) return null;
+            const myPlayer = players.find((p) => p.isMe);
+            if (myPlayer?.paymentStatus === "paid") return null;
+            const sessionTime = new Date(`${challenge.scheduled_date}T${challenge.scheduled_time}`);
+            const deadlineDate = new Date(sessionTime.getTime() - (challenge.courts.payment_hours_before * 60 * 60 * 1000));
+            const now = new Date();
+            const hoursUntilDeadline = (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+            if (hoursUntilDeadline > 24) return null;
+            return <PaymentDeadlineWarning paymentDeadline={deadlineDate.toISOString()} compact />;
+          })()}
 
           {/* Action Buttons */}
           <div className="mt-6 md:mt-8 flex flex-col items-center gap-4 w-full max-w-2xl">
