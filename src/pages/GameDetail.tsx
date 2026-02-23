@@ -86,10 +86,6 @@ interface GameData {
   players: PlayerWithProfile[];
   waitingList: PlayerWithProfile[];
   courtManagerId?: string;
-  courtManagerProfile?: {
-    full_name: string | null;
-    phone: string | null;
-  } | null;
 }
 
 const normalizeCountryCode = (countryCode?: string | null): string | null => {
@@ -222,17 +218,6 @@ export default function GameDetail() {
       // Get court manager ID from venue
       const courtManagerId = (sessionData.courts as any)?.venues?.owner_id;
 
-      // Fetch court manager profile
-      let courtManagerProfile = null;
-      if (courtManagerId) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("full_name, phone")
-          .eq("user_id", courtManagerId)
-          .maybeSingle();
-        courtManagerProfile = profile;
-      }
-
       setGameData({
         session: sessionData,
         group: groupData,
@@ -241,7 +226,6 @@ export default function GameDetail() {
         players: confirmedPlayers,
         waitingList: waitingList,
         courtManagerId,
-        courtManagerProfile,
       });
     } catch (error) {
       console.error("Error fetching game data:", error);
