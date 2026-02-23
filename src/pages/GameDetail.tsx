@@ -9,7 +9,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SessionBadge } from "@/components/ui/session-badge";
 import { PlayerCount } from "@/components/ui/player-count";
 import { SportIcon } from "@/components/ui/sport-icon";
-import { SessionChat } from "@/components/chat/SessionChat";
 import { EditPlayerLimits } from "@/components/session/EditPlayerLimits";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -36,12 +35,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { 
-  Loader2, 
-  ArrowLeft, 
-  MapPin, 
-  Calendar, 
-  Clock, 
+import {
+  Loader2,
+  ArrowLeft,
+  MapPin,
+  Calendar,
   DollarSign,
   Users,
   CheckCircle2,
@@ -52,10 +50,8 @@ import {
   LifeBuoy,
   UserMinus,
   Trash2,
-  ListOrdered,
   ExternalLink,
-  Phone,
-  FileText
+  FileText,
 } from "lucide-react";
 import { format, isPast } from "date-fns";
 
@@ -66,7 +62,14 @@ type Venue = Database["public"]["Tables"]["venues"]["Row"];
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type SessionPlayer = Database["public"]["Tables"]["session_players"]["Row"];
 type SessionState = "protected" | "rescue" | "released";
-type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "other";
+type SportType =
+  | "futsal"
+  | "tennis"
+  | "volleyball"
+  | "basketball"
+  | "turf_hockey"
+  | "badminton"
+  | "other";
 type SportCategory = Database["public"]["Tables"]["sport_categories"]["Row"];
 
 interface PlayerWithProfile extends SessionPlayer {
@@ -83,7 +86,10 @@ interface GameData {
   players: PlayerWithProfile[];
   waitingList: PlayerWithProfile[];
   courtManagerId?: string;
-  courtManagerProfile?: { full_name: string | null; phone: string | null } | null;
+  courtManagerProfile?: {
+    full_name: string | null;
+    phone: string | null;
+  } | null;
 }
 
 const normalizeCountryCode = (countryCode?: string | null): string | null => {
@@ -102,11 +108,17 @@ export default function GameDetail() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [showProfileAlert, setShowProfileAlert] = useState(false);
-  const [profileMissingFields, setProfileMissingFields] = useState<string[]>([]);
+  const [profileMissingFields, setProfileMissingFields] = useState<string[]>(
+    [],
+  );
   const [showCreditsModal, setShowCreditsModal] = useState(false);
-  
+
   // Fetch user credits
-  const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  const {
+    balance: credits,
+    loading: loadingCredits,
+    refetch: refetchCredits,
+  } = useUserCredits();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -128,14 +140,16 @@ export default function GameDetail() {
       // Fetch session with court, venue, and sport category
       const { data: sessionData, error: sessionError } = await supabase
         .from("sessions")
-        .select(`
+        .select(
+          `
           *,
           courts (
             *,
             venues (*)
           ),
           sport_categories (*)
-        `)
+        `,
+        )
         .eq("id", id)
         .maybeSingle();
 
@@ -156,7 +170,8 @@ export default function GameDetail() {
       if (groupError) throw groupError;
 
       // Use sport category directly from session (preferred) or fallback to group's sport_type
-      let sportCategory = (sessionData as any).sport_categories as SportCategory | null;
+      let sportCategory = (sessionData as any)
+        .sport_categories as SportCategory | null;
       if (!sportCategory && groupData?.sport_type) {
         sportCategory = await getSportCategory(groupData.sport_type);
       }
@@ -175,7 +190,7 @@ export default function GameDetail() {
             .select("*")
             .eq("user_id", player.user_id)
             .maybeSingle();
-          
+
           // Check payment status
           const { data: payment } = await supabase
             .from("payments")
@@ -184,20 +199,25 @@ export default function GameDetail() {
             .eq("user_id", player.user_id)
             .maybeSingle();
 
-          return { 
-            ...player, 
-            profile: profile || undefined, 
-            isPaid: payment?.status === "completed" 
+          return {
+            ...player,
+            profile: profile || undefined,
+            isPaid: payment?.status === "completed",
           };
-        })
+        }),
       );
 
       // Separate confirmed players and waiting list based on max_players
-      const confirmedPlayers = playersWithProfiles.slice(0, sessionData.max_players);
-      const waitingList = playersWithProfiles.slice(sessionData.max_players).map(p => ({
-        ...p,
-        isWaitingList: true
-      }));
+      const confirmedPlayers = playersWithProfiles.slice(
+        0,
+        sessionData.max_players,
+      );
+      const waitingList = playersWithProfiles
+        .slice(sessionData.max_players)
+        .map((p) => ({
+          ...p,
+          isWaitingList: true,
+        }));
 
       // Get court manager ID from venue
       const courtManagerId = (sessionData.courts as any)?.venues?.owner_id;
@@ -238,9 +258,9 @@ export default function GameDetail() {
     try {
       const { error } = await supabase
         .from("sessions")
-        .update({ 
-          state: "rescue" as SessionState, 
-          is_rescue_open: true 
+        .update({
+          state: "rescue" as SessionState,
+          is_rescue_open: true,
         })
         .eq("id", id);
 
@@ -270,9 +290,9 @@ export default function GameDetail() {
     try {
       const { error } = await supabase
         .from("sessions")
-        .update({ 
-          state: "protected" as SessionState, 
-          is_rescue_open: false 
+        .update({
+          state: "protected" as SessionState,
+          is_rescue_open: false,
         })
         .eq("id", id);
 
@@ -299,16 +319,19 @@ export default function GameDetail() {
     if (!gameData || !id || !user) return;
 
     // Check if user has a completed payment
-    const currentPlayer = gameData.players.find(p => p.user_id === user.id);
+    const currentPlayer = gameData.players.find((p) => p.user_id === user.id);
     const hasPaid = currentPlayer?.isPaid;
 
     setActionLoading(true);
     try {
       if (hasPaid) {
         // Use edge function to handle cancellation with credits conversion
-        const { data, error } = await supabase.functions.invoke("cancel-player-participation", {
-          body: { sessionId: id },
-        });
+        const { data, error } = await supabase.functions.invoke(
+          "cancel-player-participation",
+          {
+            body: { sessionId: id },
+          },
+        );
 
         if (error) throw error;
 
@@ -334,7 +357,7 @@ export default function GameDetail() {
           description: "You have left this game session.",
         });
       }
-      
+
       navigate(-1);
     } catch (error) {
       console.error("Error leaving session:", error);
@@ -386,13 +409,11 @@ export default function GameDetail() {
       }
 
       // Add player to session
-      const { error } = await supabase
-        .from("session_players")
-        .insert({
-          session_id: id,
-          user_id: user.id,
-          is_from_rescue: true,
-        });
+      const { error } = await supabase.from("session_players").insert({
+        session_id: id,
+        user_id: user.id,
+        is_from_rescue: true,
+      });
 
       if (error) throw error;
 
@@ -417,7 +438,8 @@ export default function GameDetail() {
     if (!gameData || !id || !user) return;
 
     // Check if user has enough credits to cover full amount
-    const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
+    const pricePerPlayer =
+      gameData.session.court_price / gameData.session.min_players;
     if (credits >= pricePerPlayer && !loadingCredits) {
       setShowCreditsModal(true);
       return;
@@ -429,27 +451,31 @@ export default function GameDetail() {
 
   const handleSelectPaymentMethod = async (
     method: "credits" | "payment",
-    creditsToUse?: number
+    creditsToUse?: number,
   ) => {
     if (!gameData || !id || !user) return;
-    
+
     setActionLoading(true);
     try {
-      const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
-      
+      const pricePerPlayer =
+        gameData.session.court_price / gameData.session.min_players;
+
       if (method === "credits") {
         // If credits cover the full amount, process with credits only
         if (credits >= pricePerPlayer) {
-          const { data, error } = await supabase.functions.invoke("create-payment", {
-            body: {
-              sessionId: id,
-              paymentType: "before_session",
-              returnUrl: `/games/${id}`,
-              origin: window.location.origin,
-              useCredits: true,
-              creditsAmount: creditsToUse,
+          const { data, error } = await supabase.functions.invoke(
+            "create-payment",
+            {
+              body: {
+                sessionId: id,
+                paymentType: "before_session",
+                returnUrl: `/games/${id}`,
+                origin: window.location.origin,
+                useCredits: true,
+                creditsAmount: creditsToUse,
+              },
             },
-          });
+          );
 
           if (error) throw error;
 
@@ -457,7 +483,8 @@ export default function GameDetail() {
             // Payment completed with credits only
             toast({
               title: "Payment Complete",
-              description: data.message || "Payment completed using your credits.",
+              description:
+                data.message || "Payment completed using your credits.",
             });
             setShowCreditsModal(false);
             refetchCredits();
@@ -484,21 +511,27 @@ export default function GameDetail() {
     }
   };
 
-  const processCardPayment = async (useCredits: boolean, creditsAmount?: number) => {
+  const processCardPayment = async (
+    useCredits: boolean,
+    creditsAmount?: number,
+  ) => {
     if (!gameData || !id || !user) return;
 
     setActionLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("create-payment", {
-        body: {
-          sessionId: id,
-          paymentType: "before_session",
-          returnUrl: `/games/${id}`,
-          origin: window.location.origin,
-          useCredits,
-          creditsAmount,
+      const { data, error } = await supabase.functions.invoke(
+        "create-payment",
+        {
+          body: {
+            sessionId: id,
+            paymentType: "before_session",
+            returnUrl: `/games/${id}`,
+            origin: window.location.origin,
+            useCredits,
+            creditsAmount,
+          },
         },
-      });
+      );
 
       if (error) throw error;
 
@@ -545,9 +578,9 @@ export default function GameDetail() {
     try {
       const { error } = await supabase
         .from("session_players")
-        .update({ 
-          is_confirmed: true, 
-          confirmed_at: new Date().toISOString() 
+        .update({
+          is_confirmed: true,
+          confirmed_at: new Date().toISOString(),
         })
         .eq("session_id", id)
         .eq("user_id", user.id);
@@ -577,26 +610,33 @@ export default function GameDetail() {
     setActionLoading(true);
     try {
       // Use database function to cancel session and release court availability
-      const { data, error } = await supabase.rpc('cancel_session_and_release_court', {
-        session_id: id
-      });
+      const { data, error } = await supabase.rpc(
+        "cancel_session_and_release_court",
+        {
+          session_id: id,
+        },
+      );
 
       if (error) throw error;
-      
+
       if (!data) {
         throw new Error("You don't have permission to cancel this session");
       }
 
       toast({
         title: "Session cancelled",
-        description: "The session has been cancelled and the court is now available.",
+        description:
+          "The session has been cancelled and the court is now available.",
       });
       navigate(`/groups/${gameData.group.id}`);
     } catch (error) {
       console.error("Error cancelling session:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to cancel the session.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to cancel the session.",
         variant: "destructive",
       });
     } finally {
@@ -619,42 +659,59 @@ export default function GameDetail() {
       <MobileLayout>
         <div className="flex flex-col items-center justify-center py-16 px-4">
           <h2 className="text-xl font-semibold mb-2">Game not found</h2>
-          <p className="text-muted-foreground mb-4">This game doesn't exist or has been removed.</p>
+          <p className="text-muted-foreground mb-4">
+            This game doesn't exist or has been removed.
+          </p>
           <Button onClick={() => navigate("/games")}>Back to Games</Button>
         </div>
       </MobileLayout>
     );
   }
 
-  const { session, group, sportCategory, court, players, waitingList, courtManagerId, courtManagerProfile } = gameData;
-  
+  const {
+    session,
+    group,
+    sportCategory,
+    court,
+    players,
+    waitingList,
+    courtManagerId,
+  } = gameData;
+
   // Use sport category display name if available, otherwise fallback to "Sport TBD"
   const sportDisplayName = sportCategory?.display_name || "Sport TBD";
-  
+
   // Helper function to get Google Maps URL - using simpler format for better browser compatibility
-const getGoogleMapsUrl = (address: string): string => {
-  if (!address) return "";
+  const getGoogleMapsUrl = (address: string): string => {
+    if (!address) return "";
 
-  // This is the correct, official search endpoint
-  const baseUrl = "https://www.google.com/maps/search/?api=1";
-  
-  const encodedAddress = encodeURIComponent(address);
+    // This is the correct, official search endpoint
+    const baseUrl = "https://www.google.com/maps/search/?api=1";
 
-  return `${baseUrl}&query=${encodedAddress}`;
-};
-  
+    const encodedAddress = encodeURIComponent(address);
+
+    return `${baseUrl}&query=${encodedAddress}`;
+  };
+
   // Combine session date and start time for accurate past check
-  const sessionDateTime = new Date(`${session.session_date}T${session.start_time}`);
+  const sessionDateTime = new Date(
+    `${session.session_date}T${session.start_time}`,
+  );
   const isGamePast = isPast(sessionDateTime);
-  const paidCount = players.filter(p => p.isPaid).length;
+  const paidCount = players.filter((p) => p.isPaid).length;
   const pricePerPlayer = session.court_price / session.min_players;
   const isOrganizer = group.organizer_id === user.id;
-  const isPlayerInGame = players.some(p => p.user_id === user.id);
-  const isInWaitingList = waitingList.some(p => p.user_id === user.id);
-  const currentPlayerPayment = players.find(p => p.user_id === user.id);
+  const isPlayerInGame = players.some((p) => p.user_id === user.id);
+  const isInWaitingList = waitingList.some((p) => p.user_id === user.id);
+  const currentPlayerPayment = players.find((p) => p.user_id === user.id);
   const isRescueActive = session.state === "rescue" && session.is_rescue_open;
-  const isCourtManager = courtManagerId === user.id;
-  const canJoinRescue = isRescueActive && !isPlayerInGame && !isInWaitingList && !isOrganizer && !isGamePast && players.length < session.max_players;
+  const canJoinRescue =
+    isRescueActive &&
+    !isPlayerInGame &&
+    !isInWaitingList &&
+    !isOrganizer &&
+    !isGamePast &&
+    players.length < session.max_players;
 
   return (
     <MobileLayout showHeader={false} showBottomNav={false}>
@@ -675,25 +732,29 @@ const getGoogleMapsUrl = (address: string): string => {
         <div className="p-4 space-y-4 max-w-4xl mx-auto lg:p-6 lg:space-y-6 pb-24">
           {/* Game Header Card with Court Photo */}
           <Card className="overflow-hidden">
-            {/* Court Photo Header */}
-            {court?.photo_url && (
+            {court?.photo_url ? (
               <div className="relative w-full h-48 sm:h-56 lg:h-64">
-                <img 
-                  src={court.photo_url} 
-                  alt={court.name || "Court"} 
+                <img
+                  src={court.photo_url}
+                  alt={court.name || "Court"}
                   className="w-full h-full object-cover"
                   loading="eager"
                 />
-                {/* Overlay with court info */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
                   <div className="flex items-center gap-3 text-white">
-                    <SportIcon sport={group.sport_type as SportType} size="lg" className="drop-shadow-lg" />
+                    <SportIcon
+                      sport={group.sport_type as SportType}
+                      size="lg"
+                      className="drop-shadow-lg"
+                    />
                     <div>
                       <h2 className="font-display text-lg sm:text-xl font-bold drop-shadow-md">
                         {court.name || group.name}
                       </h2>
-                      <p className="text-sm text-white/90 drop-shadow-md">{sportDisplayName}</p>
+                      <p className="text-sm text-white/90 drop-shadow-md">
+                        {sportDisplayName}
+                      </p>
                     </div>
                   </div>
                   {isRescueActive ? (
@@ -707,75 +768,86 @@ const getGoogleMapsUrl = (address: string): string => {
                   )}
                 </div>
               </div>
-            )}
-            
-            {/* Fallback if no photo */}
-            {!court?.photo_url && (
+            ) : (
               <CardContent className="p-4 lg:p-6">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <SportIcon sport={group.sport_type as SportType} size="lg" />
+                    <SportIcon
+                      sport={group.sport_type as SportType}
+                      size="lg"
+                    />
                     <div>
-                      <h2 className="font-display text-xl lg:text-2xl font-bold">{group.name}</h2>
-                      <p className="text-muted-foreground">{sportDisplayName}</p>
+                      <h2 className="font-display text-xl lg:text-2xl font-bold">
+                        {group.name}
+                      </h2>
+                      <p className="text-muted-foreground">
+                        {sportDisplayName}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {isRescueActive ? (
-                      <Badge className="bg-warning text-warning-foreground">Rescue Mode</Badge>
+                      <Badge className="bg-warning text-warning-foreground">
+                        Rescue Mode
+                      </Badge>
                     ) : (
-                      <Badge className="bg-success text-success-foreground">Booked</Badge>
+                      <Badge className="bg-success text-success-foreground">
+                        Booked
+                      </Badge>
                     )}
-                    {isGamePast && (
-                      <Badge variant="secondary">Completed</Badge>
-                    )}
+                    {isGamePast && <Badge variant="secondary">Completed</Badge>}
                   </div>
                 </div>
               </CardContent>
             )}
-          </Card>
 
-          {/* Organizer Rescue Controls */}
-          {isOrganizer && !isGamePast && (
-            <Card className="border-warning/50 bg-warning/5">
-              <CardContent className="p-4 lg:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                      <LifeBuoy className="h-5 w-5 text-warning" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">Rescue Mode</p>
-                      <p className="text-sm text-muted-foreground">
-                        {isRescueActive 
-                          ? "External players can join this session" 
-                          : "Allow external players to fill empty spots"}
-                      </p>
-                    </div>
+            <CardContent className="p-0">
+              <div className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                <div className="flex items-start gap-3 p-4 lg:p-6">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <Calendar className="h-5 w-5 text-primary" />
                   </div>
-                  {isRescueActive ? (
-                    <Button 
-                      variant="outline" 
-                      onClick={handleDeactivateRescue}
-                      disabled={actionLoading}
-                    >
-                      {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Deactivate Rescue
-                    </Button>
-                  ) : (
-                    <Button 
-                      className="bg-warning text-warning-foreground hover:bg-warning/90"
-                      onClick={handleActivateRescue}
-                      disabled={actionLoading}
-                    >
-                      {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Activate Rescue
-                    </Button>
-                  )}
+                  <div>
+                    <p className="text-sm text-muted-foreground">Date & Time</p>
+                    <p className="font-semibold">
+                      {format(sessionDateTime, "EEE, MMM d, yyyy")}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {session.start_time.slice(0, 5)} (
+                      {session.duration_minutes} min)
+                    </p>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+                <div className="flex items-start gap-3 p-4 lg:p-6">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <MapPin className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground">Venue</p>
+                    <p className="font-semibold">
+                      {court?.venues?.name || "TBA"}
+                    </p>
+                    {!!court?.name && (
+                      <p className="text-sm text-muted-foreground">
+                        {court.name}
+                      </p>
+                    )}
+                    {court?.venues?.address && (
+                      <a
+                        href={getGoogleMapsUrl(court.venues.address)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary hover:underline inline-flex items-center gap-1 mt-1"
+                      >
+                        <span className="truncate">{court.venues.address}</span>
+                        <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Join Rescue Session - For external players */}
           {canJoinRescue && (
@@ -789,128 +861,25 @@ const getGoogleMapsUrl = (address: string): string => {
                     <div>
                       <p className="font-semibold">Join This Rescue Game!</p>
                       <p className="text-sm text-muted-foreground">
-                        This game needs players. Join now for ${pricePerPlayer.toFixed(2)} per player.
+                        This game needs players. Join now for $
+                        {pricePerPlayer.toFixed(2)} per player.
                       </p>
                     </div>
                   </div>
-                  <Button 
+                  <Button
                     onClick={handleJoinRescueSession}
                     disabled={actionLoading}
                     className="bg-success hover:bg-success/90 text-success-foreground"
                   >
-                    {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    {actionLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : null}
                     Join Game
                   </Button>
                 </div>
               </CardContent>
             </Card>
           )}
-
-          {/* Details Grid */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            {/* Date & Time */}
-            <Card>
-              <CardContent className="p-4 lg:p-6 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Calendar className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Date</p>
-                    <p className="font-semibold">{format(sessionDateTime, "EEEE, MMMM d, yyyy")}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Clock className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Time</p>
-                    <p className="font-semibold">{session.start_time.slice(0, 5)} ({session.duration_minutes} min)</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Venue */}
-            <Card>
-              <CardContent className="p-4 lg:p-6 space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <MapPin className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                  <p className="text-sm text-muted-foreground">Venue</p>
-                  <p className="font-semibold">{court?.venues?.name || "TBA"}</p>
-                  <p className="text-sm text-muted-foreground">{court?.name || ""}</p>
-                  
-                  {court?.venues?.address && (
-                    <a 
-                      // Use the standard google.com/maps/search/ URL
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(court.venues.address)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-primary hover:underline inline-flex items-center gap-1 mt-1"
-                    >
-                      <span className="truncate">{court.venues.address}</span>
-                      <ExternalLink className="h-3 w-3 flex-shrink-0" />
-                    </a>
-                  )}
-                </div>
-                </div>
-
-                {/* Court Manager Contact */}
-                {courtManagerProfile && courtManagerProfile.phone && (
-                  <div className="pt-3 border-t border-border">
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                        <Phone className="h-4 w-4 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-muted-foreground">Court Manager</p>
-                        <p className="text-sm font-medium truncate">
-                          {courtManagerProfile.full_name || "Manager"}
-                        </p>
-                        <a 
-                          href={`tel:${courtManagerProfile.phone}`} 
-                          className="text-sm text-primary hover:underline"
-                        >
-                          {courtManagerProfile.phone}
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Stripe Connect Warning for Court Manager */}
-            {isCourtManager && court?.venues && !court.venues.stripe_account_id && (
-              <Card className="border-destructive/50 bg-destructive/5">
-                <CardContent className="p-4 lg:p-6">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
-                      <AlertTriangle className="h-5 w-5 text-destructive" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-destructive">Payment Setup Required</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Your venue hasn't connected a Stripe account yet. You won't receive payouts for bookings until you complete the setup.
-                      </p>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="mt-3 border-destructive/30 hover:bg-destructive/10"
-                        onClick={() => navigate("/manager/settings")}
-                      >
-                        Connect Stripe Account
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
 
           {/* Court Rules */}
           {court?.rules && (
@@ -928,18 +897,43 @@ const getGoogleMapsUrl = (address: string): string => {
               </CardContent>
             </Card>
           )}
+          {!isGamePast && isPlayerInGame && !currentPlayerPayment?.isPaid && (
+            <Card className="border-amber-300 bg-amber-50">
+              <CardContent className="p-4 lg:p-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-semibold text-amber-700">
+                      Payment Pending
+                    </p>
+                    <p className="text-sm text-amber-700/80">
+                      Please complete payment before the deadline to avoid
+                      automatic cancellation.
+                    </p>
+                  </div>
+                  <p className="text-xs font-medium text-amber-700">
+                    Due by 4:00 PM on session day
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardContent className="p-4 lg:p-6">
-                {session.payment_type === "single" ? (
+              {session.payment_type === "single" ? (
                 // Organizer pays full amount
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      currentPlayerPayment?.isPaid || (isOrganizer && currentPlayerPayment?.isPaid)
-                        ? "bg-success/10" 
-                        : "bg-warning/10"
-                    }`}>
-                      {currentPlayerPayment?.isPaid || (isOrganizer && currentPlayerPayment?.isPaid) ? (
+                    <div
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        currentPlayerPayment?.isPaid ||
+                        (isOrganizer && currentPlayerPayment?.isPaid)
+                          ? "bg-success/10"
+                          : "bg-warning/10"
+                      }`}
+                    >
+                      {currentPlayerPayment?.isPaid ||
+                      (isOrganizer && currentPlayerPayment?.isPaid) ? (
                         <CheckCircle2 className="h-5 w-5 text-success" />
                       ) : (
                         <DollarSign className="h-5 w-5 text-warning" />
@@ -950,58 +944,75 @@ const getGoogleMapsUrl = (address: string): string => {
                       {isOrganizer ? (
                         currentPlayerPayment?.isPaid ? (
                           <>
-                            <p className="font-semibold text-success">Paid & Confirmed</p>
-                            <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                            <p className="font-semibold text-success">
+                              Paid & Confirmed
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Total: ${session.court_price.toFixed(2)}
+                            </p>
                           </>
                         ) : (
                           <>
-                            <p className="font-semibold text-warning">Payment Pending</p>
-                            <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                            <p className="font-semibold text-warning">
+                              Payment Pending
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Total: ${session.court_price.toFixed(2)}
+                            </p>
                           </>
                         )
                       ) : (
                         <>
-                          <p className="font-semibold text-success">Covered by Organizer</p>
-                          <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                          <p className="font-semibold text-success">
+                            Covered by Organizer
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Total: ${session.court_price.toFixed(2)}
+                          </p>
                         </>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {isOrganizer && !isGamePast && (
-                      currentPlayerPayment?.isPaid ? (
+                    {isOrganizer &&
+                      !isGamePast &&
+                      (currentPlayerPayment?.isPaid ? (
                         <div className="flex items-center gap-2 px-4 py-2 bg-success/10 text-success rounded-lg">
                           <CheckCircle2 className="h-5 w-5" />
                           <span className="font-semibold">Paid</span>
                         </div>
                       ) : (
-                        <Button 
+                        <Button
                           className="btn-athletic"
                           onClick={handleMakePayment}
                           disabled={actionLoading}
                         >
-                          {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          {actionLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : null}
                           Pay Now - ${session.court_price.toFixed(2)}
                         </Button>
-                      )
-                    )}
-                    {!isOrganizer && isPlayerInGame && !isGamePast && (
-                      currentPlayerPayment?.is_confirmed ? (
+                      ))}
+                    {!isOrganizer &&
+                      isPlayerInGame &&
+                      !isGamePast &&
+                      (currentPlayerPayment?.is_confirmed ? (
                         <div className="flex items-center gap-2 px-4 py-2 bg-success/10 text-success rounded-lg">
                           <CheckCircle2 className="h-5 w-5" />
                           <span className="font-semibold">Confirmed</span>
                         </div>
                       ) : (
-                        <Button 
+                        <Button
                           className="bg-success hover:bg-success/90 text-success-foreground"
                           onClick={handleConfirmAttendance}
                           disabled={actionLoading}
                         >
-                          {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          {actionLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : null}
                           Confirm Attendance
                         </Button>
-                      )
-                    )}
+                      ))}
                   </div>
                 </div>
               ) : (
@@ -1012,29 +1023,36 @@ const getGoogleMapsUrl = (address: string): string => {
                       <DollarSign className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Price per player</p>
-                      <p className="text-2xl font-bold">${pricePerPlayer.toFixed(2)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Price per player
+                      </p>
+                      <p className="text-2xl font-bold">
+                        ${pricePerPlayer.toFixed(2)}
+                      </p>
                     </div>
                   </div>
                   {!isGamePast && (
                     <>
-                      {isPlayerInGame && (
-                        currentPlayerPayment?.isPaid ? (
+                      {isPlayerInGame &&
+                        (currentPlayerPayment?.isPaid ? (
                           <div className="flex items-center gap-2 px-4 py-2 bg-success/10 text-success rounded-lg">
                             <CheckCircle2 className="h-5 w-5" />
-                            <span className="font-semibold">Paid & Confirmed</span>
+                            <span className="font-semibold">
+                              Paid & Confirmed
+                            </span>
                           </div>
                         ) : (
-                          <Button 
+                          <Button
                             className="btn-athletic"
                             onClick={handleMakePayment}
                             disabled={actionLoading}
                           >
-                            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            {actionLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            ) : null}
                             Make Payment - ${pricePerPlayer.toFixed(2)}
                           </Button>
-                        )
-                      )}
+                        ))}
                       {isInWaitingList && (
                         <Button disabled className="opacity-50">
                           Waiting List
@@ -1050,7 +1068,7 @@ const getGoogleMapsUrl = (address: string): string => {
           {/* Player Count with Organizer Edit */}
           <Card>
             <CardContent className="p-4 lg:p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-start justify-between mb-4 gap-3">
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-muted-foreground" />
                   <span className="font-semibold">Players</span>
@@ -1061,6 +1079,31 @@ const getGoogleMapsUrl = (address: string): string => {
                       {paidCount}/{players.length} paid
                     </Badge>
                   )}
+                  {isOrganizer && !isGamePast && (
+                    <div className="group relative flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 cursor-help">
+                      <div className="pointer-events-none absolute -top-10 right-0 z-20 w-max rounded-md bg-foreground px-3 py-1.5 text-xs text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                        Allow external players to fill empty spots
+                      </div>
+                      <LifeBuoy className="h-4 w-4 text-amber-600" />
+                      <span className="text-xs font-medium text-amber-800 hidden sm:inline">
+                        Rescue Mode
+                      </span>
+                      <button
+                        type="button"
+                        onClick={
+                          isRescueActive
+                            ? handleDeactivateRescue
+                            : handleActivateRescue
+                        }
+                        disabled={actionLoading}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 ${isRescueActive ? "bg-amber-500" : "bg-muted"}`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isRescueActive ? "translate-x-6" : "translate-x-1"}`}
+                        />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
               <PlayerCount
@@ -1068,10 +1111,10 @@ const getGoogleMapsUrl = (address: string): string => {
                 min={session.min_players}
                 max={session.max_players}
               />
-              
+
               {/* Organizer can edit player limits */}
               {isOrganizer && !isGamePast && (
-                <EditPlayerLimits 
+                <EditPlayerLimits
                   sessionId={session.id}
                   currentMin={session.min_players}
                   currentMax={session.max_players}
@@ -1095,10 +1138,13 @@ const getGoogleMapsUrl = (address: string): string => {
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {players.map((player) => {
                     const normalizedNationality = normalizeCountryCode(
-                      player.profile?.nationality_code
+                      player.profile?.nationality_code,
                     );
-                    const flagCode = normalizedNationality?.toLowerCase() ?? null;
-                    const flagUrl = flagCode ? `https://flagcdn.com/w40/${flagCode}.png` : null;
+                    const flagCode =
+                      normalizedNationality?.toLowerCase() ?? null;
+                    const flagUrl = flagCode
+                      ? `https://flagcdn.com/w40/${flagCode}.png`
+                      : null;
 
                     return (
                       <div
@@ -1106,9 +1152,14 @@ const getGoogleMapsUrl = (address: string): string => {
                         className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
                       >
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={player.profile?.avatar_url || undefined} />
+                          <AvatarImage
+                            src={player.profile?.avatar_url || undefined}
+                          />
                           <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                            {player.profile?.full_name?.split(" ").map(n => n[0]).join("") || "?"}
+                            {player.profile?.full_name
+                              ?.split(" ")
+                              .map((n) => n[0])
+                              .join("") || "?"}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
@@ -1139,17 +1190,15 @@ const getGoogleMapsUrl = (address: string): string => {
                                   <XCircle className="h-3 w-3" /> Pending
                                 </span>
                               )
+                            ) : // For split payment sessions, check isPaid
+                            player.isPaid ? (
+                              <span className="text-xs text-success flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" /> Confirmed
+                              </span>
                             ) : (
-                              // For split payment sessions, check isPaid
-                              player.isPaid ? (
-                                <span className="text-xs text-success flex items-center gap-1">
-                                  <CheckCircle2 className="h-3 w-3" /> Confirmed
-                                </span>
-                              ) : (
-                                <span className="text-xs text-warning flex items-center gap-1">
-                                  <XCircle className="h-3 w-3" /> Pending
-                                </span>
-                              )
+                              <span className="text-xs text-warning flex items-center gap-1">
+                                <XCircle className="h-3 w-3" /> Pending
+                              </span>
                             )}
                           </div>
                         </div>
@@ -1158,55 +1207,57 @@ const getGoogleMapsUrl = (address: string): string => {
                   })}
                 </div>
               ) : (
-                <p className="text-center text-muted-foreground py-4">No players yet</p>
+                <p className="text-center text-muted-foreground py-4">
+                  No players yet
+                </p>
               )}
             </CardContent>
           </Card>
 
-          {/* Waiting List */}
-          {waitingList.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ListOrdered className="h-5 w-5" />
-                  Waiting List
-                  <Badge variant="secondary" className="ml-2">{waitingList.length}</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 lg:p-6 pt-2">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {waitingList.map((player, index) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-dashed"
-                    >
-                      <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-semibold">
-                        {index + 1}
-                      </div>
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={player.profile?.avatar_url || undefined} />
-                        <AvatarFallback className="bg-muted text-muted-foreground font-semibold">
-                          {player.profile?.full_name?.split(" ").map(n => n[0]).join("") || "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">
-                          {player.profile?.full_name || "Player"}
-                          {player.user_id === user.id && " (You)"}
-                        </p>
-                        <span className="text-xs text-muted-foreground">
-                          In queue
-                        </span>
-                      </div>
+          {/* Waiting List (UI mockup only) */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Waitlist
+                <Badge variant="secondary" className="ml-2">
+                  2
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 lg:p-6 pt-2">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-semibold">
+                      AS
                     </div>
-                  ))}
+                    <div>
+                      <p className="text-sm font-medium">Alex Smith</p>
+                      <p className="text-xs text-muted-foreground">
+                        Joined 1h ago
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline">#1</Badge>
                 </div>
-                <p className="text-sm text-muted-foreground mt-4 text-center">
-                  Players on the waiting list will be automatically added when a spot opens up.
-                </p>
-              </CardContent>
-            </Card>
-          )}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-semibold">
+                      MG
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Maria Garcia</p>
+                      <p className="text-xs text-muted-foreground">
+                        Joined 3h ago
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline">#2</Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Notes */}
           {session.notes && (
@@ -1223,18 +1274,6 @@ const getGoogleMapsUrl = (address: string): string => {
             </Card>
           )}
 
-          {/* Session Chat - Only for organizer or court manager */}
-          {(isOrganizer || isCourtManager) && courtManagerId && (
-            <SessionChat
-              sessionId={session.id}
-              sessionDate={session.session_date}
-              sessionStartTime={session.start_time}
-              sessionDurationMinutes={session.duration_minutes}
-              courtManagerId={courtManagerId}
-              isOrganizer={isOrganizer}
-            />
-          )}
-
           {/* Organizer Cancel Session */}
           {isOrganizer && !isGamePast && (
             <Card className="border-destructive/50">
@@ -1245,7 +1284,9 @@ const getGoogleMapsUrl = (address: string): string => {
                       <Trash2 className="h-5 w-5 text-destructive" />
                     </div>
                     <div>
-                      <p className="font-semibold text-destructive">Cancel Session</p>
+                      <p className="font-semibold text-destructive">
+                        Cancel Session
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         This will release the court and remove all players
                       </p>
@@ -1264,7 +1305,9 @@ const getGoogleMapsUrl = (address: string): string => {
                           Cancel this session?
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                          This action cannot be undone. The court availability will be released and all players will be removed from this session.
+                          This action cannot be undone. The court availability
+                          will be released and all players will be removed from
+                          this session.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -1273,7 +1316,9 @@ const getGoogleMapsUrl = (address: string): string => {
                           onClick={handleCancelSession}
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
-                          {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          {actionLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : null}
                           Yes, Cancel Session
                         </AlertDialogAction>
                       </AlertDialogFooter>
@@ -1285,48 +1330,52 @@ const getGoogleMapsUrl = (address: string): string => {
           )}
 
           {/* Leave Game Button - Only for non-organizer players */}
-          {!isGamePast && (isPlayerInGame || isInWaitingList) && !isOrganizer && (
-            <div className="pb-4">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button 
-                    variant="destructive" 
-                    className="w-full"
-                    disabled={actionLoading}
-                  >
-                    <UserMinus className="h-4 w-4 mr-2" />
-                    Leave Game
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Leave this game?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {isInWaitingList 
-                        ? "You will be removed from the waiting list."
-                        : "Your spot will be given to the next person on the waiting list."}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Stay</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleLeaveSession}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          {!isGamePast &&
+            (isPlayerInGame || isInWaitingList) &&
+            !isOrganizer && (
+              <div className="pb-4">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      disabled={actionLoading}
                     >
+                      <UserMinus className="h-4 w-4 mr-2" />
                       Leave Game
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          )}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Leave this game?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {isInWaitingList
+                          ? "You will be removed from the waiting list."
+                          : "Your spot will be given to the next person on the waiting list."}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Stay</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleLeaveSession}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Leave Game
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            )}
         </div>
 
         {/* Profile Completion Alert Modal */}
         <Dialog open={showProfileAlert} onOpenChange={setShowProfileAlert}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="sr-only">Complete Your Profile</DialogTitle>
+              <DialogTitle className="sr-only">
+                Complete Your Profile
+              </DialogTitle>
             </DialogHeader>
             <ProfileCompletionAlert
               missingFields={profileMissingFields}
