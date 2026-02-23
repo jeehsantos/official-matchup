@@ -185,7 +185,7 @@ export function WeeklyScheduleEditor({ venueId, onScheduleUpdated }: WeeklySched
 
   if (loading) {
     return (
-      <Card>
+      <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">
         <CardContent className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </CardContent>
@@ -194,8 +194,8 @@ export function WeeklyScheduleEditor({ venueId, onScheduleUpdated }: WeeklySched
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">
+      <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2">
           <Clock className="h-5 w-5" />
           Weekly Schedule
@@ -204,7 +204,7 @@ export function WeeklyScheduleEditor({ venueId, onScheduleUpdated }: WeeklySched
           Set your regular opening hours for each day of the week
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 pt-0">
         {DAYS_OF_WEEK.map(day => {
           const rule = rules[day.value];
           const isOpen = !rule.is_closed;
@@ -235,13 +235,13 @@ export function WeeklyScheduleEditor({ venueId, onScheduleUpdated }: WeeklySched
 
               {/* Time selectors */}
               {isOpen && (
-                <div className="flex items-center gap-2 flex-1 flex-wrap sm:flex-nowrap">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 w-full">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 w-full">
                     <Select
                       value={rule.start_time}
                       onValueChange={(value) => handleRuleChange(day.value, "start_time", value)}
                     >
-                      <SelectTrigger className="w-[120px] bg-background">
+                      <SelectTrigger className="w-full min-w-0 bg-background">
                         <SelectValue>{formatTimeDisplay(rule.start_time)}</SelectValue>
                       </SelectTrigger>
                       <SelectContent className="max-h-[280px]">
@@ -259,7 +259,7 @@ export function WeeklyScheduleEditor({ venueId, onScheduleUpdated }: WeeklySched
                       value={rule.end_time}
                       onValueChange={(value) => handleRuleChange(day.value, "end_time", value)}
                     >
-                      <SelectTrigger className="w-[120px] bg-background">
+                      <SelectTrigger className="w-full min-w-0 bg-background">
                         <SelectValue>{formatTimeDisplay(rule.end_time)}</SelectValue>
                       </SelectTrigger>
                       <SelectContent className="max-h-[280px]">
@@ -276,7 +276,7 @@ export function WeeklyScheduleEditor({ venueId, onScheduleUpdated }: WeeklySched
                     variant="ghost"
                     size="sm"
                     onClick={() => handleCopyToAll(day.value)}
-                    className="text-xs gap-1 ml-auto"
+                    className="text-xs gap-1 ml-auto self-end sm:self-auto"
                   >
                     <Copy className="h-3 w-3" />
                     <span className="hidden sm:inline">Copy to all</span>

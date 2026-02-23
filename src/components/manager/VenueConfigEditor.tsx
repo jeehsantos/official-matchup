@@ -74,7 +74,7 @@ export function VenueConfigEditor({ venueId, onConfigUpdated }: VenueConfigEdito
 
   if (loading) {
     return (
-      <Card>
+      <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">
         <CardContent className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </CardContent>
@@ -83,8 +83,8 @@ export function VenueConfigEditor({ venueId, onConfigUpdated }: VenueConfigEdito
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">
+      <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2">
           <Settings className="h-5 w-5" />
           Booking Settings
@@ -93,7 +93,7 @@ export function VenueConfigEditor({ venueId, onConfigUpdated }: VenueConfigEdito
           Configure time slot intervals and maximum booking duration
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 pt-0">
         <div>
           <Label htmlFor="slot_interval">Slot Interval (minutes)</Label>
           <p className="text-sm text-muted-foreground mb-2">

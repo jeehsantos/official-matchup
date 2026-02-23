@@ -66,6 +66,7 @@ export default function Discover() {
   const [selectedCourtType, setSelectedCourtType] = useState("all");
   const [selectedCity, setSelectedCity] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [todayOnly, setTodayOnly] = useState(false);
   const [rescueGames, setRescueGames] = useState<RescueGame[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [quickGameModalOpen, setQuickGameModalOpen] = useState(false);
@@ -374,8 +375,14 @@ export default function Discover() {
           .select("*", { count: "exact", head: true })
           .eq("session_id", session.id);
 
-        const group = session.groups as any;
-        const court = session.courts as any;
+        const group = session.groups as {
+          name?: string;
+          sport_type?: string;
+        } | null;
+        const court = session.courts as {
+          name?: string;
+          venues?: { name?: string } | null;
+        } | null;
         
         // If organizer pays (payment_type = 'single'), price is 0 (free for players)
         const isFreeForPlayers = session.payment_type === "single";
@@ -410,6 +417,9 @@ export default function Discover() {
 
   // Filter rescue games based on sport, preferred sports, and search
   const filteredRescueGames = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     return rescueGames.filter((game) => {
       // If explicit sport filter is set, use it; otherwise auto-filter by preferred sports
       const matchesSport =
@@ -513,7 +523,7 @@ export default function Discover() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search games, groups, or sports..."
-            className="pl-10 h-11"
+            className="pl-10 h-11 rounded-xl bg-muted/30 border-border/70"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />

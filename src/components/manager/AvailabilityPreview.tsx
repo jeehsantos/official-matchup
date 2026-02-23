@@ -70,8 +70,8 @@ export function AvailabilityPreview({ venueId, courtId, refreshTrigger }: Availa
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">
+      <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2">
           <Eye className="h-5 w-5" />
           Live Preview
@@ -80,13 +80,13 @@ export function AvailabilityPreview({ venueId, courtId, refreshTrigger }: Availa
           See exactly what customers will see when booking
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 pt-0">
         <Calendar
           mode="single"
           selected={selectedDate}
           onSelect={setSelectedDate}
           disabled={(date) => date < new Date()}
-          className="rounded-md border"
+          className="rounded-md border border-border/60"
         />
 
         {selectedDate && (
@@ -119,7 +119,7 @@ export function AvailabilityPreview({ venueId, courtId, refreshTrigger }: Availa
                         <p className="text-sm text-muted-foreground">
                           {availability.slots.length} available time slots
                         </p>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto scrollbar-hide">
                           {availability.slots.slice(0, 12).map((slot, idx) => (
                             <div
                               key={idx}
