@@ -52,6 +52,9 @@ interface QuickChallenge {
     id: string;
     name: string;
     photo_url?: string | null;
+    ground_type?: string | null;
+    payment_timing?: string | null;
+    payment_hours_before?: number | null;
   } | null;
   quick_challenge_players?: QuickChallengePlayer[];
 }
@@ -71,7 +74,7 @@ export function useQuickChallenges(filters?: {
           *,
           sport_categories (id, name, display_name, icon),
           venues (id, name, address, city, photo_url),
-          courts (id, name, photo_url),
+          courts (id, name, photo_url, ground_type, payment_timing, payment_hours_before),
           quick_challenge_players (
             id,
             challenge_id,

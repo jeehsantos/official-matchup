@@ -21,13 +21,10 @@ import { ArrowLeft, Loader2, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { Constants } from "@/integrations/supabase/types";
 
-const sportTypes = Constants.public.Enums.sport_type;
 
 const courtSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
-  sport_type: z.enum([...sportTypes] as [string, ...string[]]),
   capacity: z.number().min(1).max(100),
   hourly_rate: z.number().min(0),
   is_indoor: z.boolean(),
@@ -47,6 +44,7 @@ export default function ManagerCourtForm() {
   
   const [loading, setLoading] = useState(isEditing);
   const [submitting, setSubmitting] = useState(false);
+  const [venueAllowedSports, setVenueAllowedSports] = useState<string[]>([]);
 
   const {
     register,
@@ -72,6 +70,35 @@ export default function ManagerCourtForm() {
     }
   }, [courtId, isEditing]);
 
+  useEffect(() => {
+    if (venueId) {
+      fetchVenueAllowedSports();
+    }
+  }, [venueId]);
+
+  const fetchVenueAllowedSports = async () => {
+    if (!venueId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("courts")
+        .select("allowed_sports")
+        .eq("venue_id", venueId)
+        .not("allowed_sports", "is", null);
+
+      if (error) throw error;
+
+      const uniqueSports = Array.from(
+        new Set((data || []).flatMap((court: { allowed_sports: string[] | null }) => court.allowed_sports || []))
+      );
+
+      setVenueAllowedSports(uniqueSports);
+    } catch (error) {
+      console.error("Error fetching venue allowed sports:", error);
+      setVenueAllowedSports([]);
+    }
+  };
+
   const fetchCourt = async () => {
     try {
       const { data, error } = await supabase
@@ -84,7 +111,6 @@ export default function ManagerCourtForm() {
       
       reset({
         name: data.name,
-        sport_type: data.sport_type,
         capacity: data.capacity,
         hourly_rate: Number(data.hourly_rate),
         is_indoor: data.is_indoor ?? false,
@@ -110,7 +136,6 @@ export default function ManagerCourtForm() {
           .from("courts")
           .update({
             name: data.name,
-            sport_type: data.sport_type as any,
             capacity: data.capacity,
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
@@ -128,13 +153,13 @@ export default function ManagerCourtForm() {
           .insert({
             venue_id: venueId,
             name: data.name,
-            sport_type: data.sport_type as any,
             capacity: data.capacity,
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
             is_active: data.is_active,
             photo_url: data.photo_url || null,
             rules: data.rules || null,
+            allowed_sports: venueAllowedSports,
           } as any);
 
         if (error) throw error;
@@ -201,27 +226,6 @@ export default function ManagerCourtForm() {
                 )}
               </div>
 
-              <div>
-                <Label htmlFor="sport_type">Sport Type *</Label>
-                <Select
-                  value={watch("sport_type")}
-                  onValueChange={(value) => setValue("sport_type", value as any)}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select a sport" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sportTypes.map((sport) => (
-                      <SelectItem key={sport} value={sport} className="capitalize">
-                        {sport}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.sport_type && (
-                  <p className="text-sm text-destructive mt-1">{errors.sport_type.message}</p>
-                )}
-              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/lib/auth-context";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import JoinGroup from "./pages/JoinGroup";
@@ -37,6 +38,8 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminSportCategories from "./pages/admin/AdminSportCategories";
 import AdminSurfaceTypes from "./pages/admin/AdminSurfaceTypes";
 import AdminArchiving from "./pages/admin/AdminArchiving";
+import AdminReferralSettings from "./pages/admin/AdminReferralSettings";
+import AdminPlatformFees from "./pages/admin/AdminPlatformFees";
 import ArchivedSessions from "./pages/ArchivedSessions";
 
 const queryClient = new QueryClient({});
@@ -57,14 +60,14 @@ const App = () => (
             <Route path="/groups" element={<Groups />} />
             <Route path="/groups/:id" element={<GroupDetail />} />
             <Route path="/join/:code" element={<JoinGroup />} />
-            <Route path="/discover" element={<Discover />} />
-            <Route path="/quick-games/:id" element={<QuickGameLobby />} />
-            <Route path="/games" element={<Games />} />
+            <Route path="/discover" element={<ProtectedRoute requireCompleteProfile><Discover /></ProtectedRoute>} />
+            <Route path="/quick-games/:id" element={<ProtectedRoute requireCompleteProfile><QuickGameLobby /></ProtectedRoute>} />
+            <Route path="/games" element={<ProtectedRoute requireCompleteProfile><Games /></ProtectedRoute>} />
             <Route path="/games/:id" element={<GameDetail />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/profile/edit" element={<ProfileEdit />} />
-            <Route path="/courts" element={<Courts />} />
-            <Route path="/courts/:id" element={<CourtDetail />} />
+            <Route path="/courts" element={<ProtectedRoute requireCompleteProfile><Courts /></ProtectedRoute>} />
+            <Route path="/courts/:id" element={<ProtectedRoute requireCompleteProfile><CourtDetail /></ProtectedRoute>} />
             <Route path="/payment-success" element={<PaymentSuccess />} />
             {/* Manager Routes */}
             <Route path="/manager" element={<ManagerDashboard />} />
@@ -86,6 +89,9 @@ const App = () => (
             <Route path="/admin/sports" element={<AdminSportCategories />} />
             <Route path="/admin/surfaces" element={<AdminSurfaceTypes />} />
             <Route path="/admin/archiving" element={<AdminArchiving />} />
+            <Route path="/admin/referrals" element={<AdminReferralSettings />} />
+            <Route path="/admin/fees" element={<AdminPlatformFees />} />
+            <Route path="/admin/*" element={<AdminDashboard />} />
             {/* User Routes */}
             <Route path="/archived-sessions" element={<ArchivedSessions />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

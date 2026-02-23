@@ -47,6 +47,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSportCategories } from "@/hooks/useSportCategories";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { CreditsDisplay } from "@/components/profile/CreditsDisplay";
+import { ReferralSection } from "@/components/profile/ReferralSection";
 import { NationalityCombobox } from "@/components/ui/nationality-combobox";
 
 interface ProfileData {
@@ -341,6 +342,9 @@ export default function Profile() {
 
         {/* Credits Display */}
         <CreditsDisplay credits={credits} isLoading={loadingCredits} />
+
+        {/* Referral Program */}
+        <ReferralSection />
 
         {/* Collapsible Sections */}
         <Card>

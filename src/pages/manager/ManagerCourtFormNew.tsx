@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CourtPhotosUpload } from "@/components/manager/CourtPhotosUpload";
 import { PaymentSettingsCard } from "@/components/manager/PaymentSettingsCard";
 import { VenueDetailsEditor } from "@/components/manager/VenueDetailsEditor";
+import { AllowedSportsSelector } from "@/components/manager/AllowedSportsSelector";
 import { nzCities, getSuburbsForCity } from "@/data/nzLocations";
 import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
 
@@ -234,7 +235,7 @@ export default function ManagerCourtFormNew() {
         .from("courts")
         .select(`
           *,
-          venue:venues(id, name, address, city, suburb, country, owner_id, amenities, allowed_sports)
+          venue:venues(id, name, address, city, suburb, country, owner_id, amenities)
         `)
         .eq("id", courtId)
         .single();
@@ -251,7 +252,7 @@ export default function ManagerCourtFormNew() {
       setVenueName(data.venue?.name || "");
       setVenueData(data.venue);
       setParentCourtId(data.parent_court_id || data.id);
-      setVenueAllowedSports(data.venue?.allowed_sports || []);
+      setVenueAllowedSports((data as any).allowed_sports || []);
       setVenueAmenities(data.venue?.amenities || []);
       
       reset({
@@ -356,7 +357,6 @@ export default function ManagerCourtFormNew() {
           .insert([{
             venue_id: existingVenueId,
             name: data.name,
-            sport_type: "futsal" as any,
             ground_type: data.ground_type as any,
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
@@ -368,6 +368,7 @@ export default function ManagerCourtFormNew() {
             payment_timing: data.payment_timing as any,
             payment_hours_before: data.payment_hours_before,
             rules: data.rules || null,
+            allowed_sports: venueAllowedSports,
           } as any])
           .select()
           .single();
@@ -398,7 +399,6 @@ export default function ManagerCourtFormNew() {
             city: data.city,
             suburb: data.suburb || null,
             country: data.country,
-            allowed_sports: venueAllowedSports,
             amenities: venueAmenities,
           } as any)
           .eq("id", existingVenueId);
@@ -422,6 +422,7 @@ export default function ManagerCourtFormNew() {
             payment_timing: data.payment_timing as any,
             payment_hours_before: data.payment_hours_before,
             rules: data.rules || null,
+            allowed_sports: venueAllowedSports,
           } as any)
           .eq("id", courtId);
 
@@ -443,7 +444,6 @@ export default function ManagerCourtFormNew() {
             suburb: data.suburb || null,
             country: data.country,
             is_active: true,
-            allowed_sports: venueAllowedSports,
             amenities: venueAmenities,
           } as any])
           .select()
@@ -456,7 +456,6 @@ export default function ManagerCourtFormNew() {
           .insert([{
             venue_id: newVenueData.id,
             name: data.name,
-            sport_type: "futsal" as any,
             ground_type: data.ground_type as any,
             hourly_rate: data.hourly_rate,
             is_indoor: data.is_indoor,
@@ -468,6 +467,7 @@ export default function ManagerCourtFormNew() {
             payment_timing: data.payment_timing as any,
             payment_hours_before: data.payment_hours_before,
             rules: data.rules || null,
+            allowed_sports: venueAllowedSports,
           } as any]);
 
         if (courtError) throw courtError;
@@ -874,6 +874,11 @@ export default function ManagerCourtFormNew() {
                         )}
                       </div>
 
+                      {/* Allowed Sports - court level */}
+                      <AllowedSportsSelector
+                        allowedSports={venueAllowedSports}
+                        onAllowedSportsChange={setVenueAllowedSports}
+                      />
                       <div>
                         <Label htmlFor="description">Description</Label>
                         <Textarea
@@ -1014,12 +1019,10 @@ export default function ManagerCourtFormNew() {
                 </Collapsible>
               </Card>
 
-              {/* Venue Details - Only for parent courts (main venue) */}
+              {/* Venue Facilities - Only for parent courts (main venue) */}
               {(!currentCourt?.parent_court_id && !isAddingNewSubCourt) && (
                 <VenueDetailsEditor
-                  allowedSports={venueAllowedSports}
                   amenities={venueAmenities}
-                  onAllowedSportsChange={setVenueAllowedSports}
                   onAmenitiesChange={setVenueAmenities}
                 />
               )}

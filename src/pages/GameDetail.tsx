@@ -17,8 +17,12 @@ import { useToast } from "@/hooks/use-toast";
 import { checkProfileComplete } from "@/lib/profile-utils";
 import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
+import { PaymentDeadlineWarning } from "@/components/booking/PaymentDeadlineWarning";
 import { useUserCredits } from "@/hooks/useUserCredits";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { getSportCategory } from "@/lib/sport-category-utils";
+import { usePlatformFee } from "@/hooks/usePlatformFee";
+import { estimateServiceFee } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -107,6 +111,7 @@ export default function GameDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  const { playerFee } = usePlatformFee();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -417,8 +422,12 @@ export default function GameDetail() {
     if (!gameData || !id || !user) return;
 
     // Check if user has enough credits to cover full amount
-    const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
-    if (credits >= pricePerPlayer && !loadingCredits) {
+    const courtShare = session.payment_type === "single"
+      ? gameData.session.court_price
+      : gameData.session.court_price / (gameData.session.min_players || 1);
+    const estServiceFee = estimateServiceFee(courtShare, playerFee);
+    const totalAmount = courtShare + estServiceFee;
+    if (credits >= totalAmount && !loadingCredits) {
       setShowCreditsModal(true);
       return;
     }
@@ -432,14 +441,18 @@ export default function GameDetail() {
     creditsToUse?: number
   ) => {
     if (!gameData || !id || !user) return;
-    
+
     setActionLoading(true);
     try {
-      const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
+      const courtShare = session.payment_type === "single"
+        ? gameData.session.court_price
+        : gameData.session.court_price / (gameData.session.min_players || 1);
+      const estServiceFee = estimateServiceFee(courtShare, playerFee);
+      const totalAmount = courtShare + estServiceFee;
       
       if (method === "credits") {
         // If credits cover the full amount, process with credits only
-        if (credits >= pricePerPlayer) {
+        if (credits >= totalAmount) {
           const { data, error } = await supabase.functions.invoke("create-payment", {
             body: {
               sessionId: id,
@@ -469,7 +482,6 @@ export default function GameDetail() {
         // Partial credits - proceed to Stripe with credits applied
         await processCardPayment(true, creditsToUse);
       } else {
-        // Pay with card only
         await processCardPayment(false);
       }
     } catch (error) {
@@ -538,38 +550,8 @@ export default function GameDetail() {
     }
   };
 
-  const handleConfirmAttendance = async () => {
-    if (!gameData || !id || !user) return;
-
-    setActionLoading(true);
-    try {
-      const { error } = await supabase
-        .from("session_players")
-        .update({ 
-          is_confirmed: true, 
-          confirmed_at: new Date().toISOString() 
-        })
-        .eq("session_id", id)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Attendance confirmed",
-        description: "You've confirmed you're coming to this game.",
-      });
-      fetchGameData();
-    } catch (error) {
-      console.error("Error confirming attendance:", error);
-      toast({
-        title: "Error",
-        description: "Failed to confirm attendance.",
-        variant: "destructive",
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  // Attendance confirmation is handled automatically by the payment webhook.
+  // No manual frontend confirmation is allowed.
 
   const handleCancelSession = async () => {
     if (!gameData || !id) return;
@@ -647,7 +629,11 @@ const getGoogleMapsUrl = (address: string): string => {
   const sessionDateTime = new Date(`${session.session_date}T${session.start_time}`);
   const isGamePast = isPast(sessionDateTime);
   const paidCount = players.filter(p => p.isPaid).length;
-  const pricePerPlayer = session.court_price / session.min_players;
+  const pricePerPlayer = session.payment_type === "single"
+    ? session.court_price
+    : session.court_price / (session.min_players || 1);
+  const serviceFee = estimateServiceFee(pricePerPlayer, playerFee);
+  const totalPerPlayer = pricePerPlayer + serviceFee;
   const isOrganizer = group.organizer_id === user.id;
   const isPlayerInGame = players.some(p => p.user_id === user.id);
   const isInWaitingList = waitingList.some(p => p.user_id === user.id);
@@ -789,7 +775,7 @@ const getGoogleMapsUrl = (address: string): string => {
                     <div>
                       <p className="font-semibold">Join This Rescue Game!</p>
                       <p className="text-sm text-muted-foreground">
-                        This game needs players. Join now for ${pricePerPlayer.toFixed(2)} per player.
+                        This game needs players. Join now for ${totalPerPlayer.toFixed(2)} per player.
                       </p>
                     </div>
                   </div>
@@ -951,18 +937,24 @@ const getGoogleMapsUrl = (address: string): string => {
                         currentPlayerPayment?.isPaid ? (
                           <>
                             <p className="font-semibold text-success">Paid & Confirmed</p>
-                            <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Court price: ${session.court_price.toFixed(2)} + Service fee: ${serviceFee.toFixed(2)}
+                            </p>
+                            <p className="text-sm font-semibold">Total: ${(session.court_price + serviceFee).toFixed(2)}</p>
                           </>
                         ) : (
                           <>
                             <p className="font-semibold text-warning">Payment Pending</p>
-                            <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Court price: ${session.court_price.toFixed(2)} + Service fee: ${serviceFee.toFixed(2)}
+                            </p>
+                            <p className="text-sm font-semibold">Total: ${(session.court_price + serviceFee).toFixed(2)}</p>
                           </>
                         )
                       ) : (
                         <>
                           <p className="font-semibold text-success">Covered by Organizer</p>
-                          <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                          <p className="text-sm text-muted-foreground">Total: ${(session.court_price + serviceFee).toFixed(2)}</p>
                         </>
                       )}
                     </div>
@@ -981,7 +973,7 @@ const getGoogleMapsUrl = (address: string): string => {
                           disabled={actionLoading}
                         >
                           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Pay Now - ${session.court_price.toFixed(2)}
+                          Pay Now - ${(session.court_price + serviceFee).toFixed(2)}
                         </Button>
                       )
                     )}
@@ -992,14 +984,10 @@ const getGoogleMapsUrl = (address: string): string => {
                           <span className="font-semibold">Confirmed</span>
                         </div>
                       ) : (
-                        <Button 
-                          className="bg-success hover:bg-success/90 text-success-foreground"
-                          onClick={handleConfirmAttendance}
-                          disabled={actionLoading}
-                        >
-                          {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Confirm Attendance
-                        </Button>
+                        <div className="flex items-center gap-2 px-4 py-2 bg-muted text-muted-foreground rounded-lg">
+                          <Clock className="h-5 w-5" />
+                          <span className="text-sm">Confirmation pending — pay to confirm</span>
+                        </div>
                       )
                     )}
                   </div>
@@ -1013,7 +1001,10 @@ const getGoogleMapsUrl = (address: string): string => {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Price per player</p>
-                      <p className="text-2xl font-bold">${pricePerPlayer.toFixed(2)}</p>
+                      <p className="text-2xl font-bold">${totalPerPlayer.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Court: ${pricePerPlayer.toFixed(2)} + Service fee: ${serviceFee.toFixed(2)}
+                      </p>
                     </div>
                   </div>
                   {!isGamePast && (
@@ -1031,7 +1022,7 @@ const getGoogleMapsUrl = (address: string): string => {
                             disabled={actionLoading}
                           >
                             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                            Make Payment - ${pricePerPlayer.toFixed(2)}
+                            Make Payment - ${totalPerPlayer.toFixed(2)}
                           </Button>
                         )
                       )}
@@ -1046,6 +1037,11 @@ const getGoogleMapsUrl = (address: string): string => {
               )}
             </CardContent>
           </Card>
+
+          {/* Payment Deadline Warning - shown to organizer with pending payment */}
+          {isOrganizer && !isGamePast && !currentPlayerPayment?.isPaid && session.payment_deadline && (
+            <PaymentDeadlineWarning paymentDeadline={session.payment_deadline} />
+          )}
 
           {/* Player Count with Organizer Edit */}
           <Card>
@@ -1077,6 +1073,7 @@ const getGoogleMapsUrl = (address: string): string => {
                   currentMax={session.max_players}
                   courtPrice={session.court_price}
                   onUpdate={fetchGameData}
+                  locked={paidCount > 0}
                 />
               )}
             </CardContent>
@@ -1340,7 +1337,7 @@ const getGoogleMapsUrl = (address: string): string => {
           open={showCreditsModal}
           onOpenChange={setShowCreditsModal}
           userCredits={credits}
-          sessionCost={pricePerPlayer}
+          sessionCost={totalPerPlayer}
           onSelectPaymentMethod={handleSelectPaymentMethod}
           isLoading={actionLoading}
         />

@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { GuestNavbar } from "@/components/layout/GuestNavbar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -107,29 +108,10 @@ export default function Contact() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center" aria-label="Sport Arena home">
-            <img
-              src="/sportarena-logo.png"
-              alt="Sport Arena logo"
-              className="h-10 w-auto mix-blend-screen"
-            />
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link to="/auth">
-              <Button variant="ghost">Sign In</Button>
-            </Link>
-            <Link to="/auth">
-              <Button>Get Started</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <GuestNavbar />
 
       {/* Back Link */}
-      <div className="pt-24 px-4">
+      <div className="px-4 pt-28">
         <div className="container mx-auto max-w-4xl">
           <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-4 w-4" />

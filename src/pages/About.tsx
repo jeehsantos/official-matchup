@@ -1,264 +1,198 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Target, Heart, Users, Shield } from "lucide-react";
+import { Check, Lightbulb, Sprout, Trophy } from "lucide-react";
+import { GuestNavbar } from "@/components/layout/GuestNavbar";
 
-const values = [
+const journeyCards = [
   {
-    icon: Target,
-    title: "Commitment",
-    description: "We believe in showing up. That's why we enforce upfront payments - because your teammates are counting on you."
+    icon: Sprout,
+    title: "The Evolution",
+    description:
+      "We noticed that the passion for sport was often hindered by complex logistics. We saw a future where organizing a game was as simple as playing one.",
+    iconClass: "bg-orange-50 text-orange-500",
   },
   {
-    icon: Heart,
-    title: "Fairness",
-    description: "Everyone deserves a chance to play. Our rescue and release system ensures unused slots go to those who want them."
+    icon: Lightbulb,
+    title: "The Innovation",
+    description:
+      "By introducing upfront commitments and automated scheduling, we removed the uncertainty of no-shows and last-minute cancellations.",
+    iconClass: "bg-blue-50 text-blue-500",
   },
   {
-    icon: Users,
-    title: "Community",
-    description: "Sports bring people together. We're building the infrastructure that makes regular games possible."
+    icon: Trophy,
+    title: "The Impact",
+    description:
+      "Today, Sport Arena is a thriving ecosystem where venues stay busy and players stay active. A community built on reliability and play.",
+    iconClass: "bg-emerald-50 text-emerald-500",
   },
-  {
-    icon: Shield,
-    title: "Reliability",
-    description: "Court managers get guaranteed income. Players get guaranteed games. No more uncertainty."
-  }
+];
+
+const playerHighlights = [
+  "Guaranteed spots with upfront payments",
+  "Faster group coordination and smart reminders",
+  "Automatic rescue mode for unexpected cancellations",
+];
+
+const managerHighlights = [
+  "Predictable revenue and significantly fewer no-shows",
+  "Centralized venue availability and easy controls",
+  "Smart visibility to fill courts during off-peak hours",
 ];
 
 export default function About() {
   return (
-    <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center" aria-label="Sport Arena home">
-            <img
-              src="/sportarena-logo.png"
-              alt="Sport Arena logo"
-              className="h-10 w-auto mix-blend-screen"
-            />
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link to="/auth">
-              <Button variant="ghost">Sign In</Button>
-            </Link>
-            <Link to="/auth">
-              <Button>Get Started</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[#fcfdfe] text-slate-900 antialiased">
+      <GuestNavbar />
 
-      {/* Back Link */}
-      <div className="pt-24 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Home
-          </Link>
-        </div>
-      </div>
-
-      {/* Hero */}
-      <section className="pt-10 pb-12 px-4">
-        <div className="container mx-auto max-w-5xl">
-          <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
-            <div>
-              <p className="text-sm uppercase tracking-widest text-muted-foreground">Our story</p>
-              <h1 className="font-display text-4xl md:text-5xl font-bold mb-4">
-                Sport Arena is built for real players
-              </h1>
-              <p className="text-lg text-muted-foreground max-w-2xl">
-                We take the chaos out of group bookings so you can focus on the game.
-              </p>
-            </div>
-            <div className="card-elevated p-6 space-y-4">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Our mission</p>
-                <p className="font-semibold text-lg">Make every game happen.</p>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                From upfront payments to smart rescue mode, we remove last-minute drama
-                and keep courts full.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {["Fair play", "Reliable venues", "Committed teams"].map((item) => (
-                  <span key={item} className="text-xs font-semibold px-3 py-1 rounded-full bg-muted border border-border">
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Story */}
-      <section className="py-12 px-4 bg-muted/30">
-        <div className="container mx-auto max-w-5xl">
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                title: "The problem",
-                body: "Group chats, no-shows, and uneven payments were cancelling too many games."
-              },
-              {
-                title: "The idea",
-                body: "Collect payments upfront, automate cancellations, and reward consistency."
-              },
-              {
-                title: "The result",
-                body: "Sport Arena: a clean, sporty platform where commitment is guaranteed."
-              },
-            ].map((item) => (
-              <div key={item.title} className="card-elevated p-6">
-                <p className="text-xs uppercase tracking-widest text-muted-foreground">{item.title}</p>
-                <p className="mt-3 text-sm text-muted-foreground">{item.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Focus Areas */}
-      <section className="py-12 px-4">
-        <div className="container mx-auto max-w-5xl">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
-            <div>
-              <p className="text-sm uppercase tracking-widest text-muted-foreground">Our focus</p>
-              <h2 className="font-display text-3xl font-bold mt-2">Built for players and venues</h2>
-            </div>
-            <p className="text-muted-foreground max-w-md">
-              Everyone wins when bookings are clear and commitments are honored.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="card-elevated p-6">
-              <h3 className="font-semibold text-lg mb-3">Players & Organizers</h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>• Guaranteed spots with upfront payments</li>
-                <li>• Faster group coordination and reminders</li>
-                <li>• Automatic rescue mode for cancellations</li>
-              </ul>
-            </div>
-            <div className="card-elevated p-6">
-              <h3 className="font-semibold text-lg mb-3">Court Managers</h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>• Predictable revenue and fewer no-shows</li>
-                <li>• Centralized venue availability control</li>
-                <li>• Smart visibility to fill courts faster</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Values */}
-      <section className="py-12 px-4 bg-muted/30">
-        <div className="container mx-auto max-w-5xl">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
-            <div>
-              <p className="text-sm uppercase tracking-widest text-muted-foreground">Values</p>
-              <h2 className="font-display text-3xl font-bold mt-2">What we stand for</h2>
-            </div>
-            <p className="text-muted-foreground max-w-md">
-              These values keep Sport Arena focused on athletes first.
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-6">
-            {values.map((value) => (
-              <div key={value.title} className="card-elevated p-6">
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                  <value.icon className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="font-display font-semibold text-lg mb-2">{value.title}</h3>
-                <p className="text-muted-foreground text-sm">{value.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* New Zealand Focus */}
-      <section className="py-12 px-4">
-        <div className="container mx-auto max-w-5xl">
-          <div className="card-elevated p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div>
-              <h2 className="font-display text-2xl font-bold mb-2">Proudly New Zealand</h2>
-              <p className="text-muted-foreground max-w-2xl">
-                We understand local leagues and community venues, from Auckland futsal to Wellington tennis.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {["Auckland", "Wellington", "Christchurch", "Hamilton"].map((city) => (
-                <span key={city} className="text-xs font-semibold px-3 py-1 rounded-full bg-muted border border-border">
-                  {city}
+      <main className="overflow-hidden pt-20">
+        <header className="relative px-4 pb-16 pt-20 sm:px-6">
+          <div className="pointer-events-none absolute -left-24 -top-24 h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle,rgba(14,165,233,0.16)_0%,rgba(255,255,255,0)_70%)] blur-3xl" />
+          <div className="mx-auto max-w-7xl">
+            <div className="max-w-3xl">
+              <span className="mb-6 inline-flex rounded-full bg-blue-50 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] text-blue-600">
+                Our Journey
+              </span>
+              <h1 className="mb-8 text-4xl font-extrabold leading-tight text-slate-900 sm:text-5xl md:text-6xl">
+                Sport Arena is built for{" "}
+                <span className="bg-gradient-to-br from-sky-500 to-blue-700 bg-clip-text text-transparent">
+                  real players.
                 </span>
-              ))}
+              </h1>
+              <p className="text-lg leading-relaxed text-slate-600 sm:text-xl">
+                We&apos;ve transformed the way local sports are organized. By replacing manual coordination with seamless automation, we let you focus on what actually matters: the game.
+              </p>
             </div>
           </div>
-        </div>
-      </section>
+        </header>
 
-      {/* Contact Anchor */}
-      <section id="lets-talk-courts" className="scroll-mt-24 px-4 py-10 bg-muted/30">
-        <div className="container mx-auto max-w-5xl">
-          <div className="card-elevated p-6 md:p-8 text-center">
-            <p className="text-sm uppercase tracking-widest text-muted-foreground">Connect</p>
-            <h2 className="font-display text-3xl font-bold mt-2">Let’s talk courts</h2>
-            <p className="text-muted-foreground mt-3">
-              Have questions about Sport Arena, partnerships, or venue onboarding? We’d love to hear from you.
+        <section className="bg-slate-50/70 px-4 py-20 sm:px-6">
+          <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-3">
+            {journeyCards.map((card) => (
+              <article key={card.title} className="rounded-3xl border border-slate-200/70 bg-white/80 p-8 shadow-[0_10px_30px_-5px_rgba(0,0,0,0.04)] backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.08)]">
+                <div className={`mb-6 flex h-12 w-12 items-center justify-center rounded-2xl ${card.iconClass}`}>
+                  <card.icon className="h-5 w-5" />
+                </div>
+                <h3 className="mb-4 text-xl font-bold">{card.title}</h3>
+                <p className="leading-relaxed text-slate-600">{card.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="px-4 py-24 sm:px-6">
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-16 text-center">
+              <h2 className="mb-4 text-3xl font-bold md:text-4xl">Built for players and venues</h2>
+              <p className="mx-auto max-w-2xl text-slate-500">
+                Everyone wins when bookings are clear and commitments are honored.
+              </p>
+            </div>
+
+            <div className="grid gap-8 md:grid-cols-2 md:gap-12">
+              <article className="group relative overflow-hidden rounded-[2rem] border border-slate-100 bg-white p-8 sm:p-10">
+                <div className="absolute -right-8 -top-8 h-32 w-32 rounded-bl-full bg-blue-50/60 transition-all group-hover:scale-110" />
+                <h3 className="mb-6 flex items-center gap-3 text-2xl font-bold">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm text-white">1</span>
+                  Players &amp; Organizers
+                </h3>
+                <ul className="space-y-4">
+                  {playerHighlights.map((item) => (
+                    <li key={item} className="flex items-start gap-3 text-slate-600">
+                      <Check className="mt-1 h-4 w-4 shrink-0 text-blue-500" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+
+              <article className="group relative overflow-hidden rounded-[2rem] bg-slate-900 p-8 text-white sm:p-10">
+                <div className="absolute -right-8 -top-8 h-32 w-32 rounded-bl-full bg-white/5 transition-all group-hover:scale-110" />
+                <h3 className="mb-6 flex items-center gap-3 text-2xl font-bold">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm text-white">2</span>
+                  Court Managers
+                </h3>
+                <ul className="space-y-4">
+                  {managerHighlights.map((item) => (
+                    <li key={item} className="flex items-start gap-3 text-slate-300">
+                      <Check className="mt-1 h-4 w-4 shrink-0 text-blue-400" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section className="px-4 py-24 sm:px-6">
+          <div className="mx-auto max-w-7xl rounded-[2.5rem] bg-slate-900 p-8 text-white sm:p-12 lg:p-16">
+            <div className="grid items-center gap-10 lg:grid-cols-[1.2fr_0.8fr]">
+              <div>
+                <span className="mb-4 block text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Our Heritage</span>
+                <h2 className="mb-6 text-4xl font-bold md:text-5xl">Born in Aotearoa.</h2>
+                <p className="mb-5 text-lg leading-relaxed text-slate-300">
+                  Sport Arena was founded on the sidelines of local parks and community courts right here in New Zealand.
+                </p>
+                <p className="text-slate-400">
+                  We started with a simple goal: to make playing sports as accessible as possible for our local communities. While our vision is global, our roots remain firmly planted in the values of Kiwi sportsmanship—fairness, commitment, and the belief that everyone should have a chance to get on the court.
+                </p>
+              </div>
+
+              <div className="mx-auto w-full max-w-[280px] sm:max-w-[320px]">
+                <svg viewBox="0 0 400 500" className="h-full w-full drop-shadow-[0_0_25px_rgba(59,130,246,0.3)]" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="mapGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" style={{ stopColor: "#3b82f6", stopOpacity: 1 }} />
+                      <stop offset="100%" style={{ stopColor: "#2563eb", stopOpacity: 1 }} />
+                    </linearGradient>
+                  </defs>
+                  <path fill="url(#mapGradient)" d="M260,40 C280,30 310,40 330,60 C350,80 340,110 330,130 C320,150 280,180 260,200 C240,220 230,250 220,280 L190,290 C170,280 160,250 165,220 C170,190 190,160 180,130 C170,100 150,80 160,60 C170,40 190,40 210,50 L260,40 Z" />
+                  <path fill="url(#mapGradient)" d="M185,310 L210,330 C200,360 170,400 150,440 C130,480 90,490 70,480 C50,470 40,440 60,410 C80,380 120,340 150,320 L185,310 Z" opacity="0.9" />
+                  <circle cx="85" cy="485" r="8" fill="url(#mapGradient)" opacity="0.8" />
+                  <circle cx="215" cy="240" r="4" fill="white">
+                    <animate attributeName="r" values="3;6;3" dur="3s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="1;0.4;1" dur="3s" repeatCount="indefinite" />
+                  </circle>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="px-4 py-20 text-center sm:px-6">
+          <div className="mx-auto max-w-3xl">
+            <h2 className="mb-6 text-4xl font-extrabold md:text-5xl">Ready to Get Started?</h2>
+            <p className="mb-10 text-lg leading-relaxed text-slate-500">
+              Join the movement towards guaranteed, hassle-free sports bookings. Whether you&apos;re a player or a venue, we&apos;ve got you covered.
             </p>
-            <div className="mt-6">
-              <Link to="/contact#lets-talk-courts">
-                <Button>Contact Us</Button>
+            <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <Link to="/auth?tab=signup" className="w-full sm:w-auto">
+                <Button className="w-full rounded-2xl bg-blue-600 px-8 py-6 font-bold text-white shadow-xl shadow-blue-200 hover:bg-blue-700">
+                  Create Free Account
+                </Button>
+              </Link>
+              <Link to="/contact" className="w-full sm:w-auto">
+                <Button variant="outline" className="w-full rounded-2xl border-slate-200 px-8 py-6 font-bold text-slate-700 hover:bg-slate-50">
+                  Contact Our Team
+                </Button>
               </Link>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* CTA */}
-      <section className="py-16 px-4 bg-primary text-primary-foreground">
-        <div className="container mx-auto max-w-4xl text-center">
-          <h2 className="font-display text-2xl font-bold mb-4">
-            Ready to Get Started?
-          </h2>
-          <p className="text-primary-foreground/80 mb-6">
-            Join the movement towards guaranteed, hassle-free sports bookings.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/auth">
-              <Button size="lg" variant="secondary">
-                Create Free Account
-              </Button>
-            </Link>
-            <Link to="/contact">
-              <Button size="lg" variant="outline" className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10">
-                Contact Us
-              </Button>
-            </Link>
+      <footer className="border-t border-slate-100 bg-white px-4 py-12 sm:px-6">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 text-center md:flex-row md:text-left">
+          <Link to="/" className="flex items-center" aria-label="Sport Arena home">
+            <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-10 w-auto object-contain" />
+          </Link>
+          <div className="flex gap-6 text-sm text-slate-500 sm:gap-8">
+            <Link to="/" className="transition hover:text-blue-600">Home</Link>
+            <Link to="/about" className="transition hover:text-blue-600">Our Story</Link>
+            <Link to="/courts" className="transition hover:text-blue-600">Venues</Link>
+            <Link to="/contact" className="transition hover:text-blue-600">Contact</Link>
           </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="py-8 px-4 border-t border-border">
-        <div className="container mx-auto max-w-4xl flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center">
-            <img
-              src="/sportarena-logo.png"
-              alt="Sport Arena logo"
-              className="h-8 w-auto mix-blend-screen"
-            />
-          </div>
-          <div className="flex gap-6 text-sm text-muted-foreground">
-            <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
-            <Link to="/contact" className="hover:text-foreground transition-colors">Contact</Link>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Sport Arena
-          </p>
+          <p className="text-sm text-slate-400">© {new Date().getFullYear()} Sport Arena Ltd.</p>
         </div>
       </footer>
     </div>

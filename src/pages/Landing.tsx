@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSportCategories } from "@/hooks/useSportCategories";
+import { GuestNavbar } from "@/components/layout/GuestNavbar";
 
 const playerSteps = [
   {
@@ -81,31 +82,10 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-white text-slate-900">
-      <header className="fixed top-0 z-50 w-full border-b border-white/50 bg-white/80 backdrop-blur-[10px]">
-        <div className="mx-auto flex h-24 w-full max-w-7xl items-center justify-between px-6">
-          <Link to="/" className="flex items-center" aria-label="Sport Arena home">
-            <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-36 w-auto object-contain" />
-          </Link>
-
-          <nav className="hidden items-center gap-8 text-sm font-medium text-slate-600 md:flex">
-            <Link to="/about" className="transition hover:text-blue-600">About</Link>
-            <Link to="/contact" className="transition hover:text-blue-600">Contact</Link>
-            <Link to="/courts" className="transition hover:text-blue-600">Browse Courts</Link>
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <Link to="/auth">
-              <Button variant="ghost" className="hidden sm:inline-flex">Sign In</Button>
-            </Link>
-            <Link to="/auth?tab=signup">
-              <Button className="bg-[#0e8ddd] hover:bg-[#0b76bc]">Get Started</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <GuestNavbar />
 
       <main>
-        <section className="overflow-hidden bg-gradient-to-br from-[#f0f9ff] to-[#e0f2fe] px-6 pb-20 pt-32">
+        <section className="overflow-hidden bg-gradient-to-br from-[#f0f9ff] to-[#e0f2fe] px-6 pb-20 pt-36">
           <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-2">
             <div>
               <h1 className="mb-6 text-5xl font-extrabold leading-tight md:text-6xl">

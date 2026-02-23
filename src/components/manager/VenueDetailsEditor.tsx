@@ -7,12 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronDown, ChevronUp, Building2, Plus, X } from "lucide-react";
-import { useSportCategories } from "@/hooks/useSportCategories";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 
 const DEFAULT_FACILITIES = [
   "Changing Room",
@@ -28,32 +22,17 @@ const DEFAULT_FACILITIES = [
 ];
 
 interface VenueDetailsEditorProps {
-  allowedSports: string[];
   amenities: string[];
-  onAllowedSportsChange: (sports: string[]) => void;
   onAmenitiesChange: (amenities: string[]) => void;
 }
 
 export function VenueDetailsEditor({
-  allowedSports,
   amenities,
-  onAllowedSportsChange,
   onAmenitiesChange,
 }: VenueDetailsEditorProps) {
   const [expanded, setExpanded] = useState(true);
   const [customFacility, setCustomFacility] = useState("");
-  const [sportsOpen, setSportsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
-
-  const toggleSport = (sportName: string) => {
-    if (allowedSports.includes(sportName)) {
-      onAllowedSportsChange(allowedSports.filter((s) => s !== sportName));
-    } else {
-      onAllowedSportsChange([...allowedSports, sportName]);
-    }
-  };
 
   const toggleFacility = (facility: string) => {
     if (amenities.includes(facility)) {
@@ -76,7 +55,6 @@ export function VenueDetailsEditor({
     onAmenitiesChange(amenities.filter((a) => a !== facility));
   };
 
-  // Combine default + any custom ones already selected
   const allFacilityOptions = [
     ...DEFAULT_FACILITIES,
     ...amenities.filter((a) => !DEFAULT_FACILITIES.includes(a)),
@@ -90,7 +68,7 @@ export function VenueDetailsEditor({
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Building2 className="h-4 w-4 text-primary" />
-                Venue Details
+                Venue Facilities
               </CardTitle>
               {expanded ? (
                 <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -102,73 +80,6 @@ export function VenueDetailsEditor({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <CardContent className="space-y-5 pt-0">
-            {/* Allowed Sports */}
-            <div className="space-y-2">
-              <Label>Allowed Sports</Label>
-              <p className="text-xs text-muted-foreground">
-                Select which sports can be played at this venue
-              </p>
-              <Popover open={sportsOpen} onOpenChange={setSportsOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between text-left font-normal h-auto min-h-10"
-                  >
-                    <span className="truncate">
-                      {allowedSports.length === 0
-                        ? "Select sports..."
-                        : `${allowedSports.length} sport${allowedSports.length > 1 ? "s" : ""} selected`}
-                    </span>
-                    <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-2" align="start">
-                  {loadingSports ? (
-                    <p className="text-sm text-muted-foreground p-2">Loading...</p>
-                  ) : (
-                    <div className="max-h-48 overflow-y-auto space-y-1">
-                      {sportCategories.map((sport) => (
-                        <label
-                          key={sport.id}
-                          className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted cursor-pointer"
-                        >
-                          <Checkbox
-                            checked={allowedSports.includes(sport.name)}
-                            onCheckedChange={() => toggleSport(sport.name)}
-                          />
-                          <span className="text-sm">
-                            {sport.icon && <span className="mr-1">{sport.icon}</span>}
-                            {sport.display_name}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </PopoverContent>
-              </Popover>
-              {/* Selected sports badges */}
-              {allowedSports.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {allowedSports.map((sport) => {
-                    const cat = sportCategories.find((c) => c.name === sport);
-                    return (
-                      <Badge
-                        key={sport}
-                        variant="secondary"
-                        className="gap-1 cursor-pointer hover:bg-destructive/20"
-                        onClick={() => toggleSport(sport)}
-                      >
-                        {cat?.icon && <span>{cat.icon}</span>}
-                        {cat?.display_name || sport}
-                        <X className="h-3 w-3" />
-                      </Badge>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Facilities / Amenities */}
             <div className="space-y-2">
               <Label>Facilities</Label>
               <p className="text-xs text-muted-foreground">
@@ -189,7 +100,6 @@ export function VenueDetailsEditor({
                 ))}
               </div>
 
-              {/* Custom facility input */}
               <div className="flex gap-2 mt-2">
                 <Input
                   ref={inputRef}
@@ -215,7 +125,6 @@ export function VenueDetailsEditor({
                 </Button>
               </div>
 
-              {/* Selected amenities badges */}
               {amenities.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {amenities.map((a) => (

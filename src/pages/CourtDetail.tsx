@@ -27,6 +27,7 @@ import {
   Users
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { format, getDay } from "date-fns";
@@ -38,8 +39,9 @@ import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/
 import { checkProfileComplete } from "@/lib/profile-utils";
 import { useVenueEquipment } from "@/hooks/useVenueEquipment";
 import { useUserCredits } from "@/hooks/useUserCredits";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
-import { PaymentTimingChoice } from "@/components/booking/PaymentTimingChoice";
+
 import { HoldCountdown } from "@/components/booking/HoldCountdown";
 import { SlotStatusBadge } from "@/components/booking/SlotStatusBadge";
 import { useBookingHold } from "@/hooks/useBookingHold";
@@ -73,6 +75,7 @@ interface AvailableCourt {
   ground_type: string | null;
   rules: string | null;
   photo_urls: string[] | null;
+  allowed_sports?: string[] | null;
 }
 
 type SlotStatus = "AVAILABLE" | "HELD" | "CONFIRMED";
@@ -133,7 +136,7 @@ export default function CourtDetail() {
   const [showProfileAlert, setShowProfileAlert] = useState(false);
   const [profileMissingFields, setProfileMissingFields] = useState<string[]>([]);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
-  const [showPaymentTimingChoice, setShowPaymentTimingChoice] = useState(false);
+  
   const [pendingPaymentSessionId, setPendingPaymentSessionId] = useState<string | null>(null);
   const [pendingPaymentAmount, setPendingPaymentAmount] = useState<number>(0);
   
@@ -165,8 +168,11 @@ export default function CourtDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  const { preferredSports, isLoading: profileLoading } = useUserProfile();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
+  
+  const { data: platformSettings } = usePlatformSettings();
   
   // Equipment state
   const [selectedEquipment, setSelectedEquipment] = useState<SelectedEquipment[]>([]);
@@ -198,6 +204,12 @@ export default function CourtDetail() {
   // Refs to prevent race conditions during state restoration
   const isRestoringRef = useRef(false);
   const hasRestoredRef = useRef(false);
+  
+  // Ref to track if wizard is open (avoids stale closure in real-time subscriptions)
+  const wizardOpenRef = useRef(false);
+
+  // Prevents auto-selecting a preferred court more than once per page load
+  const hasAutoSelectedRef = useRef(false);
 
   // Function declarations first (before useEffects that use them)
   const fetchCourt = useCallback(async () => {
@@ -212,15 +224,57 @@ export default function CourtDetail() {
         .single();
 
       if (error) throw error;
-      setCourt(data as CourtWithVenue);
-      setSelectedCourtId(data.id);
+
+      let resolvedCourt = data as CourtWithVenue;
+      let resolvedCourtId = data.id;
+
+      // For multi-court venues, check if we should show a different court
+      // that matches the user's preferred sports
+      if (preferredSports.length > 0 && !profileLoading) {
+        const isMultiCourt = data.is_multi_court || data.parent_court_id;
+
+        if (isMultiCourt) {
+          const courtSports = data.allowed_sports || [];
+          const matchesPreferred =
+            courtSports.length === 0 ||
+            courtSports.some((s: string) => preferredSports.includes(s));
+
+          if (!matchesPreferred) {
+            // Fetch sibling courts from the same venue
+            const venueId = data.venue_id;
+            const { data: siblings } = await supabase
+              .from("courts")
+              .select("*, venues (*)")
+              .eq("venue_id", venueId)
+              .eq("is_active", true)
+              .order("name");
+
+            if (siblings && siblings.length > 1) {
+              const betterCourt = siblings.find((c: any) => {
+                const sports = c.allowed_sports || [];
+                return sports.length === 0 ||
+                  sports.some((s: string) => preferredSports.includes(s));
+              });
+
+              if (betterCourt) {
+                resolvedCourt = betterCourt as CourtWithVenue;
+                resolvedCourtId = betterCourt.id;
+              }
+            }
+          }
+        }
+      }
+
+      hasAutoSelectedRef.current = true;
+      setCourt(resolvedCourt);
+      setSelectedCourtId(resolvedCourtId);
     } catch (error) {
       console.error("Error fetching court:", error);
       navigate("/courts");
     } finally {
       setLoading(false);
     }
-  }, [id, navigate]);
+  }, [id, navigate, preferredSports, profileLoading]);
 
   const fetchAvailability = useCallback(async (venueId: string, courtId: string, date: Date) => {
     setAvailabilityLoading(true);
@@ -280,11 +334,13 @@ export default function CourtDetail() {
     }
   }, [id]);
 
+  // Fetch court data — gated on profile loading so preferredSports is available
+  // for resolving the correct sub-court before any render
   useEffect(() => {
-    if (id) {
+    if (id && !profileLoading) {
       fetchCourt();
     }
-  }, [id, fetchCourt]);
+  }, [id, profileLoading, fetchCourt]);
 
   // Fetch availability when date or selected court changes
   useEffect(() => {
@@ -330,6 +386,11 @@ export default function CourtDetail() {
   }, [availabilityData, availabilityLoading, toast]);
 
   // Reset selected slots when date changes - but NOT during restoration
+  // NOTE: releaseHold is intentionally excluded from deps to avoid clearing slots
+  // when holdId changes (which changes releaseHold's identity).
+  const releaseHoldRef = useRef(releaseHold);
+  releaseHoldRef.current = releaseHold;
+
   useEffect(() => {
     // Skip reset during restoration
     if (isRestoringRef.current) return;
@@ -338,8 +399,9 @@ export default function CourtDetail() {
     setSelectedSlots([]);
     setSelectedEquipment([]);
     // Release any existing hold when date changes
-    releaseHold();
-  }, [selectedDate, releaseHold]);
+    releaseHoldRef.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
 
   // Track presence when slots are selected
   useEffect(() => {
@@ -352,6 +414,11 @@ export default function CourtDetail() {
     const endTime = getEndTime();
     trackSelection(startTime, endTime);
   }, [selectedSlots, trackSelection]);
+
+  // Keep wizardOpenRef in sync with wizard state
+  useEffect(() => {
+    wizardOpenRef.current = showGroupModal || showQuickChallengeWizard;
+  }, [showGroupModal, showQuickChallengeWizard]);
 
   // Subscribe to booking_holds changes for real-time updates
   useEffect(() => {
@@ -369,7 +436,8 @@ export default function CourtDetail() {
         },
         (payload) => {
           console.log('Hold changed:', payload);
-          // Refetch availability when holds change
+          // Use ref to avoid stale closure — state may not be updated yet
+          if (wizardOpenRef.current) return;
           if (court.venues && selectedDate) {
             fetchAvailability(court.venues.id, court.id, selectedDate);
           }
@@ -398,7 +466,8 @@ export default function CourtDetail() {
         },
         (payload) => {
           console.log('Availability changed:', payload);
-          // Refetch availability when changes occur
+          // Use ref to avoid stale closure — state may not be updated yet
+          if (wizardOpenRef.current) return;
           if (court.venues && selectedDate) {
             fetchAvailability(court.venues.id, court.id, selectedDate);
           }
@@ -568,6 +637,9 @@ export default function CourtDetail() {
       return;
     }
 
+    // Mark wizard as "opening" before creating hold so real-time callbacks won't refetch
+    wizardOpenRef.current = true;
+
     // Create a hold on the slot before proceeding to wizard
     const dateStr = format(selectedDate, "yyyy-MM-dd");
     const startTime = getStartTime();
@@ -578,6 +650,8 @@ export default function CourtDetail() {
     const holdResult = await createHold(bookingCourtId, startDatetime, endDatetime);
 
     if (!holdResult.success) {
+      // Reset ref since wizard won't open
+      wizardOpenRef.current = false;
       // Hold failed - slot is taken
       if (holdResult.error === "SLOT_UNAVAILABLE") {
         toast({
@@ -632,6 +706,7 @@ export default function CourtDetail() {
     paymentType: "single" | "split";
     equipment: SelectedEquipment[];
     sportCategoryId: string;
+    splitPlayers?: number;
   }) => {
     const { groupId, isNewGroup, paymentType, equipment, sportCategoryId } = data;
     // Update selected equipment from wizard
@@ -650,9 +725,9 @@ export default function CourtDetail() {
 
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-      const slotDate = new Date(dateStr);
-      const paymentDeadline = new Date(slotDate);
-      paymentDeadline.setHours(paymentDeadline.getHours() - 24);
+      const sessionStart = new Date(`${dateStr}T${startTime}`);
+      const hoursBeforeSession = court.payment_hours_before ?? 24;
+      const paymentDeadline = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
 
       // Calculate price based on duration + equipment
       const hours = totalDuration / 60;
@@ -670,7 +745,7 @@ export default function CourtDetail() {
           start_time: startTime,
           duration_minutes: totalDuration,
           court_price: totalPrice,
-          min_players: 6,
+          min_players: data.paymentType === "split" && data.splitPlayers ? data.splitPlayers : 6,
           max_players: court.capacity,
           payment_deadline: paymentDeadline.toISOString(),
           state: "protected",
@@ -683,13 +758,15 @@ export default function CourtDetail() {
       if (sessionError) throw sessionError;
 
       // Add the organizer as a session player automatically
+      // Only confirm if payment is NOT required at booking time
+      const requiresPaymentFirst = court.payment_timing === "at_booking";
       const { error: playerError } = await supabase
         .from("session_players")
         .insert({
           session_id: session.id,
           user_id: user.id,
-          is_confirmed: true,
-          confirmed_at: new Date().toISOString(),
+          is_confirmed: !requiresPaymentFirst,
+          confirmed_at: requiresPaymentFirst ? null : new Date().toISOString(),
         });
 
       if (playerError) {
@@ -704,7 +781,7 @@ export default function CourtDetail() {
           available_date: dateStr,
           start_time: startTime,
           end_time: endTime,
-          is_booked: true,
+          is_booked: court.payment_timing !== "at_booking",
           booked_by_user_id: user.id,
           booked_by_group_id: groupId,
           booked_by_session_id: session.id,
@@ -763,17 +840,22 @@ export default function CourtDetail() {
 
       // Check if court requires payment at booking
       if (court.payment_timing === "at_booking") {
-        // Store session ID and amount for payment processing
+        // Store session ID for payment processing
         setPendingPaymentSessionId(session.id);
         setPendingPaymentAmount(totalPrice);
 
         toast({
           title: isNewGroup ? "Group created!" : "Booking reserved!",
-          description: "Choose when to complete your payment...",
+          description: "Redirecting to payment...",
         });
 
-        // Show pay now/later choice dialog
-        setShowPaymentTimingChoice(true);
+        // Go directly to credits check or Stripe payment
+        const totalCost = totalPrice;
+        if (credits >= totalCost && !loadingCredits) {
+          setShowCreditsModal(true);
+        } else {
+          await processCourtPayment(session.id, false);
+        }
         return;
       } else {
         toast({
@@ -827,9 +909,16 @@ export default function CourtDetail() {
       const courtPriceCalc = courtRate * hours;
       const equipmentTotal = equipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0);
       const totalPrice = courtPriceCalc + equipmentTotal;
-      const pricePerPlayer = paymentType === "split" 
-        ? Math.ceil((totalPrice / quickGameConfig.totalPlayers) * 100) / 100 
-        : 0;
+      const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
+      const splitPricePerPlayer = Math.ceil((totalPrice / quickGameConfig.totalPlayers) * 100) / 100;
+      
+      // For at_booking courts, force single payment (organizer pays full amount)
+      const effectivePT = court.payment_timing === "at_booking" ? "single" : paymentType;
+      // For single payment (organizer pays all), store full court price so the edge function
+      // knows to charge Stripe. For split, store per-player share + service fee.
+      const pricePerPlayer = effectivePT === "split" 
+        ? splitPricePerPlayer + serviceFee
+        : totalPrice;
 
       // Create quick_challenges record
       const { data: challenge, error: challengeError } = await supabase
@@ -842,7 +931,7 @@ export default function CourtDetail() {
           scheduled_date: dateStr,
           scheduled_time: startTime,
           total_slots: quickGameConfig.totalPlayers,
-          price_per_player: paymentType === "split" ? pricePerPlayer : 0,
+          price_per_player: pricePerPlayer,
           status: "open",
           created_by: user.id,
         })
@@ -852,6 +941,7 @@ export default function CourtDetail() {
       if (challengeError) throw challengeError;
 
       // Create court_availability record to mark the slot as booked
+      // For at_booking courts, keep is_booked false until payment is confirmed
       const { data: bookingRecord, error: bookingError } = await supabase
         .from("court_availability")
         .insert({
@@ -859,7 +949,7 @@ export default function CourtDetail() {
           available_date: dateStr,
           start_time: startTime,
           end_time: endTime,
-          is_booked: true,
+          is_booked: court.payment_timing !== "at_booking",
           booked_by_user_id: user.id,
           payment_status: "pending",
         })
@@ -888,7 +978,7 @@ export default function CourtDetail() {
           user_id: user.id,
           team: "left",
           slot_position: 0,
-          payment_status: paymentType === "single" ? "pending" : "pending",
+          payment_status: "pending",
         });
 
       if (playerError) {
@@ -898,12 +988,59 @@ export default function CourtDetail() {
       // Clear quick game state
       sessionStorage.removeItem("quickGameConfig");
 
+      // If at_booking, redirect to Stripe for payment
+      if (court.payment_timing === "at_booking") {
+        try {
+          const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-quick-challenge-payment", {
+            body: {
+              challengeId: challenge.id,
+              origin: window.location.origin,
+              useCredits: false,
+            },
+          });
+
+          if (paymentError) throw paymentError;
+
+          if (paymentData?.url) {
+            const isInIframe = window.self !== window.top;
+            if (isInIframe) {
+              const opened = window.open(paymentData.url, "_blank", "noopener,noreferrer");
+              if (!opened) window.location.href = paymentData.url;
+            } else {
+              window.location.href = paymentData.url;
+            }
+            return;
+          }
+
+          if (paymentData?.success && !paymentData?.url) {
+            // Free challenge or credits-only — already confirmed
+            toast({
+              title: "Challenge Created & Paid!",
+              description: paymentData.message || "Your spot has been confirmed.",
+            });
+            navigate(`/quick-games/${challenge.id}`);
+            return;
+          }
+
+          throw new Error("No checkout URL returned");
+        } catch (payErr: any) {
+          console.error("Payment error:", payErr);
+          toast({
+            title: "Challenge created but payment failed",
+            description: payErr?.message || "Please go to the lobby to complete payment.",
+            variant: "destructive",
+          });
+          navigate(`/quick-games/${challenge.id}`);
+          return;
+        }
+      }
+
+      // Non at_booking: navigate normally
       toast({
         title: "Quick Challenge Created!",
         description: `Your ${quickGameConfig.gameMode} challenge is now open for players to join.`,
       });
 
-      // Navigate to discover page with quick games filter
       navigate("/discover?tab=quickgames");
 
     } catch (error: any) {
@@ -987,48 +1124,6 @@ export default function CourtDetail() {
     }
   };
 
-  // Handler for pay now/later choice
-  const handlePaymentTimingChoice = async (choice: "now" | "later") => {
-    if (!pendingPaymentSessionId || !court) return;
-
-    setBooking(true);
-    try {
-      if (choice === "now") {
-        // User chose to pay now - check for credits first
-        const totalCost = court.hourly_rate + selectedEquipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0);
-        if (credits >= totalCost && !loadingCredits) {
-          setShowPaymentTimingChoice(false);
-          setShowCreditsModal(true);
-        } else {
-          // No credits, proceed directly to Stripe
-          setShowPaymentTimingChoice(false);
-          await processCourtPayment(pendingPaymentSessionId, false);
-        }
-      } else {
-        // User chose to pay later - booking is already created with pending status
-        setShowPaymentTimingChoice(false);
-        setPendingPaymentSessionId(null);
-        setPendingPaymentAmount(0);
-        
-        toast({
-          title: "Booking Reserved!",
-          description: "Your court is reserved. Complete payment from the game details page before the session starts.",
-        });
-        
-        // Navigate to the game details page
-        navigate(`/games`);
-      }
-    } catch (error) {
-      console.error("Error processing payment choice:", error);
-      toast({
-        title: "Error",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setBooking(false);
-    }
-  };
 
   const processCourtPayment = async (sessionId: string, useCredits: boolean, creditsAmount?: number) => {
     if (!court) return;
@@ -1136,6 +1231,38 @@ export default function CourtDetail() {
     return rate * (durationMinutes / 60);
   };
 
+  // Filter venue courts by user's preferred sports
+  const allVenueCourts = availabilityData?.venue_courts || [];
+  const venueCourts = useMemo(() => {
+    if (preferredSports.length === 0 || allVenueCourts.length <= 1) return allVenueCourts;
+
+    const filtered = allVenueCourts.filter(c => {
+      const courtSports = c.allowed_sports || [];
+      if (courtSports.length === 0) return true;
+      return courtSports.some(sport => preferredSports.includes(sport));
+    });
+
+    const courtsToShow = filtered.length > 0 ? filtered : allVenueCourts;
+    if (!selectedCourtId || courtsToShow.some(c => c.id === selectedCourtId)) {
+      return courtsToShow;
+    }
+
+    const selectedCourt = allVenueCourts.find(c => c.id === selectedCourtId);
+    return selectedCourt ? [selectedCourt, ...courtsToShow] : courtsToShow;
+  }, [allVenueCourts, preferredSports, selectedCourtId]);
+
+  // Fallback: if the selected court no longer exists in venue availability, reset to first available
+  useEffect(() => {
+    if (!selectedCourtId || allVenueCourts.length === 0) return;
+
+    const selectedCourtExists = allVenueCourts.some(c => c.id === selectedCourtId);
+    if (!selectedCourtExists) {
+      setSelectedCourtId(allVenueCourts[0].id);
+      setSelectedSlots([]);
+      setCurrentImageIndex(0);
+    }
+  }, [allVenueCourts, selectedCourtId]);
+
   // Use public layout for unauthenticated users
   const Layout = user ? MobileLayout : PublicLayout;
   
@@ -1163,10 +1290,24 @@ export default function CourtDetail() {
   }
 
   const totalDuration = getTotalDuration();
+
+  // Compute effective payment timing: if court uses 'before_session' but we're already
+  // within the payment window (deadline has passed), force 'at_booking'.
+  const effectivePaymentTiming = (() => {
+    if (!court || court.payment_timing !== "before_session" || !selectedDate) {
+      return court?.payment_timing ?? "at_booking";
+    }
+    const dateStr = format(selectedDate, "yyyy-MM-dd");
+    const startTime = getStartTime();
+    const sessionStart = new Date(`${dateStr}T${startTime}`);
+    const hoursBeforeSession = court.payment_hours_before ?? 24;
+    const deadline = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
+    return new Date() >= deadline ? "at_booking" : "before_session";
+  })() as "at_booking" | "before_session";
+
   const courtPrice = calculatePrice(totalDuration);
   const equipmentTotal = getEquipmentTotal();
   const totalPrice = courtPrice + equipmentTotal;
-  const venueCourts = availabilityData?.venue_courts || [];
 
   return (
     <Layout>
@@ -1209,8 +1350,8 @@ export default function CourtDetail() {
             <div className="px-4 lg:px-0">
               <div className="flex items-start gap-3 mb-3">
                 <Badge className="capitalize shrink-0">
-                  <SportIcon sport={court.sport_type} className="h-3 w-3 mr-1" />
-                  {court.sport_type}
+                  <SportIcon sport={(getSelectedCourt()?.allowed_sports?.[0] || court.allowed_sports?.[0] || "other")} className="h-3 w-3 mr-1" />
+                  {(getSelectedCourt()?.allowed_sports || court.allowed_sports)?.join(", ") || "Other"}
                 </Badge>
                 <Badge variant="outline" className="shrink-0">
                   {court.is_indoor ? "Indoor" : "Outdoor"}
@@ -1287,7 +1428,7 @@ export default function CourtDetail() {
                 </div>
               ) : (
                 <div className="aspect-video bg-muted flex items-center justify-center">
-                  <SportIcon sport={court.sport_type} className="h-16 w-16 text-muted-foreground" />
+                  <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-16 w-16 text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -1351,17 +1492,19 @@ export default function CourtDetail() {
             </div>
 
             {/* Venue Details: Allowed Sports + Amenities */}
-            {(court.venues?.amenities?.length > 0 || (court.venues as any)?.allowed_sports?.length > 0) && (
+            {(() => {
+              const displaySports = getSelectedCourt()?.allowed_sports || court.allowed_sports || [];
+              return ((court.venues?.amenities && court.venues.amenities.length > 0) || displaySports.length > 0) ? (
               <div className="px-4 lg:px-0 space-y-4">
                 {/* Allowed Sports */}
-                {(court.venues as any)?.allowed_sports?.length > 0 && (
+                {displaySports.length > 0 && (
                   <div>
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <span className="text-lg">🏅</span>
                       Sports Available
                     </h3>
                     <div className="flex flex-wrap gap-2">
-                      {((court.venues as any).allowed_sports as string[]).map((sport, i) => (
+                      {displaySports.map((sport: string, i: number) => (
                         <Badge key={i} variant="secondary" className="gap-1.5 py-1 px-3">
                           <SportIcon sport={sport} size="sm" className="w-5 h-5 text-xs" />
                           <span className="capitalize">{sport.replace(/_/g, " ")}</span>
@@ -1392,7 +1535,8 @@ export default function CourtDetail() {
                   </div>
                 )}
               </div>
-            )}
+              ) : null;
+            })()}
 
             {/* Court Rules - Dynamic based on selected court */}
             {(getSelectedCourt()?.rules || (court as any).rules) && (
@@ -1446,7 +1590,7 @@ export default function CourtDetail() {
                   Available Times for {format(selectedDate, "MMMM d")}
                 </h3>
                 
-                {availabilityLoading ? (
+                {(availabilityLoading || profileLoading) ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                     <span className="ml-2 text-muted-foreground">Loading availability...</span>
@@ -1671,7 +1815,7 @@ export default function CourtDetail() {
                 </>
               ) : (
                 <div className="aspect-square rounded-xl bg-muted flex items-center justify-center">
-                  <SportIcon sport={court.sport_type} className="h-20 w-20 text-muted-foreground" />
+                  <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-20 w-20 text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -1800,7 +1944,7 @@ export default function CourtDetail() {
             open={showGroupModal}
             onOpenChange={setShowGroupModal}
             onConfirm={handleBookingConfirm}
-            sportType={court.sport_type}
+            sportType={(court.allowed_sports?.[0] || "other") as any}
             courtPrice={courtPrice}
             dayOfWeek={getDay(selectedDate)}
             startTime={getStartTime()}
@@ -1814,7 +1958,7 @@ export default function CourtDetail() {
             equipment={venueEquipment}
             selectedEquipment={selectedEquipment}
             onEquipmentChange={setSelectedEquipment}
-            paymentTiming={court.payment_timing}
+            paymentTiming={effectivePaymentTiming}
           />
         )}
 
@@ -1835,7 +1979,7 @@ export default function CourtDetail() {
             equipment={venueEquipment}
             selectedEquipment={selectedEquipment}
             onEquipmentChange={setSelectedEquipment}
-            paymentTiming={court.payment_timing}
+            paymentTiming={effectivePaymentTiming}
             sportName={quickGameConfig.sportName}
             gameMode={quickGameConfig.gameMode}
             totalPlayers={quickGameConfig.totalPlayers}
@@ -1868,14 +2012,6 @@ export default function CourtDetail() {
           />
         )}
 
-        {/* Pay Now/Later Choice Modal */}
-        <PaymentTimingChoice
-          open={showPaymentTimingChoice}
-          onOpenChange={setShowPaymentTimingChoice}
-          onChoice={handlePaymentTimingChoice}
-          isLoading={booking}
-          totalAmount={pendingPaymentAmount}
-        />
       </div>
     </Layout>
   );

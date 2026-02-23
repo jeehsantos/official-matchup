@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
@@ -67,6 +67,20 @@ serve(async (req) => {
 
     // Check if all players are now paid and update challenge status
     await checkAndUpdateChallengeStatus(supabaseClient, actualChallengeId);
+
+    // Process referral credit for the paying user (if they were referred)
+    if (userId) {
+      try {
+        const { data: referralResult } = await supabaseClient.rpc("process_referral_credit", {
+          p_referred_user_id: userId,
+        });
+        if (referralResult) {
+          console.log("Referral credit awarded for user:", userId);
+        }
+      } catch (refError) {
+        console.error("Error processing referral credit:", refError);
+      }
+    }
 
     console.log("Quick challenge payment verified:", {
       challengeId: actualChallengeId,
