@@ -1,21 +1,25 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const WEBHOOK_WAITING_STATUS = "paid_but_waiting_for_webhook";
+const PENDING_STATUS = "pending";
+
+function buildResponse(payload: Record<string, unknown>) {
+  return new Response(JSON.stringify(payload), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    status: 200,
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
-
-  const supabaseClient = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-  );
 
   try {
     const { checkoutSessionId, challengeId } = await req.json();
@@ -28,74 +32,23 @@ serve(async (req) => {
       apiVersion: "2024-12-18.acacia",
     });
 
-    // Verify the checkout session
     const checkoutSession = await stripe.checkout.sessions.retrieve(checkoutSessionId);
-    
+    const resolvedChallengeId = challengeId || checkoutSession.metadata?.challenge_id || null;
+
     if (checkoutSession.payment_status !== "paid") {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        message: "Payment not completed" 
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
+      return buildResponse({
+        success: false,
+        status: PENDING_STATUS,
+        challengeId: resolvedChallengeId,
+        nextAction: "poll_payments_table",
       });
     }
 
-    const metadata = checkoutSession.metadata || {};
-    const playerRecordId = metadata.player_record_id;
-    const userId = metadata.user_id;
-    const actualChallengeId = metadata.challenge_id || challengeId;
-
-    if (!playerRecordId) {
-      throw new Error("Player record ID not found in session metadata");
-    }
-
-    // Update player payment status
-    const { error: updateError } = await supabaseClient
-      .from("quick_challenge_players")
-      .update({
-        payment_status: "paid",
-        paid_at: new Date().toISOString(),
-        stripe_session_id: checkoutSessionId,
-      })
-      .eq("id", playerRecordId);
-
-    if (updateError) {
-      console.error("Error updating player payment status:", updateError);
-      throw new Error("Failed to update payment status");
-    }
-
-    // Check if all players are now paid and update challenge status
-    await checkAndUpdateChallengeStatus(supabaseClient, actualChallengeId);
-
-    // Process referral credit for the paying user (if they were referred)
-    if (userId) {
-      try {
-        const { data: referralResult } = await supabaseClient.rpc("process_referral_credit", {
-          p_referred_user_id: userId,
-        });
-        if (referralResult) {
-          console.log("Referral credit awarded for user:", userId);
-        }
-      } catch (refError) {
-        console.error("Error processing referral credit:", refError);
-      }
-    }
-
-    console.log("Quick challenge payment verified:", {
-      challengeId: actualChallengeId,
-      playerId: playerRecordId,
-      userId,
-      amount: (checkoutSession.amount_total || 0) / 100,
-    });
-
-    return new Response(JSON.stringify({ 
-      success: true,
-      message: "Payment verified and confirmed",
-      challengeId: actualChallengeId,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
+    return buildResponse({
+      success: false,
+      status: WEBHOOK_WAITING_STATUS,
+      challengeId: resolvedChallengeId,
+      nextAction: "poll_payments_table",
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -106,34 +59,3 @@ serve(async (req) => {
     });
   }
 });
-
-async function checkAndUpdateChallengeStatus(
-  supabaseAdmin: any,
-  challengeId: string
-) {
-  // Get challenge and players
-  const { data: challenge } = await supabaseAdmin
-    .from("quick_challenges")
-    .select("total_slots, quick_challenge_players(payment_status)")
-    .eq("id", challengeId)
-    .single();
-
-  if (!challenge) return;
-
-  const players = (challenge as any).quick_challenge_players || [];
-  const paidCount = players.filter((p: { payment_status: string }) => p.payment_status === "paid").length;
-  
-  // If all slots are filled and paid, update status to "ready"
-  if (paidCount >= (challenge as any).total_slots) {
-    await supabaseAdmin
-      .from("quick_challenges")
-      .update({ status: "ready" })
-      .eq("id", challengeId);
-  } else if (players.length >= (challenge as any).total_slots) {
-    // All slots filled but not all paid
-    await supabaseAdmin
-      .from("quick_challenges")
-      .update({ status: "full" })
-      .eq("id", challengeId);
-  }
-}
