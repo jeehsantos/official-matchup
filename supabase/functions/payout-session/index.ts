@@ -56,7 +56,8 @@ Deno.serve(async (req) => {
         })
         .eq("session_id", sessionId)
         .eq("status", "completed")
-        .is("transferred_at", null);
+        .is("transferred_at", null)
+        .is("converted_to_credits_at", null);
 
       return new Response(
         JSON.stringify({
@@ -74,7 +75,8 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("session_id", sessionId)
       .eq("status", "completed")
-      .is("transferred_at", null);
+      .is("transferred_at", null)
+      .is("converted_to_credits_at", null);
 
     if (paymentsError) {
       throw new Error("Failed to fetch payments");

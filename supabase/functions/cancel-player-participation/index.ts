@@ -52,14 +52,24 @@ serve(async (req) => {
       throw new Error("You are not a participant in this session");
     }
 
-    // Check if user has a completed payment for this session
-    const { data: payment, error: paymentError } = await supabaseAdmin
+    // Load latest completed/transferred CARD payment for this session/user
+    const { data: payments, error: paymentError } = await supabaseAdmin
       .from("payments")
       .select("*")
       .eq("session_id", sessionId)
       .eq("user_id", userId)
       .in("status", ["completed", "transferred"])
-      .single();
+      .gt("amount", 0)
+      .order("paid_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (paymentError) {
+      console.error("Error loading payment:", paymentError);
+      throw new Error("Failed to load payment");
+    }
+
+    const payment = payments?.[0] ?? null;
 
     let creditsAdded = 0;
 
@@ -69,16 +79,25 @@ serve(async (req) => {
         throw new Error("Cannot cancel - payment has already been transferred to venue owner");
       }
 
-      // Convert paid amount to credits (only the cash portion, not credits used)
-      const amountToCredit = Number(payment.amount) - Number(payment.paid_with_credits || 0);
+      // Credits-backed escrow policy:
+      // 1) refund ONLY court amount to credits (platform profit/service fee is non-refundable)
+      // 2) never Stripe refund from this path
+      // 3) mark payment as explicitly converted to credits
+      const rawCourtAmount = payment.court_amount != null
+        ? Number(payment.court_amount)
+        : NaN;
+      const fallbackCourtAmount = Number(payment.amount) - Number(payment.service_fee_total || 0);
+      const creditAmount = Number.isFinite(rawCourtAmount) ? rawCourtAmount : fallbackCourtAmount;
+      const creditAmountCents = Math.max(0, Math.round(creditAmount));
+      const creditAmountDollars = creditAmountCents / 100;
       
-      if (amountToCredit > 0) {
-        const { data: newBalance, error: creditError } = await supabaseAdmin.rpc(
+      if (creditAmountDollars > 0) {
+        const { error: creditError } = await supabaseAdmin.rpc(
           "add_user_credits",
           {
             p_user_id: userId,
-            p_amount: amountToCredit,
-            p_reason: "Session cancellation",
+            p_amount: creditAmountDollars,
+            p_reason: "CANCEL_CONVERT_TO_CREDIT",
             p_session_id: sessionId,
             p_payment_id: payment.id,
           }
@@ -89,14 +108,11 @@ serve(async (req) => {
           throw new Error("Failed to convert payment to credits");
         }
 
-        creditsAdded = amountToCredit;
+        creditsAdded = creditAmountDollars;
       }
 
       // Create held_credit_liability for the court-share portion
-      // court_share = total payment value (amount + credits used) - platform_fee
-      const totalPaymentValue = Number(payment.amount) + Number(payment.paid_with_credits || 0);
-      const platformFee = Number(payment.platform_fee || 0);
-      const courtShareCents = Math.round(Math.max(0, totalPaymentValue - platformFee) * 100);
+      const courtShareCents = creditAmountCents;
 
       if (courtShareCents > 0) {
         const { error: liabilityError } = await supabaseAdmin
@@ -118,11 +134,12 @@ serve(async (req) => {
       }
 
       // Update payment status
-      const newStatus = amountToCredit > 0 ? "refunded" : "cancelled";
+      const newStatus = creditAmountDollars > 0 ? "converted_to_credits" : "cancelled";
       const { error: updateError } = await supabaseAdmin
         .from("payments")
         .update({ 
           status: newStatus,
+          converted_to_credits_at: creditAmountDollars > 0 ? new Date().toISOString() : null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", payment.id);
