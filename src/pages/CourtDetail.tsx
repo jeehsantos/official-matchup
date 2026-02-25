@@ -39,7 +39,6 @@ import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/
 import { checkProfileComplete } from "@/lib/profile-utils";
 import { useVenueEquipment } from "@/hooks/useVenueEquipment";
 import { useUserCredits } from "@/hooks/useUserCredits";
-import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
 
 import { HoldCountdown } from "@/components/booking/HoldCountdown";
@@ -138,7 +137,6 @@ export default function CourtDetail() {
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   
   const [pendingPaymentSessionId, setPendingPaymentSessionId] = useState<string | null>(null);
-  const [pendingPaymentAmount, setPendingPaymentAmount] = useState<number>(0);
   
   // Quick game mode detection
   const isQuickGameMode = searchParams.get("quickGame") === "true";
@@ -172,7 +170,6 @@ export default function CourtDetail() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
   
-  const { data: platformSettings } = usePlatformSettings();
   
   // Equipment state
   const [selectedEquipment, setSelectedEquipment] = useState<SelectedEquipment[]>([]);
@@ -709,7 +706,6 @@ export default function CourtDetail() {
     splitPlayers?: number;
   }) => {
     const { groupId, isNewGroup, paymentType, equipment, sportCategoryId } = data;
-    // Update selected equipment from wizard
     setSelectedEquipment(equipment);
     if (selectedSlots.length === 0 || !court || !user || !selectedDate) return;
 
@@ -718,153 +714,51 @@ export default function CourtDetail() {
 
     const totalDuration = getTotalDuration();
     const startTime = getStartTime();
-    const endTime = getEndTime();
     const bookingCourtId = selectedCourtId || court.id;
-    const selectedCourtData = getSelectedCourt();
-    const courtRate = selectedCourtData?.hourly_rate || court.hourly_rate;
 
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-      const sessionStart = new Date(`${dateStr}T${startTime}`);
-      const hoursBeforeSession = court.payment_hours_before ?? 24;
-      const paymentDeadline = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
-
-      // Calculate price based on duration + equipment
-      const hours = totalDuration / 60;
-      const courtPrice = courtRate * hours;
-      const equipmentTotal = getEquipmentTotal();
-      const totalPrice = courtPrice + equipmentTotal;
-
-      // Create a session for this booking
-      const { data: session, error: sessionError } = await supabase
-        .from("sessions")
-        .insert({
-          group_id: groupId,
-          court_id: bookingCourtId,
-          session_date: dateStr,
-          start_time: startTime,
-          duration_minutes: totalDuration,
-          court_price: totalPrice,
-          min_players: data.paymentType === "split" && data.splitPlayers ? data.splitPlayers : 6,
-          max_players: court.capacity,
-          payment_deadline: paymentDeadline.toISOString(),
-          state: "protected",
-          payment_type: paymentType,
-          sport_category_id: sportCategoryId,
-        })
-        .select()
-        .single();
-
-      if (sessionError) throw sessionError;
-
-      // Add the organizer as a session player automatically
-      // Only confirm if payment is NOT required at booking time
-      const requiresPaymentFirst = court.payment_timing === "at_booking";
-      const { error: playerError } = await supabase
-        .from("session_players")
-        .insert({
-          session_id: session.id,
-          user_id: user.id,
-          is_confirmed: !requiresPaymentFirst,
-          confirmed_at: requiresPaymentFirst ? null : new Date().toISOString(),
-        });
-
-      if (playerError) {
-        console.error("Error adding organizer as player:", playerError);
-      }
-
-      // Create a court_availability record for this booking (for tracking)
-      const { data: bookingRecord, error: bookingError } = await supabase
-        .from("court_availability")
-        .insert({
-          court_id: bookingCourtId,
-          available_date: dateStr,
-          start_time: startTime,
-          end_time: endTime,
-          is_booked: court.payment_timing !== "at_booking",
-          booked_by_user_id: user.id,
-          booked_by_group_id: groupId,
-          booked_by_session_id: session.id,
-          payment_status: "pending",
-        })
-        .select()
-        .single();
+      const { data: bookingData, error: bookingError } = await supabase.functions.invoke("create-booking", {
+        body: {
+          groupId,
+          courtId: bookingCourtId,
+          sessionDate: dateStr,
+          startTime,
+          durationMinutes: totalDuration,
+          paymentType,
+          splitPlayers: data.splitPlayers,
+          sportCategoryId,
+          equipment,
+        },
+      });
 
       if (bookingError) throw bookingError;
 
-      // Save equipment selections if any
-      if (selectedEquipment.length > 0) {
-        const equipmentInserts = selectedEquipment.map(item => ({
-          booking_id: bookingRecord.id,
-          equipment_id: item.equipmentId,
-          quantity: item.quantity,
-          price_at_booking: item.pricePerUnit,
-        }));
+      const sessionId = bookingData?.session_id as string | undefined;
+      const totalPrice = Number(bookingData?.pricing?.total ?? 0);
+      if (!sessionId) throw new Error("Booking created without session id");
 
-        const { error: equipmentError } = await supabase
-          .from("booking_equipment")
-          .insert(equipmentInserts);
-
-        if (equipmentError) {
-          console.error("Error saving equipment:", equipmentError);
-        }
-      }
-
-      // Create chat conversation for this session
-      if (court.venues) {
-        const { data: venue } = await supabase
-          .from("venues")
-          .select("owner_id")
-          .eq("id", court.venue_id)
-          .single();
-
-        if (venue) {
-          const sessionEndTime = new Date(`${dateStr}T${endTime}`);
-          const expiresAt = new Date(sessionEndTime.getTime() + 48 * 60 * 60 * 1000);
-
-          try {
-            await supabase
-              .from("chat_conversations")
-              .insert({
-                organizer_id: user.id,
-                court_manager_id: venue.owner_id,
-                booking_id: bookingRecord.id,
-                session_id: session.id,
-                expires_at: expiresAt.toISOString(),
-              } as any);
-          } catch (chatError) {
-            console.error("Error creating chat conversation:", chatError);
-          }
-        }
-      }
-
-      // Check if court requires payment at booking
       if (court.payment_timing === "at_booking") {
-        // Store session ID for payment processing
-        setPendingPaymentSessionId(session.id);
-        setPendingPaymentAmount(totalPrice);
+        setPendingPaymentSessionId(sessionId);
 
         toast({
           title: isNewGroup ? "Group created!" : "Booking reserved!",
           description: "Redirecting to payment...",
         });
 
-        // Go directly to credits check or Stripe payment
-        const totalCost = totalPrice;
-        if (credits >= totalCost && !loadingCredits) {
+        if (credits >= totalPrice && !loadingCredits) {
           setShowCreditsModal(true);
         } else {
-          await processCourtPayment(session.id, false);
+          await processCourtPayment(sessionId, false);
         }
         return;
-      } else {
-        toast({
-          title: isNewGroup ? "Group created & court booked!" : "Court booked!",
-          description: `You've booked ${court.name} on ${format(selectedDate, "MMMM d")} at ${startTime}. Check your games for details.`,
-        });
       }
 
-      // Update UI
+      toast({
+        title: isNewGroup ? "Group created & court booked!" : "Court booked!",
+        description: `You've booked ${court.name} on ${format(selectedDate, "MMMM d")} at ${startTime}. Check your games for details.`,
+      });
+
       setSelectedSlots([]);
       setSelectedEquipment([]);
       if (court.venues) {
@@ -888,7 +782,7 @@ export default function CourtDetail() {
   }) => {
     const { paymentType, equipment } = data;
     setSelectedEquipment(equipment);
-    
+
     if (selectedSlots.length === 0 || !court || !user || !selectedDate || !quickGameConfig) return;
 
     setShowQuickChallengeWizard(false);
@@ -896,104 +790,37 @@ export default function CourtDetail() {
 
     const totalDuration = getTotalDuration();
     const startTime = getStartTime();
-    const endTime = getEndTime();
     const bookingCourtId = selectedCourtId || court.id;
-    const selectedCourtData = getSelectedCourt();
-    const courtRate = selectedCourtData?.hourly_rate || court.hourly_rate;
 
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-
-      // Calculate price based on duration + equipment
-      const hours = totalDuration / 60;
-      const courtPriceCalc = courtRate * hours;
-      const equipmentTotal = equipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0);
-      const totalPrice = courtPriceCalc + equipmentTotal;
-      const serviceFee = platformSettings?.is_active ? (platformSettings?.player_fee ?? 0) : 0;
-      const splitPricePerPlayer = Math.ceil((totalPrice / quickGameConfig.totalPlayers) * 100) / 100;
-      
-      // For at_booking courts, force single payment (organizer pays full amount)
-      const effectivePT = court.payment_timing === "at_booking" ? "single" : paymentType;
-      // For single payment (organizer pays all), store full court price so the edge function
-      // knows to charge Stripe. For split, store per-player share + service fee.
-      const pricePerPlayer = effectivePT === "split" 
-        ? splitPricePerPlayer + serviceFee
-        : totalPrice;
-
-      // Create quick_challenges record
-      const { data: challenge, error: challengeError } = await supabase
-        .from("quick_challenges")
-        .insert({
-          sport_category_id: quickGameConfig.sportCategoryId,
-          game_mode: quickGameConfig.gameMode,
-          venue_id: court.venue_id,
-          court_id: bookingCourtId,
-          scheduled_date: dateStr,
-          scheduled_time: startTime,
-          total_slots: quickGameConfig.totalPlayers,
-          price_per_player: pricePerPlayer,
-          status: "open",
-          created_by: user.id,
-        })
-        .select()
-        .single();
+      const { data: challengeData, error: challengeError } = await supabase.functions.invoke("create-quick-challenge", {
+        body: {
+          sportCategoryId: quickGameConfig.sportCategoryId,
+          gameMode: quickGameConfig.gameMode,
+          venueId: court.venue_id,
+          courtId: bookingCourtId,
+          scheduledDate: dateStr,
+          scheduledTime: startTime,
+          durationMinutes: totalDuration,
+          totalPlayers: quickGameConfig.totalPlayers,
+          paymentType,
+          equipment,
+        },
+      });
 
       if (challengeError) throw challengeError;
 
-      // Create court_availability record to mark the slot as booked
-      // For at_booking courts, keep is_booked false until payment is confirmed
-      const { data: bookingRecord, error: bookingError } = await supabase
-        .from("court_availability")
-        .insert({
-          court_id: bookingCourtId,
-          available_date: dateStr,
-          start_time: startTime,
-          end_time: endTime,
-          is_booked: court.payment_timing !== "at_booking",
-          booked_by_user_id: user.id,
-          payment_status: "pending",
-        })
-        .select()
-        .single();
+      const challengeId = challengeData?.challenge_id as string | undefined;
+      if (!challengeId) throw new Error("Challenge created without id");
 
-      if (bookingError) throw bookingError;
-
-      // Save equipment selections if any
-      if (equipment.length > 0) {
-        const equipmentInserts = equipment.map(item => ({
-          booking_id: bookingRecord.id,
-          equipment_id: item.equipmentId,
-          quantity: item.quantity,
-          price_at_booking: item.pricePerUnit,
-        }));
-
-        await supabase.from("booking_equipment").insert(equipmentInserts);
-      }
-
-      // Auto-add creator as first player
-      const { error: playerError } = await supabase
-        .from("quick_challenge_players")
-        .insert({
-          challenge_id: challenge.id,
-          user_id: user.id,
-          team: "left",
-          slot_position: 0,
-          payment_status: "pending",
-        });
-
-      if (playerError) {
-        console.error("Error adding creator as player:", playerError);
-      }
-
-      // Clear quick game state
       sessionStorage.removeItem("quickGameConfig");
 
-      // If at_booking, redirect to Stripe for payment
       if (court.payment_timing === "at_booking") {
         try {
           const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-quick-challenge-payment", {
             body: {
-              challengeId: challenge.id,
+              challengeId,
               origin: window.location.origin,
               useCredits: false,
             },
@@ -1013,12 +840,11 @@ export default function CourtDetail() {
           }
 
           if (paymentData?.success && !paymentData?.url) {
-            // Free challenge or credits-only — already confirmed
             toast({
               title: "Challenge Created & Paid!",
               description: paymentData.message || "Your spot has been confirmed.",
             });
-            navigate(`/quick-games/${challenge.id}`);
+            navigate(`/quick-games/${challengeId}`);
             return;
           }
 
@@ -1030,19 +856,17 @@ export default function CourtDetail() {
             description: payErr?.message || "Please go to the lobby to complete payment.",
             variant: "destructive",
           });
-          navigate(`/quick-games/${challenge.id}`);
+          navigate(`/quick-games/${challengeId}`);
           return;
         }
       }
 
-      // Non at_booking: navigate normally
       toast({
         title: "Quick Challenge Created!",
         description: `Your ${quickGameConfig.gameMode} challenge is now open for players to join.`,
       });
 
       navigate("/discover?tab=quickgames");
-
     } catch (error: any) {
       console.error("Error creating quick challenge:", error);
       toast({
