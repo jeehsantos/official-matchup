@@ -155,13 +155,56 @@ serve(async (req) => {
         throw new Error("Failed to deduct credits");
       }
 
+      const paidAt = new Date().toISOString();
+
       await supabaseAdmin
         .from("quick_challenge_players")
         .update({
           payment_status: "paid",
-          paid_at: new Date().toISOString(),
+          paid_at: paidAt,
         })
         .eq("id", playerRecord.id);
+
+      const snapshotPayload = {
+        challenge_id: challengeId,
+        user_id: user.id,
+        amount: courtShareCents,
+        court_amount: courtShareCents,
+        platform_profit_target: 0,
+        service_fee_total: 0,
+        payment_method_type: "credits",
+        status: "completed",
+        paid_at: paidAt,
+      };
+
+      const { data: existingCreditSnapshot } = await supabaseAdmin
+        .from("quick_challenge_payments")
+        .select("id")
+        .eq("challenge_id", challengeId)
+        .eq("user_id", user.id)
+        .is("stripe_payment_intent_id", null)
+        .maybeSingle();
+
+      if (existingCreditSnapshot?.id) {
+        const { error: updateSnapshotError } = await supabaseAdmin
+          .from("quick_challenge_payments")
+          .update(snapshotPayload)
+          .eq("id", existingCreditSnapshot.id);
+
+        if (updateSnapshotError) {
+          console.error("Error updating credits snapshot:", updateSnapshotError);
+          throw new Error("Failed to store payment snapshot");
+        }
+      } else {
+        const { error: insertSnapshotError } = await supabaseAdmin
+          .from("quick_challenge_payments")
+          .insert(snapshotPayload);
+
+        if (insertSnapshotError) {
+          console.error("Error inserting credits snapshot:", insertSnapshotError);
+          throw new Error("Failed to store payment snapshot");
+        }
+      }
 
       await checkAndUpdateChallengeStatus(supabaseAdmin, challengeId);
 
