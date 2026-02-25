@@ -115,6 +115,16 @@ async function handlePaymentIntentSucceeded(
     } else {
       console.log("Stored stripe_fee_actual:", stripeFeeActual / 100, "for PI:", piId);
     }
+
+    const { error: quickChallengeFeeUpdateError } = await supabaseAdmin
+      .from("quick_challenge_payments")
+      .update({ stripe_fee_actual: stripeFeeActual })
+      .eq("stripe_payment_intent_id", piId)
+      .is("stripe_fee_actual", null);
+
+    if (quickChallengeFeeUpdateError) {
+      console.error("Failed to store quick challenge stripe_fee_actual:", quickChallengeFeeUpdateError);
+    }
   }
 }
 
@@ -326,6 +336,7 @@ async function handleQuickChallengePayment(
   const challengeId = metadata.challenge_id;
   const playerRecordId = metadata.player_record_id;
   const userId = metadata.user_id;
+  const paymentIntentId = session.payment_intent as string | null;
 
   if (!challengeId || !playerRecordId || !userId) {
     console.error("Missing quick challenge metadata");
@@ -339,6 +350,54 @@ async function handleQuickChallengePayment(
     .eq("id", playerRecordId)
     .single();
 
+  const paidAt = new Date().toISOString();
+  const courtAmountCents = Number(metadata.court_amount || 0);
+  const platformProfitTargetCents = Number(metadata.platform_fee_target || metadata.platform_fee || 0);
+  const serviceFeeTotalCents = Number(metadata.service_fee_total || metadata.service_fee || 0);
+
+  let stripeFeeActualCents: number | null = null;
+  if (paymentIntentId) {
+    try {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+        expand: ["latest_charge.balance_transaction"],
+      });
+      const latestCharge = pi.latest_charge as Stripe.Charge | null;
+      const balanceTx = latestCharge?.balance_transaction as Stripe.BalanceTransaction | null;
+      if (balanceTx?.fee != null) {
+        stripeFeeActualCents = balanceTx.fee;
+      }
+    } catch (feeErr) {
+      console.error("Unable to retrieve Stripe fee for quick challenge webhook (non-fatal):", feeErr);
+    }
+  }
+
+  if (paymentIntentId) {
+    const quickPaymentPayload = {
+      challenge_id: challengeId,
+      user_id: userId,
+      amount: session.amount_total || 0,
+      court_amount: courtAmountCents,
+      platform_profit_target: platformProfitTargetCents,
+      service_fee_total: serviceFeeTotalCents,
+      payment_method_type: "card",
+      stripe_payment_intent_id: paymentIntentId,
+      stripe_fee_actual: stripeFeeActualCents,
+      status: "completed",
+      paid_at: paidAt,
+    };
+
+    const { error: quickPaymentUpsertError } = await supabaseAdmin
+      .from("quick_challenge_payments")
+      .upsert(quickPaymentPayload, {
+        onConflict: "challenge_id,user_id,stripe_payment_intent_id",
+      });
+
+    if (quickPaymentUpsertError) {
+      console.error("Failed to upsert quick challenge payment snapshot:", quickPaymentUpsertError);
+      return;
+    }
+  }
+
   if (player?.payment_status === "paid") {
     console.log("Quick challenge player already paid, skipping:", playerRecordId);
     return;
@@ -349,7 +408,7 @@ async function handleQuickChallengePayment(
     .from("quick_challenge_players")
     .update({
       payment_status: "paid",
-      paid_at: new Date().toISOString(),
+      paid_at: paidAt,
       stripe_session_id: session.id,
     })
     .eq("id", playerRecordId);
@@ -397,18 +456,3 @@ async function handleQuickChallengePayment(
     platformFee: parseFloat(metadata.platform_fee || "0") / 100,
   });
 }
-  let stripeFeeActual: number | null = null;
-  if (paymentIntentId) {
-    try {
-      const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
-        expand: ["latest_charge.balance_transaction"],
-      });
-      const latestCharge = pi.latest_charge as Stripe.Charge | null;
-      const balanceTx = latestCharge?.balance_transaction as Stripe.BalanceTransaction | null;
-      if (balanceTx?.fee != null) {
-        stripeFeeActual = balanceTx.fee / 100;
-      }
-    } catch (feeErr) {
-      console.error("Unable to retrieve Stripe fee (non-fatal):", feeErr);
-    }
-  }

@@ -343,39 +343,12 @@ export function useCancelChallenge() {
     mutationFn: async (challengeId: string) => {
       if (!user) throw new Error("Must be logged in");
 
-      // Verify user is the organizer and check for paid players
-      const { data: challenge } = await supabase
-        .from("quick_challenges")
-        .select("created_by, quick_challenge_players(id, payment_status)")
-        .eq("id", challengeId)
-        .single();
-
-      if (!challenge || challenge.created_by !== user.id) {
-        throw new Error("Only the organizer can cancel this challenge");
-      }
-
-      // Check if any player has already paid
-      const hasPaidPlayers = challenge.quick_challenge_players?.some(
-        (player) => player.payment_status === "paid"
-      );
-
-      if (hasPaidPlayers) {
-        throw new Error("Cannot cancel - some players have already paid. Please refund them first.");
-      }
-
-      // Delete all players first (due to FK constraint)
-      await supabase
-        .from("quick_challenge_players")
-        .delete()
-        .eq("challenge_id", challengeId);
-
-      // Delete the challenge entirely instead of just updating status
-      const { error } = await supabase
-        .from("quick_challenges")
-        .delete()
-        .eq("id", challengeId);
+      const { data, error } = await supabase.functions.invoke("cancel-quick-challenge", {
+        body: { challengeId },
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["quick-challenges"] });

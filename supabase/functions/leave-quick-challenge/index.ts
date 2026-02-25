@@ -61,7 +61,7 @@ serve(async (req) => {
     // Check if user is a participant
     const { data: playerRecord, error: playerError } = await supabaseAdmin
       .from("quick_challenge_players")
-      .select("*")
+      .select("id, payment_status")
       .eq("challenge_id", challengeId)
       .eq("user_id", userId)
       .single();
@@ -72,9 +72,28 @@ serve(async (req) => {
 
     let creditsAdded = 0;
 
-    // If the player has paid, convert to credits
+    // If the player has paid, convert to credits using durable payment snapshot.
     if (playerRecord.payment_status === "paid") {
-      const amountToCredit = Number(challenge.price_per_player) || 0;
+      const { data: paymentSnapshot, error: paymentSnapshotError } = await supabaseAdmin
+        .from("quick_challenge_payments")
+        .select("id, payment_method_type, court_amount, status, converted_to_credits_at")
+        .eq("challenge_id", challengeId)
+        .eq("user_id", userId)
+        .eq("status", "completed")
+        .order("paid_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (paymentSnapshotError) {
+        console.error("Error loading payment snapshot:", paymentSnapshotError);
+        throw new Error("Failed to load payment snapshot");
+      }
+
+      if (!paymentSnapshot) {
+        throw new Error("Payment snapshot not found for this player");
+      }
+
+      const amountToCredit = Number(paymentSnapshot.court_amount || 0) / 100;
 
       if (amountToCredit > 0) {
         const { error: creditError } = await supabaseAdmin.rpc(
@@ -94,6 +113,20 @@ serve(async (req) => {
         }
 
         creditsAdded = amountToCredit;
+      }
+
+      const { error: markConvertedError } = await supabaseAdmin
+        .from("quick_challenge_payments")
+        .update({
+          status: "converted_to_credits",
+          converted_to_credits_at: new Date().toISOString(),
+        })
+        .eq("id", paymentSnapshot.id)
+        .is("converted_to_credits_at", null);
+
+      if (markConvertedError) {
+        console.error("Error marking payment as converted_to_credits:", markConvertedError);
+        throw new Error("Failed to convert payment snapshot");
       }
     }
 

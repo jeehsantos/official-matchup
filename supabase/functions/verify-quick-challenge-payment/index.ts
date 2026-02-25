@@ -45,6 +45,7 @@ serve(async (req) => {
     const playerRecordId = metadata.player_record_id;
     const userId = metadata.user_id;
     const actualChallengeId = metadata.challenge_id || challengeId;
+    const paymentIntentId = checkoutSession.payment_intent as string | null;
 
     if (!playerRecordId) {
       throw new Error("Player record ID not found in session metadata");
@@ -63,6 +64,54 @@ serve(async (req) => {
     if (updateError) {
       console.error("Error updating player payment status:", updateError);
       throw new Error("Failed to update payment status");
+    }
+
+    const paidAt = new Date().toISOString();
+    const courtAmountCents = Number(metadata.court_amount || 0);
+    const platformProfitTargetCents = Number(metadata.platform_fee_target || 0);
+    const serviceFeeTotalCents = Number(metadata.service_fee_total || 0);
+
+    let stripeFeeActualCents: number | null = null;
+    if (paymentIntentId) {
+      try {
+        const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+          expand: ["latest_charge.balance_transaction"],
+        });
+        const latestCharge = pi.latest_charge as Stripe.Charge | null;
+        const balanceTx = latestCharge?.balance_transaction as Stripe.BalanceTransaction | null;
+        if (balanceTx?.fee != null) {
+          stripeFeeActualCents = balanceTx.fee;
+        }
+      } catch (feeErr) {
+        console.error("Unable to retrieve Stripe fee for quick challenge verify (non-fatal):", feeErr);
+      }
+    }
+
+    const quickChallengePaymentPayload = {
+      challenge_id: actualChallengeId,
+      user_id: userId,
+      amount: checkoutSession.amount_total || 0,
+      court_amount: courtAmountCents,
+      platform_profit_target: platformProfitTargetCents,
+      service_fee_total: serviceFeeTotalCents,
+      payment_method_type: "card",
+      stripe_payment_intent_id: paymentIntentId,
+      stripe_fee_actual: stripeFeeActualCents,
+      status: "completed",
+      paid_at: paidAt,
+    };
+
+    if (paymentIntentId) {
+      const { error: upsertQuickPaymentError } = await supabaseClient
+        .from("quick_challenge_payments")
+        .upsert(quickChallengePaymentPayload, {
+          onConflict: "challenge_id,user_id,stripe_payment_intent_id",
+        });
+
+      if (upsertQuickPaymentError) {
+        console.error("Error upserting quick challenge payment snapshot:", upsertQuickPaymentError);
+        throw new Error("Failed to store quick challenge payment snapshot");
+      }
     }
 
     // Check if all players are now paid and update challenge status
