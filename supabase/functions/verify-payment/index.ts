@@ -9,11 +9,42 @@ const corsHeaders = {
 
 const WEBHOOK_WAITING_STATUS = "paid_but_waiting_for_webhook";
 const PENDING_STATUS = "pending";
+const NEXT_ACTION = "poll_payments_table";
 
 function buildResponse(payload: Record<string, unknown>) {
   return new Response(JSON.stringify(payload), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
     status: 200,
+  });
+}
+
+function buildPendingOrWaitingResponse({
+  status,
+  payment,
+}: {
+  status: typeof PENDING_STATUS | typeof WEBHOOK_WAITING_STATUS;
+  payment:
+    | {
+        amount: unknown;
+        paid_with_credits: unknown;
+        paid_at: unknown;
+      }
+    | null
+    | undefined;
+}) {
+  return buildResponse({
+    success: true,
+    status,
+    isConfirmed: false,
+    webhookAuthority: true,
+    payment: payment
+      ? {
+          amount: payment.amount,
+          paidWithCredits: payment.paid_with_credits,
+          paidAt: payment.paid_at,
+        }
+      : null,
+    nextAction: NEXT_ACTION,
   });
 }
 
@@ -72,8 +103,8 @@ serve(async (req) => {
       });
     }
 
-    if (checkoutSessionId && payment?.status === PENDING_STATUS) {
-      console.log("DB still pending, checking Stripe status for:", checkoutSessionId);
+    if (checkoutSessionId) {
+      console.log("Checking Stripe checkout session status for:", checkoutSessionId);
 
       const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
         apiVersion: "2024-12-18.acacia",
@@ -88,48 +119,21 @@ serve(async (req) => {
           checkoutSessionId,
         });
 
-        return buildResponse({
-          success: false,
+        return buildPendingOrWaitingResponse({
           status: WEBHOOK_WAITING_STATUS,
-          isConfirmed: false,
-          payment: payment
-            ? {
-                amount: payment.amount,
-                paidWithCredits: payment.paid_with_credits,
-                paidAt: payment.paid_at,
-              }
-            : null,
-          nextAction: "poll_payments_table",
+          payment,
         });
       }
 
-      return buildResponse({
-        success: false,
+      return buildPendingOrWaitingResponse({
         status: PENDING_STATUS,
-        isConfirmed: false,
-        payment: payment
-          ? {
-              amount: payment.amount,
-              paidWithCredits: payment.paid_with_credits,
-              paidAt: payment.paid_at,
-            }
-          : null,
-        nextAction: "poll_payments_table",
+        payment,
       });
     }
 
-    return buildResponse({
-      success: false,
+    return buildPendingOrWaitingResponse({
       status: PENDING_STATUS,
-      isConfirmed: false,
-      payment: payment
-        ? {
-            amount: payment.amount,
-            paidWithCredits: payment.paid_with_credits,
-            paidAt: payment.paid_at,
-          }
-        : null,
-      nextAction: "poll_payments_table",
+      payment,
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);

@@ -8,6 +8,7 @@ const corsHeaders = {
 
 const WEBHOOK_WAITING_STATUS = "paid_but_waiting_for_webhook";
 const PENDING_STATUS = "pending";
+const NEXT_ACTION = "poll_payments_table";
 
 function buildResponse(payload: Record<string, unknown>) {
   return new Response(JSON.stringify(payload), {
@@ -37,18 +38,20 @@ serve(async (req) => {
 
     if (checkoutSession.payment_status !== "paid") {
       return buildResponse({
-        success: false,
+        success: true,
         status: PENDING_STATUS,
         challengeId: resolvedChallengeId,
-        nextAction: "poll_payments_table",
+        webhookAuthority: true,
+        nextAction: NEXT_ACTION,
       });
     }
 
     return buildResponse({
-      success: false,
+      success: true,
       status: WEBHOOK_WAITING_STATUS,
       challengeId: resolvedChallengeId,
-      nextAction: "poll_payments_table",
+      webhookAuthority: true,
+      nextAction: NEXT_ACTION,
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
