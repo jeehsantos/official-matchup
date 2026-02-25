@@ -1486,6 +1486,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_valid_invitation: { Args: { _group_id: string }; Returns: boolean }
       is_challenge_participant: {
         Args: { _challenge_id: string; _user_id: string }
         Returns: boolean
