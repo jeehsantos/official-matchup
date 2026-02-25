@@ -7,6 +7,16 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
 
 const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET") || "";
 
+class WebhookProcessingError extends Error {
+  details: Record<string, unknown>;
+
+  constructor(message: string, details: Record<string, unknown> = {}) {
+    super(message);
+    this.name = "WebhookProcessingError";
+    this.details = details;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -51,22 +61,38 @@ Deno.serve(async (req) => {
 
   console.log("Webhook event received:", event.type, event.id);
 
+  let idempotentDuplicate = false;
   try {
     if (event.type === "checkout.session.completed") {
-      await handleCheckoutCompleted(event, supabaseAdmin);
+      idempotentDuplicate = await handleCheckoutCompleted(event, supabaseAdmin);
     } else if (event.type === "payment_intent.succeeded") {
       await handlePaymentIntentSucceeded(event, supabaseAdmin);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`Error processing ${event.type}:`, msg);
-    return new Response(JSON.stringify({ received: true, error: msg }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
+    const error = err instanceof Error ? err : new Error(String(err));
+    const details = err instanceof WebhookProcessingError ? err.details : {};
+
+    console.error("stripe_webhook_event_failed", {
+      eventId: event.id,
+      eventType: event.type,
+      errorName: error.name,
+      errorMessage: error.message,
+      details,
     });
+
+    return new Response(
+      JSON.stringify({
+        received: false,
+        error: "Webhook event processing failed",
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }
 
-  return new Response(JSON.stringify({ received: true }), {
+  return new Response(JSON.stringify({ received: true, duplicate: idempotentDuplicate }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
@@ -111,7 +137,12 @@ async function handlePaymentIntentSucceeded(
       .is("stripe_fee_actual", null);
 
     if (error) {
-      console.error("Failed to store stripe_fee_actual:", error);
+      throw new WebhookProcessingError("Failed to persist payments.stripe_fee_actual", {
+        operation: "payments.update",
+        table: "payments",
+        stripePaymentIntentId: piId,
+        error,
+      });
     } else {
       console.log("Stored stripe_fee_actual:", stripeFeeActual / 100, "for PI:", piId);
     }
@@ -123,7 +154,12 @@ async function handlePaymentIntentSucceeded(
       .is("stripe_fee_actual", null);
 
     if (quickChallengeFeeUpdateError) {
-      console.error("Failed to store quick challenge stripe_fee_actual:", quickChallengeFeeUpdateError);
+      throw new WebhookProcessingError("Failed to persist quick_challenge_payments.stripe_fee_actual", {
+        operation: "quick_challenge_payments.update",
+        table: "quick_challenge_payments",
+        stripePaymentIntentId: piId,
+        error: quickChallengeFeeUpdateError,
+      });
     }
   }
 }
@@ -132,16 +168,16 @@ async function handlePaymentIntentSucceeded(
 async function handleCheckoutCompleted(
   event: Stripe.Event,
   supabaseAdmin: ReturnType<typeof createClient>
-) {
+): Promise<boolean> {
   const session = event.data.object as Stripe.Checkout.Session;
   const metadata = session.metadata || {};
 
   const isQuickChallenge = metadata.type === "quick_challenge";
 
   if (isQuickChallenge) {
-    await handleQuickChallengePayment(session, metadata, supabaseAdmin);
+    return await handleQuickChallengePayment(session, metadata, supabaseAdmin);
   } else {
-    await handleSessionPayment(session, metadata, supabaseAdmin);
+    return await handleSessionPayment(session, metadata, supabaseAdmin);
   }
 }
 
@@ -149,14 +185,18 @@ async function handleSessionPayment(
   session: Stripe.Checkout.Session,
   metadata: Record<string, string>,
   supabaseAdmin: ReturnType<typeof createClient>
-) {
+): Promise<boolean> {
   const sessionId = metadata.session_id;
   const userId = metadata.payer_user_id || metadata.user_id;
   const paymentIntentId = session.payment_intent as string;
 
   if (!sessionId || !userId) {
-    console.error("Missing session_id or user_id in metadata");
-    return;
+    throw new WebhookProcessingError("Missing required checkout metadata", {
+      operation: "payments.validate_metadata",
+      sessionId: session.id,
+      hasSessionId: Boolean(sessionId),
+      hasUserId: Boolean(userId),
+    });
   }
 
   // Idempotency: check if already processed
@@ -168,7 +208,7 @@ async function handleSessionPayment(
 
   if (existing?.status === "completed" || existing?.status === "transferred") {
     console.log("Payment already processed, skipping:", paymentIntentId);
-    return;
+    return true;
   }
 
   // Read snapshot values from metadata (accept both legacy + new keys)
@@ -234,8 +274,14 @@ async function handleSessionPayment(
     );
 
   if (upsertError) {
-    console.error("Payment upsert failed:", upsertError);
-    return;
+    throw new WebhookProcessingError("Failed to upsert payments snapshot", {
+      operation: "payments.upsert",
+      table: "payments",
+      stripePaymentIntentId: paymentIntentId,
+      sessionId,
+      userId,
+      error: upsertError,
+    });
   }
 
   // Determine payment mode for confirmation logic
@@ -326,21 +372,28 @@ async function handleSessionPayment(
     paymentType: paymentTypeSnapshot,
     paymentIntentId,
   });
+
+  return false;
 }
 
 async function handleQuickChallengePayment(
   session: Stripe.Checkout.Session,
   metadata: Record<string, string>,
   supabaseAdmin: ReturnType<typeof createClient>
-) {
+): Promise<boolean> {
   const challengeId = metadata.challenge_id;
   const playerRecordId = metadata.player_record_id;
   const userId = metadata.user_id;
   const paymentIntentId = session.payment_intent as string | null;
 
   if (!challengeId || !playerRecordId || !userId) {
-    console.error("Missing quick challenge metadata");
-    return;
+    throw new WebhookProcessingError("Missing required quick challenge metadata", {
+      operation: "quick_challenge_payments.validate_metadata",
+      sessionId: session.id,
+      hasChallengeId: Boolean(challengeId),
+      hasPlayerRecordId: Boolean(playerRecordId),
+      hasUserId: Boolean(userId),
+    });
   }
 
   // Idempotency: check if already paid
@@ -393,14 +446,20 @@ async function handleQuickChallengePayment(
       });
 
     if (quickPaymentUpsertError) {
-      console.error("Failed to upsert quick challenge payment snapshot:", quickPaymentUpsertError);
-      return;
+      throw new WebhookProcessingError("Failed to upsert quick challenge payment snapshot", {
+        operation: "quick_challenge_payments.upsert",
+        table: "quick_challenge_payments",
+        challengeId,
+        userId,
+        stripePaymentIntentId: paymentIntentId,
+        error: quickPaymentUpsertError,
+      });
     }
   }
 
   if (player?.payment_status === "paid") {
     console.log("Quick challenge player already paid, skipping:", playerRecordId);
-    return;
+    return true;
   }
 
   // Mark player as paid
@@ -455,4 +514,6 @@ async function handleQuickChallengePayment(
     totalCharged: (session.amount_total || 0) / 100,
     platformFee: parseFloat(metadata.platform_fee || "0") / 100,
   });
+
+  return false;
 }
