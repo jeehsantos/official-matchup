@@ -75,32 +75,91 @@ serve(async (req) => {
         apiVersion: "2024-12-18.acacia",
       });
 
-      const checkoutSession = await stripe.checkout.sessions.retrieve(checkoutSessionId);
+      const checkoutSession = await stripe.checkout.sessions.retrieve(checkoutSessionId, {
+        expand: ["payment_intent.latest_charge.balance_transaction"],
+      });
 
       if (checkoutSession.payment_status === "paid") {
         console.log("Stripe confirms payment — processing inline");
 
         const metadata = checkoutSession.metadata || {};
         // Support both old and new metadata field names
-        const serviceFeeCents = parseFloat(metadata.service_fee || metadata.platform_fee || "0");
+        const serviceFeeCents = parseFloat(metadata.service_fee_total ?? metadata.service_fee ?? "0");
+        const platformProfitCents = parseFloat(metadata.platform_fee_target ?? metadata.platform_fee ?? "0");
+        const courtAmountCents = parseFloat(metadata.court_amount ?? metadata.court_share ?? "0");
+        const totalChargeCents = parseFloat(metadata.total_charge ?? metadata.total ?? "0");
+
         const serviceFeeDollars = serviceFeeCents / 100;
-        const totalChargeDollars = (checkoutSession.amount_total || 0) / 100;
+        const platformProfitDollars = platformProfitCents / 100;
+        const courtAmountDollars = courtAmountCents / 100;
+        const totalChargeDollars = totalChargeCents > 0
+          ? totalChargeCents / 100
+          : (checkoutSession.amount_total || 0) / 100;
         const creditsApplied = parseFloat(metadata.credits_applied || "0");
         const paymentIntentId = checkoutSession.payment_intent as string;
 
-        // Update payment record
+        const { data: existingByIntent } = await supabaseAdmin
+          .from("payments")
+          .select("id, status, amount, paid_with_credits, paid_at")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .maybeSingle();
+
+        if (existingByIntent?.status === "completed" || existingByIntent?.status === "transferred") {
+          console.log("Payment already finalized by webhook/previous attempt, skipping snapshot overwrite:", paymentIntentId);
+
+          const { data: player } = await supabaseAdmin
+            .from("session_players")
+            .select("is_confirmed")
+            .eq("session_id", sessionId)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          return new Response(JSON.stringify({
+            success: true,
+            status: existingByIntent.status,
+            isConfirmed: player?.is_confirmed === true,
+            payment: {
+              amount: existingByIntent.amount,
+              paidWithCredits: existingByIntent.paid_with_credits,
+              paidAt: existingByIntent.paid_at,
+            },
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          });
+        }
+
+        const paymentIntent = checkoutSession.payment_intent as Stripe.PaymentIntent | string | null;
+        let stripeFeeActual: number | null = null;
+        if (paymentIntent && typeof paymentIntent !== "string") {
+          const latestCharge = paymentIntent.latest_charge as Stripe.Charge | null;
+          const balanceTx = latestCharge?.balance_transaction as Stripe.BalanceTransaction | null;
+          if (balanceTx?.fee != null) {
+            stripeFeeActual = balanceTx.fee / 100;
+          }
+        }
+
+        // Upsert payment snapshot by payment_intent for idempotency
         await supabaseAdmin
           .from("payments")
-          .update({
+          .upsert({
+            session_id: sessionId,
+            user_id: userId,
             amount: totalChargeDollars,
             paid_with_credits: creditsApplied,
-            platform_fee: serviceFeeDollars,
+            platform_fee: platformProfitDollars,
+            court_amount: courtAmountDollars > 0 ? courtAmountDollars : null,
+            platform_profit_target: platformProfitDollars > 0 ? platformProfitDollars : null,
+            service_fee: serviceFeeDollars > 0 ? serviceFeeDollars : null,
+            service_fee_total: serviceFeeDollars > 0 ? serviceFeeDollars : null,
+            payment_method_type: "card",
+            stripe_fee_actual: stripeFeeActual,
             status: "completed",
             paid_at: new Date().toISOString(),
             stripe_payment_intent_id: paymentIntentId,
-          })
-          .eq("session_id", sessionId)
-          .eq("user_id", userId);
+          }, {
+            onConflict: "stripe_payment_intent_id",
+          });
 
         // Confirm player participation
         await supabaseAdmin
@@ -155,6 +214,8 @@ serve(async (req) => {
           sessionId,
           userId,
           totalCharge: totalChargeDollars,
+          courtAmount: courtAmountDollars,
+          platformProfit: platformProfitDollars,
           serviceFee: serviceFeeDollars,
         });
 

@@ -22,7 +22,7 @@ serve(async (req) => {
   );
 
   try {
-    const { paymentId, sessionId, userId } = await req.json();
+    const { paymentId, sessionId, userId, attempt } = await req.json();
 
     if (!paymentId && (!sessionId || !userId)) {
       throw new Error("Payment ID or (Session ID and User ID) is required");
@@ -173,19 +173,27 @@ serve(async (req) => {
     });
 
     // Create transfer to connected account
-    const transfer = await stripe.transfers.create({
-      amount: Math.round(transferAmount * 100), // Convert to cents
-      currency: "nzd",
-      destination: connectedAccountId,
-      description: `Payment for session ${payment.session_id}`,
-      metadata: {
-        payment_id: payment.id,
-        session_id: payment.session_id,
-        user_id: payment.user_id,
-        venue_id: venue.id,
-        venue_name: venue.name,
+    const normalizedAttempt = Number.isFinite(Number(attempt)) && Number(attempt) > 0
+      ? Math.trunc(Number(attempt))
+      : 1;
+    const transferIdempotencyKey = `transfer:session:${payment.session_id}:user:${payment.user_id}:attempt:${normalizedAttempt}`;
+
+    const transfer = await stripe.transfers.create(
+      {
+        amount: Math.round(transferAmount * 100), // Convert to cents
+        currency: "nzd",
+        destination: connectedAccountId,
+        description: `Payment for session ${payment.session_id}`,
+        metadata: {
+          payment_id: payment.id,
+          session_id: payment.session_id,
+          user_id: payment.user_id,
+          venue_id: venue.id,
+          venue_name: venue.name,
+        },
       },
-    });
+      { idempotencyKey: transferIdempotencyKey }
+    );
 
     // Update payment record with transfer details
     const { error: updateError } = await supabaseAdmin

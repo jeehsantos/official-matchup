@@ -19,7 +19,7 @@ serve(async (req) => {
   );
 
   try {
-    const { sessionId, paymentType, returnUrl, origin, useCredits, creditsAmount } = await req.json();
+    const { sessionId, paymentType, returnUrl, origin, useCredits, creditsAmount, attempt } = await req.json();
 
     if (!sessionId) {
       throw new Error("Session ID is required");
@@ -290,7 +290,15 @@ serve(async (req) => {
 
     console.log("Platform holds all funds — deferred payout model");
 
-    const checkoutSession = await stripe.checkout.sessions.create(sessionParams);
+    const normalizedAttempt = Number.isFinite(Number(attempt)) && Number(attempt) > 0
+      ? Math.trunc(Number(attempt))
+      : 1;
+    const checkoutIdempotencyKey = `checkout:session:${sessionId}:user:${user.id}:attempt:${normalizedAttempt}`;
+
+    const checkoutSession = await stripe.checkout.sessions.create(
+      sessionParams,
+      { idempotencyKey: checkoutIdempotencyKey }
+    );
 
     console.log(`Checkout created: ${checkoutSession.id} | Court: ${remainingCourtAmountCents}c, Fee: ${serviceFeeCents}c, Total: ${totalChargeCents}c, Credits: ${creditsToApply}, Mode: ${sessionPaymentType}`);
 
