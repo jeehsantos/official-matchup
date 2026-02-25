@@ -103,10 +103,12 @@ async function handlePaymentIntentSucceeded(
 
   if (stripeFeeActual !== null) {
     // Store fee in dollars on the payment row (convert from cents)
+    // Idempotent guard: do not clobber an already recorded value.
     const { error } = await supabaseAdmin
       .from("payments")
       .update({ stripe_fee_actual: stripeFeeActual / 100 })
-      .eq("stripe_payment_intent_id", piId);
+      .eq("stripe_payment_intent_id", piId)
+      .is("stripe_fee_actual", null);
 
     if (error) {
       console.error("Failed to store stripe_fee_actual:", error);
@@ -159,10 +161,16 @@ async function handleSessionPayment(
     return;
   }
 
-  // Read snapshot values from metadata (set by create-payment)
-  const courtAmountSnapshot = parseFloat(metadata.court_amount || "0") / 100;
-  const serviceFeeSnapshot = parseFloat(metadata.service_fee || "0") / 100;
-  const totalChargeSnapshot = parseFloat(metadata.total_charge || "0") / 100;
+  // Read snapshot values from metadata (accept both legacy + new keys)
+  const serviceFeeCents = parseFloat(metadata.service_fee_total ?? metadata.service_fee ?? "0");
+  const platformProfitCents = parseFloat(metadata.platform_fee_target ?? metadata.platform_fee ?? "0");
+  const courtAmountCents = parseFloat(metadata.court_amount ?? metadata.court_share ?? "0");
+  const totalChargeCents = parseFloat(metadata.total_charge ?? metadata.total ?? "0");
+
+  const courtAmountSnapshot = courtAmountCents / 100;
+  const serviceFeeSnapshot = serviceFeeCents / 100;
+  const platformProfitSnapshot = platformProfitCents / 100;
+  const totalChargeSnapshot = totalChargeCents / 100;
   const paymentTypeSnapshot = metadata.payment_type || null;
 
   // Fallback: use amount_total if total_charge not in metadata
@@ -172,28 +180,53 @@ async function handleSessionPayment(
 
   // Legacy fields for backward compat
   const creditsApplied = parseFloat(metadata.credits_applied || "0");
-  const platformFeeCents = parseFloat(metadata.platform_fee || metadata.service_fee || "0");
-  const platformFeeDollars = platformFeeCents / 100;
+
+  let stripeFeeActual: number | null = null;
+  if (paymentIntentId) {
+    try {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+        expand: ["latest_charge.balance_transaction"],
+      });
+      const latestCharge = pi.latest_charge as Stripe.Charge | null;
+      const balanceTx = latestCharge?.balance_transaction as Stripe.BalanceTransaction | null;
+      if (balanceTx?.fee != null) {
+        stripeFeeActual = balanceTx.fee / 100;
+      }
+    } catch (feeErr) {
+      console.error("Unable to retrieve Stripe fee (non-fatal):", feeErr);
+    }
+  }
+
+  const paymentPayload = {
+    session_id: sessionId,
+    user_id: userId,
+    amount: totalChargeDollars,
+    paid_with_credits: creditsApplied,
+    platform_fee: platformProfitSnapshot,
+    court_amount: courtAmountSnapshot > 0 ? courtAmountSnapshot : null,
+    service_fee: serviceFeeSnapshot > 0 ? serviceFeeSnapshot : null,
+    platform_profit_target: platformProfitSnapshot > 0 ? platformProfitSnapshot : null,
+    service_fee_total: serviceFeeSnapshot > 0 ? serviceFeeSnapshot : null,
+    payment_type_snapshot: paymentTypeSnapshot,
+    payment_method_type: "card",
+    stripe_fee_actual: stripeFeeActual,
+    status: "completed",
+    paid_at: new Date().toISOString(),
+    stripe_payment_intent_id: paymentIntentId,
+  };
 
   // Upsert payment record with snapshots
-  await supabaseAdmin
+  const { error: upsertError } = await supabaseAdmin
     .from("payments")
     .upsert(
-      {
-        session_id: sessionId,
-        user_id: userId,
-        amount: totalChargeDollars,
-        paid_with_credits: creditsApplied,
-        platform_fee: platformFeeDollars,
-        court_amount: courtAmountSnapshot > 0 ? courtAmountSnapshot : null,
-        service_fee: serviceFeeSnapshot > 0 ? serviceFeeSnapshot : null,
-        payment_type_snapshot: paymentTypeSnapshot,
-        status: "completed",
-        paid_at: new Date().toISOString(),
-        stripe_payment_intent_id: paymentIntentId,
-      },
-      { onConflict: "session_id,user_id" }
+      paymentPayload,
+      { onConflict: "stripe_payment_intent_id" }
     );
+
+  if (upsertError) {
+    console.error("Payment upsert failed:", upsertError);
+    return;
+  }
 
   // Determine payment mode for confirmation logic
   const isSplit = paymentTypeSnapshot === "split";
@@ -364,3 +397,18 @@ async function handleQuickChallengePayment(
     platformFee: parseFloat(metadata.platform_fee || "0") / 100,
   });
 }
+  let stripeFeeActual: number | null = null;
+  if (paymentIntentId) {
+    try {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+        expand: ["latest_charge.balance_transaction"],
+      });
+      const latestCharge = pi.latest_charge as Stripe.Charge | null;
+      const balanceTx = latestCharge?.balance_transaction as Stripe.BalanceTransaction | null;
+      if (balanceTx?.fee != null) {
+        stripeFeeActual = balanceTx.fee / 100;
+      }
+    } catch (feeErr) {
+      console.error("Unable to retrieve Stripe fee (non-fatal):", feeErr);
+    }
+  }

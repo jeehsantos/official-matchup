@@ -19,7 +19,7 @@ serve(async (req) => {
   );
 
   try {
-    const { challengeId, origin, useCredits } = await req.json();
+    const { challengeId, origin, useCredits, attempt } = await req.json();
 
     if (!challengeId) {
       throw new Error("Challenge ID is required");
@@ -264,7 +264,15 @@ serve(async (req) => {
 
     console.log(`Quick challenge checkout: court=${courtShareCents}c, serviceFee=${serviceFeeCents}c, total=${totalChargeCents}c`);
 
-    const checkoutSession = await stripe.checkout.sessions.create(sessionParams);
+    const normalizedAttempt = Number.isFinite(Number(attempt)) && Number(attempt) > 0
+      ? Math.trunc(Number(attempt))
+      : 1;
+    const checkoutIdempotencyKey = `checkout:challenge:${challengeId}:user:${user.id}:attempt:${normalizedAttempt}`;
+
+    const checkoutSession = await stripe.checkout.sessions.create(
+      sessionParams,
+      { idempotencyKey: checkoutIdempotencyKey }
+    );
 
     console.log(`Quick challenge checkout session created: ${checkoutSession.id}`);
 

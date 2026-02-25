@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { sessionId } = await req.json();
+    const { sessionId, attempt } = await req.json();
 
     if (!sessionId) {
       throw new Error("sessionId is required");
@@ -148,18 +148,26 @@ Deno.serve(async (req) => {
       apiVersion: "2024-12-18.acacia",
     });
 
-    const transfer = await stripe.transfers.create({
-      amount: totalTransferCents,
-      currency: "nzd",
-      destination: venue.stripe_account_id,
-      description: `Session payout: ${sessionId}`,
-      metadata: {
-        session_id: sessionId,
-        venue_id: venue.id,
-        venue_name: venue.name,
-        payment_count: eligiblePayments.length.toString(),
+    const normalizedAttempt = Number.isFinite(Number(attempt)) && Number(attempt) > 0
+      ? Math.trunc(Number(attempt))
+      : 1;
+    const transferIdempotencyKey = `transfer:session:${sessionId}:venue:${venue.id}:attempt:${normalizedAttempt}`;
+
+    const transfer = await stripe.transfers.create(
+      {
+        amount: totalTransferCents,
+        currency: "nzd",
+        destination: venue.stripe_account_id,
+        description: `Session payout: ${sessionId}`,
+        metadata: {
+          session_id: sessionId,
+          venue_id: venue.id,
+          venue_name: venue.name,
+          payment_count: eligiblePayments.length.toString(),
+        },
       },
-    });
+      { idempotencyKey: transferIdempotencyKey }
+    );
 
     // 6. Mark each payment as transferred with its individual court_amount
     for (const payment of eligiblePayments) {
