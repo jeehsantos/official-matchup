@@ -23,7 +23,6 @@ import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/
 import { useSportCategories } from "@/hooks/useSportCategories";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { usePlatformFee } from "@/hooks/usePlatformFee";
-import { estimateServiceFee } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
@@ -291,17 +290,10 @@ export function BookingWizard({
     0
   );
   const courtTotal = courtPrice + equipmentTotal;
-  // Service fee includes platform fee + estimated Stripe processing fee (display only, backend is authoritative)
-  const serviceFee = estimateServiceFee(courtTotal, platformFee);
-  const totalPrice = courtTotal + serviceFee;
+  // Service fee is calculated by the backend at checkout — not displayed here
+  const totalPrice = courtTotal;
   const perPlayerPrice = paymentType === "split" && splitPlayers > 0
     ? Math.ceil((courtTotal / splitPlayers) * 100) / 100
-    : null;
-  const perPlayerServiceFee = perPlayerPrice !== null
-    ? estimateServiceFee(perPlayerPrice, platformFee)
-    : null;
-  const perPlayerTotal = perPlayerPrice !== null && perPlayerServiceFee !== null
-    ? perPlayerPrice + perPlayerServiceFee
     : null;
 
   const progress = (currentStep / STEPS.length) * 100;
@@ -384,9 +376,9 @@ export function BookingWizard({
                 <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                 <div className="text-right">
                   <span className="text-base sm:text-lg">${totalPrice.toFixed(2)}</span>
-                  {perPlayerTotal !== null && (
+                  {perPlayerPrice !== null && (
                     <p className="text-[10px] sm:text-xs font-normal text-muted-foreground">
-                      ${perPlayerTotal.toFixed(2)}/player
+                      ${perPlayerPrice.toFixed(2)}/player
                     </p>
                   )}
                 </div>
@@ -597,17 +589,16 @@ export function BookingWizard({
                       <span>${(item.quantity * item.pricePerUnit).toFixed(2)}</span>
                     </div>
                   ))}
-                  {serviceFee > 0 && (
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Service fee</span>
-                      <span>${serviceFee.toFixed(2)}</span>
-                    </div>
-                  )}
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Service fee</span>
+                    <span className="italic">calculated at checkout</span>
+                  </div>
                   <div className="border-t border-border pt-2 mt-2">
                     <div className="flex justify-between font-semibold text-lg">
-                      <span>Total</span>
+                      <span>Court Total</span>
                       <span className="text-primary">${totalPrice.toFixed(2)}</span>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">+ service fee at checkout</p>
                   </div>
                 </div>
               </div>
@@ -640,19 +631,15 @@ export function BookingWizard({
                   <p className="text-xs text-muted-foreground">
                     This sets the minimum players required. Each player pays their share to confirm.
                   </p>
-                  {perPlayerTotal !== null && (
+                  {perPlayerPrice !== null && (
                     <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-1">
                       <div className="flex justify-between text-sm">
                         <span>Court share per player</span>
-                        <span>${perPlayerPrice!.toFixed(2)}</span>
+                        <span>${perPlayerPrice.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-sm text-muted-foreground">
-                        <span>Service fee per player</span>
-                        <span>${perPlayerServiceFee!.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between font-semibold text-sm border-t border-primary/20 pt-1 mt-1">
-                        <span>Total per player</span>
-                        <span className="text-primary">${perPlayerTotal.toFixed(2)}</span>
+                        <span>Service fee</span>
+                        <span className="italic">at checkout</span>
                       </div>
                     </div>
                   )}

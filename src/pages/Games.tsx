@@ -11,8 +11,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { isBefore, parseISO } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import { getSportCategoriesMap } from "@/lib/sport-category-utils";
-import { usePlatformFee } from "@/hooks/usePlatformFee";
-import { estimateServiceFee } from "@/lib/utils";
 
 type SportCategory = Database["public"]["Tables"]["sport_categories"]["Row"];
 
@@ -47,7 +45,7 @@ const isSessionPast = (sessionDate: string, startTime: string): boolean => {
 export default function Games() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { playerFee } = usePlatformFee();
+  
   const [loading, setLoading] = useState(true);
   const [allGames, setAllGames] = useState<(GameData & { durationMinutes: number })[]>([]);
 
@@ -293,7 +291,7 @@ export default function Games() {
             ) : upcomingGames.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {upcomingGames.map((game) => (
-                  <GameCard key={game.id} {...game} serviceFee={estimateServiceFee(game.price, playerFee)} />
+                  <GameCard key={game.id} {...game} />
                 ))}
               </div>
             ) : (
@@ -327,7 +325,7 @@ export default function Games() {
             ) : pastGames.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {pastGames.map((game) => (
-                  <GameCard key={game.id} {...game} serviceFee={estimateServiceFee(game.price, playerFee)} />
+                  <GameCard key={game.id} {...game} />
                 ))}
               </div>
             ) : (

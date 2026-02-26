@@ -826,7 +826,18 @@ export default function CourtDetail() {
             },
           });
 
-          if (paymentError) throw paymentError;
+          if (paymentError) {
+            const msg = paymentError?.message || "";
+            if (msg.includes("SLOT_UNAVAILABLE")) {
+              toast({
+                title: "Slot Unavailable",
+                description: "This slot was just taken. Please pick another time.",
+                variant: "destructive",
+              });
+              return;
+            }
+            throw paymentError;
+          }
 
           if (paymentData?.url) {
             const isInIframe = window.self !== window.top;
@@ -888,50 +899,64 @@ export default function CourtDetail() {
     setBooking(true);
     try {
       if (method === "credits") {
-        // Calculate total cost
-        const equipmentTotal = selectedEquipment.reduce(
-          (sum, item) => sum + item.quantity * item.pricePerUnit,
-          0
-        );
-        const totalCost = court.hourly_rate + equipmentTotal;
+        // Let backend decide if credits cover the full amount
+        const { data, error } = await supabase.functions.invoke("create-payment", {
+          body: {
+            sessionId: pendingPaymentSessionId,
+            paymentType: "at_booking",
+            returnUrl: `/courts/${court.id}`,
+            origin: window.location.origin,
+            useCredits: true,
+            creditsAmount: creditsToUse,
+          },
+        });
 
-        // If credits cover the full amount, process with credits only
-        if (credits >= totalCost) {
-          const { data, error } = await supabase.functions.invoke("create-payment", {
-            body: {
-              sessionId: pendingPaymentSessionId,
-              paymentType: "at_booking",
-              returnUrl: `/courts/${court.id}`,
-              origin: window.location.origin,
-              useCredits: true,
-              creditsAmount: creditsToUse,
-            },
-          });
-
-          if (error) throw error;
-
-          if (data?.success) {
-            // Payment completed with credits only
+        if (error) {
+          const msg = error?.message || "";
+          if (msg.includes("SLOT_UNAVAILABLE")) {
             toast({
-              title: "Payment Complete",
-              description: data.message || "Payment completed using your credits.",
+              title: "Slot Unavailable",
+              description: "This slot was just taken. Please pick another time.",
+              variant: "destructive",
             });
             setShowCreditsModal(false);
             setPendingPaymentSessionId(null);
-            refetchCredits();
-            
-            // Update UI
-            setSelectedSlots([]);
-            setSelectedEquipment([]);
-            if (court.venues) {
-              fetchAvailability(court.venues.id, court.id, selectedDate);
-            }
             return;
           }
+          throw error;
         }
 
-        // Partial credits - proceed to Stripe with credits applied
-        await processCourtPayment(pendingPaymentSessionId, true, creditsToUse);
+        if (data?.success) {
+          toast({
+            title: "Payment Complete",
+            description: data.message || "Payment completed using your credits.",
+          });
+          setShowCreditsModal(false);
+          setPendingPaymentSessionId(null);
+          refetchCredits();
+          setSelectedSlots([]);
+          setSelectedEquipment([]);
+          if (court.venues) {
+            fetchAvailability(court.venues.id, court.id, selectedDate);
+          }
+          return;
+        }
+
+        // Backend returned a checkout URL (partial credits)
+        if (data?.url) {
+          setShowCreditsModal(false);
+          setPendingPaymentSessionId(null);
+          const isInIframe = window.self !== window.top;
+          if (isInIframe) {
+            const opened = window.open(data.url, "_blank", "noopener,noreferrer");
+            if (!opened) window.location.href = data.url;
+          } else {
+            window.location.href = data.url;
+          }
+          return;
+        }
+
+        throw new Error("Unexpected payment response");
       } else {
         // Pay with card only
         await processCourtPayment(pendingPaymentSessionId, false);
@@ -964,7 +989,20 @@ export default function CourtDetail() {
         },
       });
 
-      if (paymentError) throw paymentError;
+      if (paymentError) {
+        const msg = paymentError?.message || "";
+        if (msg.includes("SLOT_UNAVAILABLE")) {
+          toast({
+            title: "Slot Unavailable",
+            description: "This slot was just taken. Please pick another time.",
+            variant: "destructive",
+          });
+          setShowCreditsModal(false);
+          setPendingPaymentSessionId(null);
+          return;
+        }
+        throw paymentError;
+      }
 
       if (paymentData?.url) {
         setShowCreditsModal(false);

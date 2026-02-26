@@ -27,6 +27,7 @@ interface GameCardProps {
   maxPlayers: number;
   state: SessionState;
   isPaid?: boolean;
+  /** @deprecated Service fee is calculated at checkout by the backend */
   serviceFee?: number;
   linkTo?: string;
 }
@@ -46,10 +47,9 @@ export function GameCard({
   maxPlayers,
   state,
   isPaid = false,
-  serviceFee = 0,
   linkTo,
 }: GameCardProps) {
-  const totalPrice = price + serviceFee;
+  const totalPrice = price; // Service fee added at checkout
   // Use sport category display name if available, otherwise fallback to "Sport TBD"
   const sportDisplayName = sportCategory?.display_name || "Sport TBD";
   
