@@ -29,7 +29,16 @@ export function useQuickChallengePayment() {
       });
 
       if (response.error) {
-        throw new Error(response.error.message || "Failed to create payment");
+        const msg = response.error.message || "Failed to create payment";
+        if (msg.includes("SLOT_UNAVAILABLE")) {
+          toast({
+            title: "Slot Unavailable",
+            description: "This slot was just taken. Please pick another time.",
+            variant: "destructive",
+          });
+          return false;
+        }
+        throw new Error(msg);
       }
 
       const { url, success, message } = response.data;

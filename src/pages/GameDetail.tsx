@@ -21,8 +21,7 @@ import { PaymentDeadlineWarning } from "@/components/booking/PaymentDeadlineWarn
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { getSportCategory } from "@/lib/sport-category-utils";
-import { usePlatformFee } from "@/hooks/usePlatformFee";
-import { estimateServiceFee } from "@/lib/utils";
+
 import {
   Dialog,
   DialogContent,
@@ -111,7 +110,7 @@ export default function GameDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
-  const { playerFee } = usePlatformFee();
+  
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -421,13 +420,8 @@ export default function GameDetail() {
   const handleMakePayment = async () => {
     if (!gameData || !id || !user) return;
 
-    // Check if user has enough credits to cover full amount
-    const courtShare = session.payment_type === "single"
-      ? gameData.session.court_price
-      : gameData.session.court_price / (gameData.session.min_players || 1);
-    const estServiceFee = estimateServiceFee(courtShare, playerFee);
-    const totalAmount = courtShare + estServiceFee;
-    if (credits >= totalAmount && !loadingCredits) {
+    // If user has credits, show payment method dialog; backend validates amounts
+    if (credits > 0 && !loadingCredits) {
       setShowCreditsModal(true);
       return;
     }
@@ -444,43 +438,46 @@ export default function GameDetail() {
 
     setActionLoading(true);
     try {
-      const courtShare = session.payment_type === "single"
-        ? gameData.session.court_price
-        : gameData.session.court_price / (gameData.session.min_players || 1);
-      const estServiceFee = estimateServiceFee(courtShare, playerFee);
-      const totalAmount = courtShare + estServiceFee;
-      
       if (method === "credits") {
-        // If credits cover the full amount, process with credits only
-        if (credits >= totalAmount) {
-          const { data, error } = await supabase.functions.invoke("create-payment", {
-            body: {
-              sessionId: id,
-              paymentType: "before_session",
-              returnUrl: `/games/${id}`,
-              origin: window.location.origin,
-              useCredits: true,
-              creditsAmount: creditsToUse,
-            },
+        // Let backend decide if credits cover the full amount
+        const { data, error } = await supabase.functions.invoke("create-payment", {
+          body: {
+            sessionId: id,
+            paymentType: "before_session",
+            returnUrl: `/games/${id}`,
+            origin: window.location.origin,
+            useCredits: true,
+            creditsAmount: creditsToUse,
+          },
+        });
+
+        if (error) throw error;
+
+        if (data?.success) {
+          toast({
+            title: "Payment Complete",
+            description: data.message || "Payment completed using your credits.",
           });
-
-          if (error) throw error;
-
-          if (data?.success) {
-            // Payment completed with credits only
-            toast({
-              title: "Payment Complete",
-              description: data.message || "Payment completed using your credits.",
-            });
-            setShowCreditsModal(false);
-            refetchCredits();
-            fetchGameData();
-            return;
-          }
+          setShowCreditsModal(false);
+          refetchCredits();
+          fetchGameData();
+          return;
         }
 
-        // Partial credits - proceed to Stripe with credits applied
-        await processCardPayment(true, creditsToUse);
+        // Backend returned a checkout URL (partial credits)
+        if (data?.url) {
+          setShowCreditsModal(false);
+          const isInIframe = window.self !== window.top;
+          if (isInIframe) {
+            const opened = window.open(data.url, "_blank", "noopener,noreferrer");
+            if (!opened) window.location.href = data.url;
+          } else {
+            window.location.href = data.url;
+          }
+          return;
+        }
+
+        throw new Error("Unexpected payment response");
       } else {
         await processCardPayment(false);
       }
@@ -512,7 +509,18 @@ export default function GameDetail() {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        const msg = error?.message || "";
+        if (msg.includes("SLOT_UNAVAILABLE")) {
+          toast({
+            title: "Slot Unavailable",
+            description: "This slot was just taken. Please pick another time.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw error;
+      }
 
       if (data?.url) {
         setShowCreditsModal(false);
@@ -632,8 +640,7 @@ const getGoogleMapsUrl = (address: string): string => {
   const pricePerPlayer = session.payment_type === "single"
     ? session.court_price
     : session.court_price / (session.min_players || 1);
-  const serviceFee = estimateServiceFee(pricePerPlayer, playerFee);
-  const totalPerPlayer = pricePerPlayer + serviceFee;
+  const totalPerPlayer = pricePerPlayer; // Service fee added at checkout by backend
   const isOrganizer = group.organizer_id === user.id;
   const isPlayerInGame = players.some(p => p.user_id === user.id);
   const isInWaitingList = waitingList.some(p => p.user_id === user.id);
@@ -938,23 +945,21 @@ const getGoogleMapsUrl = (address: string): string => {
                           <>
                             <p className="font-semibold text-success">Paid & Confirmed</p>
                             <p className="text-sm text-muted-foreground">
-                              Court price: ${session.court_price.toFixed(2)} + Service fee: ${serviceFee.toFixed(2)}
+                              Court price: ${session.court_price.toFixed(2)} (+ service fee at checkout)
                             </p>
-                            <p className="text-sm font-semibold">Total: ${(session.court_price + serviceFee).toFixed(2)}</p>
                           </>
                         ) : (
                           <>
                             <p className="font-semibold text-warning">Payment Pending</p>
                             <p className="text-sm text-muted-foreground">
-                              Court price: ${session.court_price.toFixed(2)} + Service fee: ${serviceFee.toFixed(2)}
+                              Court price: ${session.court_price.toFixed(2)} (+ service fee at checkout)
                             </p>
-                            <p className="text-sm font-semibold">Total: ${(session.court_price + serviceFee).toFixed(2)}</p>
                           </>
                         )
                       ) : (
                         <>
                           <p className="font-semibold text-success">Covered by Organizer</p>
-                          <p className="text-sm text-muted-foreground">Total: ${(session.court_price + serviceFee).toFixed(2)}</p>
+                          <p className="text-sm text-muted-foreground">Court price: ${session.court_price.toFixed(2)}</p>
                         </>
                       )}
                     </div>
@@ -973,7 +978,7 @@ const getGoogleMapsUrl = (address: string): string => {
                           disabled={actionLoading}
                         >
                           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Pay Now - ${(session.court_price + serviceFee).toFixed(2)}
+                          Pay Now - ${session.court_price.toFixed(2)}
                         </Button>
                       )
                     )}
@@ -1003,7 +1008,7 @@ const getGoogleMapsUrl = (address: string): string => {
                       <p className="text-sm text-muted-foreground">Price per player</p>
                       <p className="text-2xl font-bold">${totalPerPlayer.toFixed(2)}</p>
                       <p className="text-xs text-muted-foreground">
-                        Court: ${pricePerPlayer.toFixed(2)} + Service fee: ${serviceFee.toFixed(2)}
+                        Court share per player (+ service fee at checkout)
                       </p>
                     </div>
                   </div>
