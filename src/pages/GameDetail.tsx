@@ -318,7 +318,9 @@ export default function GameDetail() {
 
         toast({
           title: "Left session",
-          description: data?.message || "You have left this game session.",
+          description: data?.creditsAwarded 
+            ? `Refund of $${Number(data.creditsAwarded).toFixed(2)} issued as credits. Service fee is non-refundable.`
+            : data?.message || "You have left this game session.",
         });
 
         // Refetch credits after cancellation
@@ -640,7 +642,7 @@ const getGoogleMapsUrl = (address: string): string => {
   const pricePerPlayer = session.payment_type === "single"
     ? session.court_price
     : session.court_price / (session.min_players || 1);
-  const totalPerPlayer = pricePerPlayer; // Service fee added at checkout by backend
+  const totalPerPlayer = pricePerPlayer;
   const isOrganizer = group.organizer_id === user.id;
   const isPlayerInGame = players.some(p => p.user_id === user.id);
   const isInWaitingList = waitingList.some(p => p.user_id === user.id);
@@ -945,14 +947,14 @@ const getGoogleMapsUrl = (address: string): string => {
                           <>
                             <p className="font-semibold text-success">Paid & Confirmed</p>
                             <p className="text-sm text-muted-foreground">
-                              Court price: ${session.court_price.toFixed(2)} (+ service fee at checkout)
+                              Court price: ${session.court_price.toFixed(2)}
                             </p>
                           </>
                         ) : (
                           <>
                             <p className="font-semibold text-warning">Payment Pending</p>
                             <p className="text-sm text-muted-foreground">
-                              Court price: ${session.court_price.toFixed(2)} (+ service fee at checkout)
+                              Court price: ${session.court_price.toFixed(2)}
                             </p>
                           </>
                         )
@@ -978,7 +980,7 @@ const getGoogleMapsUrl = (address: string): string => {
                           disabled={actionLoading}
                         >
                           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Pay Now - ${session.court_price.toFixed(2)}
+                          Pay Now – ${session.court_price.toFixed(2)}
                         </Button>
                       )
                     )}
@@ -1008,7 +1010,7 @@ const getGoogleMapsUrl = (address: string): string => {
                       <p className="text-sm text-muted-foreground">Price per player</p>
                       <p className="text-2xl font-bold">${totalPerPlayer.toFixed(2)}</p>
                       <p className="text-xs text-muted-foreground">
-                        Court share per player (+ service fee at checkout)
+                        Court share per player
                       </p>
                     </div>
                   </div>
@@ -1027,7 +1029,7 @@ const getGoogleMapsUrl = (address: string): string => {
                             disabled={actionLoading}
                           >
                             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                            Make Payment - ${totalPerPlayer.toFixed(2)}
+                            Make Payment – ${totalPerPlayer.toFixed(2)}
                           </Button>
                         )
                       )}
@@ -1306,6 +1308,8 @@ const getGoogleMapsUrl = (address: string): string => {
                     <AlertDialogDescription>
                       {isInWaitingList 
                         ? "You will be removed from the waiting list."
+                        : currentPlayerPayment?.isPaid
+                        ? "Your court payment will be refunded as credits. Service fee is non-refundable."
                         : "Your spot will be given to the next person on the waiting list."}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
