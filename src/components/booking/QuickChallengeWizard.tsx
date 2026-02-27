@@ -365,7 +365,7 @@ export function QuickChallengeWizard({
                       <Label htmlFor="split" className="flex-1 cursor-pointer">
                         <span className="font-medium">Split Between Players</span>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Each player pays ${pricePerPlayer.toFixed(2)} (+ service fee at checkout) when they join ({totalPlayers} players total).
+                          Each player pays ${pricePerPlayer.toFixed(2)} when they join ({totalPlayers} players total). Service fee applied at checkout.
                         </p>
                       </Label>
                     </div>

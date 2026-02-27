@@ -598,7 +598,7 @@ export function BookingWizard({
                       <span>Court Total</span>
                       <span className="text-primary">${totalPrice.toFixed(2)}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">+ service fee at checkout</p>
+                    <p className="text-xs text-muted-foreground mt-1">Service fee applied at checkout</p>
                   </div>
                 </div>
               </div>

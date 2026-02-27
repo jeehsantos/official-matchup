@@ -707,7 +707,7 @@ export default function QuickGameLobby() {
                       Payment will be converted to credits
                     </p>
                     <p className="text-xs mt-1 text-muted-foreground">
-                      Your payment of <span className="font-bold text-primary">${challenge?.price_per_player?.toFixed(2) || "0.00"}</span> will be converted into platform credits that can be used in future sessions.
+                      Your court payment of <span className="font-bold text-primary">${challenge?.price_per_player?.toFixed(2) || "0.00"}</span> will be refunded as platform credits. Service fee is non-refundable.
                     </p>
                   </div>
                 }
@@ -1038,7 +1038,7 @@ export default function QuickGameLobby() {
               </div>
               {challenge.price_per_player > 0 &&
               <span className="text-[10px] text-muted-foreground">
-                  Court price per player (+ service fee at checkout)
+                  Per player
                 </span>
               }
             </div>
