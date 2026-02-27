@@ -258,22 +258,20 @@ async function handleSessionPayment(
     platform_fee: platformProfitSnapshot,
     court_amount: courtAmountSnapshot > 0 ? courtAmountSnapshot : null,
     service_fee: serviceFeeSnapshot > 0 ? serviceFeeSnapshot : null,
-    platform_profit_target: platformProfitSnapshot > 0 ? platformProfitSnapshot : null,
-    service_fee_total: serviceFeeSnapshot > 0 ? serviceFeeSnapshot : null,
     payment_type_snapshot: paymentTypeSnapshot,
-    payment_method_type: "card",
     stripe_fee_actual: stripeFeeActual,
     status: "completed",
     paid_at: new Date().toISOString(),
     stripe_payment_intent_id: paymentIntentId,
   };
 
-  // Upsert payment record with snapshots
+  // Upsert payment record with snapshots — match on session_id + user_id
+  // (the row created by create-payment has stripe_payment_intent_id = null)
   const { error: upsertError } = await supabaseAdmin
     .from("payments")
     .upsert(
       paymentPayload,
-      { onConflict: "stripe_payment_intent_id" }
+      { onConflict: "session_id,user_id" }
     );
 
   if (upsertError) {
