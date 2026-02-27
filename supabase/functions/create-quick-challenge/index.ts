@@ -85,12 +85,12 @@ serve(async (req) => {
     const bookingStartMin = timeToMinutes(scheduledTime);
     const endTime = minutesToTime(bookingStartMin + durationMinutes);
 
+    // Check for ANY overlapping rows (booked or not) to avoid unique constraint violations
     const { data: overlaps, error: overlapError } = await supabaseAdmin
       .from("court_availability")
-      .select("id, start_time, end_time")
+      .select("id, start_time, end_time, is_booked")
       .eq("court_id", courtId)
-      .eq("available_date", scheduledDate)
-      .eq("is_booked", true);
+      .eq("available_date", scheduledDate);
     if (overlapError) throw overlapError;
 
     const hasOverlap = (overlaps || []).some((booking) => {
@@ -98,7 +98,7 @@ serve(async (req) => {
       const existingEnd = timeToMinutes(booking.end_time);
       return bookingStartMin < existingEnd && bookingStartMin + durationMinutes > existingStart;
     });
-    if (hasOverlap) throw new Error("This time slot is no longer available");
+    if (hasOverlap) throw new Error("SLOT_UNAVAILABLE");
 
     const selectedEquipment = equipment as EquipmentSelection[];
     const hours = durationMinutes / 60;
