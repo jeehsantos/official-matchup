@@ -1080,7 +1080,7 @@ const getGoogleMapsUrl = (address: string): string => {
                   currentMax={session.max_players}
                   courtPrice={session.court_price}
                   onUpdate={fetchGameData}
-                  locked={paidCount > 0}
+                  locked={false}
                 />
               )}
             </CardContent>
