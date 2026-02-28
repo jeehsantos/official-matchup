@@ -15,29 +15,39 @@ export default function PaymentSuccess() {
   const [countdown, setCountdown] = useState(5);
   const pollCount = useRef(0);
 
-  const sessionId = searchParams.get("session_id");
+  const urlSessionId = searchParams.get("session_id");
   const checkoutSessionId = searchParams.get("checkout_session_id");
   const paymentType = searchParams.get("type");
 
+  // For deferred flow, sessionId comes from verify-payment response
+  const [resolvedSessionId, setResolvedSessionId] = useState<string | null>(urlSessionId);
+
   // Poll DB for payment confirmation (webhook is source of truth)
   useEffect(() => {
-    if (!sessionId || !user) return;
+    if (!user || (!urlSessionId && !checkoutSessionId)) return;
 
     const pollInterval = setInterval(async () => {
       pollCount.current += 1;
 
       try {
         const { data, error } = await supabase.functions.invoke("verify-payment", {
-          body: { sessionId, userId: user.id, checkoutSessionId },
+          body: {
+            sessionId: urlSessionId || null,
+            userId: user.id,
+            checkoutSessionId,
+          },
         });
 
         if (error) throw error;
 
-        if (data?.success) {
+        if (data?.success && (data?.status === "completed" || data?.status === "transferred")) {
           clearInterval(pollInterval);
+          // For deferred flow, webhook returns the created sessionId
+          if (data.sessionId) {
+            setResolvedSessionId(data.sessionId);
+          }
           setStatus("success");
         } else if (pollCount.current >= 30) {
-          // After ~60 seconds of polling, give up
           clearInterval(pollInterval);
           setStatus("error");
         }
@@ -51,7 +61,7 @@ export default function PaymentSuccess() {
     }, 2000);
 
     return () => clearInterval(pollInterval);
-  }, [sessionId, user]);
+  }, [urlSessionId, checkoutSessionId, user]);
 
   // Countdown + redirect on success
   useEffect(() => {
@@ -60,10 +70,10 @@ export default function PaymentSuccess() {
         setCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(timer);
-            if (paymentType === "at_booking") {
-              navigate("/home");
+            if (resolvedSessionId) {
+              navigate(`/games/${resolvedSessionId}`);
             } else {
-              navigate(`/games/${sessionId}`);
+              navigate("/home");
             }
             return 0;
           }
@@ -72,13 +82,13 @@ export default function PaymentSuccess() {
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [status, navigate, sessionId, paymentType]);
+  }, [status, navigate, resolvedSessionId]);
 
   const handleContinue = () => {
-    if (paymentType === "at_booking") {
-      navigate("/home");
+    if (resolvedSessionId) {
+      navigate(`/games/${resolvedSessionId}`);
     } else {
-      navigate(`/games/${sessionId}`);
+      navigate("/home");
     }
   };
 

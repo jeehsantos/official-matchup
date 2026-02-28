@@ -97,6 +97,7 @@ serve(async (req) => {
       splitPlayers,
       sportCategoryId,
       equipment = [],
+      holdId,
     } = await req.json();
 
     if (!groupId || !courtId || !sessionDate || !startTime || !durationMinutes || !paymentType || !sportCategoryId) {
@@ -171,16 +172,44 @@ serve(async (req) => {
     const serviceFee = Number(platformResult.data?.player_fee ?? 0);
     const totalAmount = courtAmountWithEquipment + serviceFee;
 
-    const sessionStart = new Date(`${sessionDate}T${startTime}`);
-    const requiresPaymentFirst = court.payment_timing === "at_booking";
+    // For at_booking courts: defer session creation to webhook (no DB records until payment confirmed)
+    if (court.payment_timing === "at_booking") {
+      const splitPricePerPlayer = paymentType === "split" && splitPlayers
+        ? Math.ceil((courtAmountWithEquipment / splitPlayers) * 100) / 100
+        : courtAmountWithEquipment;
 
-    // For at_booking courts, set a short 15-minute deadline so the auto-cancel
-    // cron cleans up abandoned sessions quickly if the user never completes payment.
-    const paymentDeadline = requiresPaymentFirst
-      ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
-      : new Date(
-          sessionStart.getTime() - (court.payment_hours_before ?? 24) * 60 * 60 * 1000
-        ).toISOString();
+      return new Response(
+        JSON.stringify({
+          deferred: true,
+          court_amount: courtAmountWithEquipment,
+          service_fee_total: serviceFee,
+          total_charge: totalAmount,
+          price_per_player: splitPricePerPlayer + serviceFee,
+          booking_details: {
+            groupId,
+            courtId,
+            sessionDate,
+            startTime,
+            endTime,
+            durationMinutes,
+            paymentType,
+            splitPlayers: paymentType === "split" && splitPlayers ? splitPlayers : null,
+            sportCategoryId,
+            equipment: selectedEquipment,
+            courtCapacity: court.capacity,
+            courtPrice: courtAmountWithEquipment,
+            holdId: holdId || null,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
+    // --- Non-at_booking (before_session) flow: create records immediately ---
+    const sessionStart = new Date(`${sessionDate}T${startTime}`);
+    const paymentDeadline = new Date(
+      sessionStart.getTime() - (court.payment_hours_before ?? 24) * 60 * 60 * 1000
+    ).toISOString();
 
     const { data: session, error: sessionError } = await supabaseAdmin
       .from("sessions")
@@ -205,8 +234,8 @@ serve(async (req) => {
     const { error: sessionPlayerError } = await supabaseAdmin.from("session_players").insert({
       session_id: session.id,
       user_id: user.id,
-      is_confirmed: !requiresPaymentFirst,
-      confirmed_at: requiresPaymentFirst ? null : new Date().toISOString(),
+      is_confirmed: true,
+      confirmed_at: new Date().toISOString(),
     });
     if (sessionPlayerError) throw sessionPlayerError;
 
@@ -217,7 +246,7 @@ serve(async (req) => {
         available_date: sessionDate,
         start_time: startTime,
         end_time: endTime,
-        is_booked: !requiresPaymentFirst,
+        is_booked: true,
         booked_by_user_id: user.id,
         booked_by_group_id: groupId,
         booked_by_session_id: session.id,
