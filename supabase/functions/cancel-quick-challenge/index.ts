@@ -59,15 +59,12 @@ serve(async (req) => {
       .from("quick_challenge_payments")
       .select("id, user_id, court_amount")
       .eq("challenge_id", challengeId)
-      .eq("status", "completed")
-      .is("converted_to_credits_at", null);
+      .eq("status", "completed");
 
     if (paidSnapshotsError) {
       console.error("Error loading paid snapshots:", paidSnapshotsError);
       throw new Error("Failed to load payment snapshots");
     }
-
-    const convertedAt = new Date().toISOString();
 
     for (const payment of paidSnapshots || []) {
       const amountToCredit = Number(payment.court_amount || 0) / 100;
@@ -91,10 +88,9 @@ serve(async (req) => {
         .from("quick_challenge_payments")
         .update({
           status: "converted_to_credits",
-          converted_to_credits_at: convertedAt,
         })
         .eq("id", payment.id)
-        .is("converted_to_credits_at", null);
+        .eq("status", "completed");
 
       if (updatePaymentError) {
         console.error("Error marking payment as converted during organizer cancellation:", updatePaymentError);

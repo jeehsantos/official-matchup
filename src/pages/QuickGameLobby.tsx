@@ -592,36 +592,36 @@ export default function QuickGameLobby() {
         // Clean up URL params
         setSearchParams({}, { replace: true });
       });
-  } else if (paymentStatus === "cancelled" && id) {
-      // Wait for challenge data to load before processing cancellation
-      if (isLoading || loadingChallenges || !challenge) return;
-
-      // Clean up URL params
+    } else if (paymentStatus === "cancelled" && id) {
+      // Clean up URL params immediately
       setSearchParams({}, { replace: true });
 
-      // If organizer cancelled Stripe checkout, cancel the challenge to release the court slot
-      // (only if no players have paid yet)
-      const hasPaidPlayers = players.some((p) => p.paymentStatus === "paid");
-      if (isOrganizer && !hasPaidPlayers) {
-        supabase.functions.invoke("cancel-quick-challenge", {
+      // Backend is authoritative for cancellation safety checks
+      supabase.functions
+        .invoke("cancel-quick-challenge", {
           body: { challengeId: id },
-        }).then(({ error }) => {
+        })
+        .then(({ error }) => {
           if (error) {
             console.error("Failed to cancel challenge after Stripe cancel:", error);
-          } else {
-            console.log("Cancelled quick challenge after Stripe cancel:", id);
-            navigate("/discover?tab=quickgames", { replace: true });
+            toast({
+              title: "Payment cancelled",
+              description: "We couldn't immediately cancel the lobby, but automatic cleanup will run shortly.",
+              variant: "destructive",
+            });
+            return;
           }
-        });
 
-        toast({
-          title: "Payment cancelled",
-          description: "Your quick challenge has been cancelled since payment was not completed.",
-          variant: "destructive",
+          toast({
+            title: "Payment cancelled",
+            description: "Your quick challenge has been cancelled and the slot has been released.",
+            variant: "destructive",
+          });
+
+          navigate("/discover?tab=quickgames", { replace: true });
         });
-      }
     }
-  }, [searchParams, id, verifyPayment, setSearchParams, isOrganizer, players, isLoading, loadingChallenges, challenge, navigate]);
+  }, [searchParams, id, verifyPayment, setSearchParams, navigate]);
 
   if (isLoading || loadingChallenges) {
     return (
