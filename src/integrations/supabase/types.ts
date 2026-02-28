@@ -875,6 +875,62 @@ export type Database = {
           },
         ]
       }
+      quick_challenge_payments: {
+        Row: {
+          amount: number
+          challenge_id: string
+          court_amount: number
+          created_at: string
+          id: string
+          paid_at: string | null
+          payment_method_type: string | null
+          platform_profit_target: number | null
+          service_fee_total: number | null
+          status: string
+          stripe_fee_actual: number | null
+          stripe_payment_intent_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          challenge_id: string
+          court_amount?: number
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          payment_method_type?: string | null
+          platform_profit_target?: number | null
+          service_fee_total?: number | null
+          status?: string
+          stripe_fee_actual?: number | null
+          stripe_payment_intent_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          challenge_id?: string
+          court_amount?: number
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          payment_method_type?: string | null
+          platform_profit_target?: number | null
+          service_fee_total?: number | null
+          status?: string
+          stripe_fee_actual?: number | null
+          stripe_payment_intent_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_challenge_payments_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "quick_challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quick_challenge_players: {
         Row: {
           challenge_id: string
