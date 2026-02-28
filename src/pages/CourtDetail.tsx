@@ -319,9 +319,9 @@ export default function CourtDetail() {
     setSearchParams(newParams, { replace: true });
 
     if (cancelledSessionId) {
-      supabase
-        .rpc("cancel_session_and_release_court", { session_id: cancelledSessionId })
-        .then(({ error }) => {
+      supabase.functions
+        .invoke("cancel-session", { body: { sessionId: cancelledSessionId } })
+        .then(({ data, error }) => {
           if (error) {
             console.error("Failed to cancel session after Stripe cancel:", error);
           } else {
@@ -331,7 +331,7 @@ export default function CourtDetail() {
 
       toast({
         title: "Payment cancelled",
-        description: "Your booking has been cancelled since payment was not completed.",
+        description: "Your booking has been cancelled. Any payments will be converted to platform credits.",
         variant: "destructive",
       });
     }
