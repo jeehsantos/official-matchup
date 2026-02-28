@@ -150,7 +150,9 @@ export default function Auth() {
 
   const handleSignUp = async (data: SignUpFormData) => {
     setIsSubmitting(true);
-    const { error } = await signUp(data.email, data.password, data.fullName, data.role);
+    // Pass referral code to signUp so it's included in user metadata
+    const referralCode = localStorage.getItem("referralCode") || undefined;
+    const { error } = await signUp(data.email, data.password, data.fullName, data.role, referralCode);
     setIsSubmitting(false);
 
     if (error) {
@@ -165,32 +167,9 @@ export default function Auth() {
         description: friendlyMessage,
       });
     } else {
-      // Process referral code if present
-      const referralCode = localStorage.getItem("referralCode");
+      // Clear referral code from localStorage after successful signup
       if (referralCode) {
         localStorage.removeItem("referralCode");
-        try {
-          // Look up referrer by code
-          const { data: referrerProfile } = await supabase
-            .from("profiles")
-            .select("user_id")
-            .eq("referral_code", referralCode)
-            .maybeSingle();
-
-          if (referrerProfile) {
-            const { data: { user: currentUser } } = await supabase.auth.getUser();
-            if (currentUser && referrerProfile.user_id !== currentUser.id) {
-              await supabase.from("referrals").insert({
-                referrer_id: referrerProfile.user_id,
-                referred_user_id: currentUser.id,
-                referral_code: referralCode,
-                status: "pending",
-              });
-            }
-          }
-        } catch (refError) {
-          console.error("Error processing referral:", refError);
-        }
       }
 
       toast({
