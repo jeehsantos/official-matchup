@@ -66,8 +66,8 @@ const App = () => (
             <Route path="/games/:id" element={<GameDetail />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/profile/edit" element={<ProfileEdit />} />
-            <Route path="/courts" element={<ProtectedRoute requireCompleteProfile><Courts /></ProtectedRoute>} />
-            <Route path="/courts/:id" element={<ProtectedRoute requireCompleteProfile><CourtDetail /></ProtectedRoute>} />
+            <Route path="/courts" element={<Courts />} />
+            <Route path="/courts/:id" element={<CourtDetail />} />
             <Route path="/payment-success" element={<PaymentSuccess />} />
             {/* Manager Routes */}
             <Route path="/manager" element={<ManagerDashboard />} />
