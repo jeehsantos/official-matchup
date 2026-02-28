@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 
-type SessionState = "protected" | "rescue" | "released";
+type SessionState = "protected" | "pending" | "rescue" | "released";
 type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "hockey" | "other";
 type SportCategory = Database["public"]["Tables"]["sport_categories"]["Row"];
 
@@ -52,6 +52,8 @@ export function GameCard({
   const totalPrice = price; // Service fee added at checkout
   // Use sport category display name if available, otherwise fallback to "Sport TBD"
   const sportDisplayName = sportCategory?.display_name || "Sport TBD";
+  // Show "Booked" (protected) only when paid, otherwise "Pending"
+  const badgeState = state === "protected" ? (isPaid ? "protected" : "pending") : state;
   
   return (
     <Link to={linkTo || `/games/${id}`}>
@@ -74,7 +76,7 @@ export function GameCard({
                 </p>
               </div>
             </div>
-            <SessionBadge state={state} />
+            <SessionBadge state={badgeState} />
           </div>
 
           {/* Details */}

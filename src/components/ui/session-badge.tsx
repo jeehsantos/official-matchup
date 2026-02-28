@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
-import { Shield, AlertTriangle, Unlock } from "lucide-react";
+import { Shield, AlertTriangle, Unlock, Clock, CheckCircle } from "lucide-react";
 
 const sessionBadgeVariants = cva(
   "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide font-display",
@@ -8,6 +8,7 @@ const sessionBadgeVariants = cva(
     variants: {
       state: {
         protected: "bg-success/15 text-success border border-success/30",
+        pending: "bg-muted text-muted-foreground border border-border",
         rescue: "bg-warning/15 text-warning border border-warning/30",
         released: "bg-destructive/15 text-destructive border border-destructive/30",
       },
@@ -23,20 +24,22 @@ interface SessionBadgeProps
     VariantProps<typeof sessionBadgeVariants> {}
 
 const stateIcons = {
-  protected: Shield,
+  protected: CheckCircle,
+  pending: Clock,
   rescue: AlertTriangle,
   released: Unlock,
 };
 
 const stateLabels = {
-  protected: "Protected",
+  protected: "Booked",
+  pending: "Pending",
   rescue: "Rescue Mode",
   released: "Released",
 };
 
 export function SessionBadge({
   className,
-  state = "protected",
+  state = "pending",
   ...props
 }: SessionBadgeProps) {
   const Icon = stateIcons[state ?? "protected"];
