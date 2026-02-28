@@ -120,7 +120,7 @@ function getFacilityIcon(facility: string): string {
 export default function CourtDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -297,33 +297,63 @@ export default function CourtDetail() {
     }
   }, []);
 
-  // Clean up at_booking session when user cancels Stripe checkout
+  // Clean up unpaid flows when user cancels Stripe checkout
   useEffect(() => {
     const cancelledSessionId = searchParams.get("cancelled_session");
-    if (!cancelledSessionId) return;
+    const cancelledChallengeId =
+      searchParams.get("payment") === "cancelled"
+        ? searchParams.get("challengeId")
+        : null;
 
-    // Remove param from URL to prevent re-triggering
+    if (!cancelledSessionId && !cancelledChallengeId) return;
+
     const newParams = new URLSearchParams(searchParams);
-    newParams.delete("cancelled_session");
-    const newSearch = newParams.toString();
-    navigate(`${window.location.pathname}${newSearch ? `?${newSearch}` : ""}`, { replace: true });
+    if (cancelledSessionId) newParams.delete("cancelled_session");
+    if (cancelledChallengeId) {
+      newParams.delete("payment");
+      newParams.delete("challengeId");
+    }
+    setSearchParams(newParams, { replace: true });
 
-    // Cancel the unpaid session via existing RPC
-    supabase.rpc("cancel_session_and_release_court", { session_id: cancelledSessionId })
-      .then(({ error }) => {
-        if (error) {
-          console.error("Failed to cancel session after Stripe cancel:", error);
-        } else {
-          console.log("Cancelled at_booking session after Stripe cancel:", cancelledSessionId);
-        }
+    if (cancelledSessionId) {
+      supabase
+        .rpc("cancel_session_and_release_court", { session_id: cancelledSessionId })
+        .then(({ error }) => {
+          if (error) {
+            console.error("Failed to cancel session after Stripe cancel:", error);
+          } else {
+            console.log("Cancelled at_booking session after Stripe cancel:", cancelledSessionId);
+          }
+        });
+
+      toast({
+        title: "Payment cancelled",
+        description: "Your booking has been cancelled since payment was not completed.",
+        variant: "destructive",
       });
+    }
 
-    toast({
-      title: "Payment cancelled",
-      description: "Your booking has been cancelled since payment was not completed.",
-      variant: "destructive",
-    });
-  }, [searchParams, navigate, toast]);
+    if (cancelledChallengeId) {
+      supabase.functions
+        .invoke("cancel-quick-challenge", {
+          body: { challengeId: cancelledChallengeId },
+        })
+        .then(({ error }) => {
+          if (error) {
+            console.error("Failed to cancel quick challenge after Stripe cancel:", error);
+            return;
+          }
+
+          console.log("Cancelled unpaid quick challenge after Stripe cancel:", cancelledChallengeId);
+        });
+
+      toast({
+        title: "Payment cancelled",
+        description: "The quick challenge was not created and the slot was released.",
+        variant: "destructive",
+      });
+    }
+  }, [searchParams, setSearchParams, toast]);
 
   // Restore booking state from localStorage after auth redirect - only runs once
   useEffect(() => {
@@ -842,8 +872,6 @@ export default function CourtDetail() {
       const challengeId = challengeData?.challenge_id as string | undefined;
       if (!challengeId) throw new Error("Challenge created without id");
 
-      sessionStorage.removeItem("quickGameConfig");
-
       if (court.payment_timing === "at_booking") {
         try {
           const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-quick-challenge-payment", {
@@ -851,6 +879,7 @@ export default function CourtDetail() {
               challengeId,
               origin: window.location.origin,
               useCredits: false,
+              cancelToCourt: true,
             },
           });
 
@@ -862,7 +891,7 @@ export default function CourtDetail() {
                 description: "This slot was just taken. Please pick another time.",
                 variant: "destructive",
               });
-              return;
+              throw paymentError;
             }
             throw paymentError;
           }
@@ -879,6 +908,7 @@ export default function CourtDetail() {
           }
 
           if (paymentData?.success && !paymentData?.url) {
+            sessionStorage.removeItem("quickGameConfig");
             toast({
               title: "Challenge Created & Paid!",
               description: paymentData.message || "Your spot has been confirmed.",
@@ -890,15 +920,25 @@ export default function CourtDetail() {
           throw new Error("No checkout URL returned");
         } catch (payErr: any) {
           console.error("Payment error:", payErr);
+
+          const { error: cancelError } = await supabase.functions.invoke("cancel-quick-challenge", {
+            body: { challengeId },
+          });
+
+          if (cancelError) {
+            console.error("Failed to rollback unpaid quick challenge:", cancelError);
+          }
+
           toast({
-            title: "Challenge created but payment failed",
-            description: payErr?.message || "Please go to the lobby to complete payment.",
+            title: "Payment not completed",
+            description: "Quick challenge was not created. Please try again.",
             variant: "destructive",
           });
-          navigate(`/quick-games/${challengeId}`);
           return;
         }
       }
+
+      sessionStorage.removeItem("quickGameConfig");
 
       toast({
         title: "Quick Challenge Created!",

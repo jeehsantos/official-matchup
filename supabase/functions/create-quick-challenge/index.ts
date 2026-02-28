@@ -112,6 +112,7 @@ serve(async (req) => {
     const pricePerPlayer = effectivePaymentType === "split"
       ? splitPricePerPlayer + serviceFee
       : courtAmountWithEquipment;
+    const initialStatus = courtResult.data.payment_timing === "at_booking" ? "pending_payment" : "open";
 
     const { data: challenge, error: challengeError } = await supabaseAdmin
       .from("quick_challenges")
@@ -124,7 +125,7 @@ serve(async (req) => {
         scheduled_time: scheduledTime,
         total_slots: totalPlayers,
         price_per_player: pricePerPlayer,
-        status: "open",
+        status: initialStatus,
         created_by: user.id,
       })
       .select("id")
