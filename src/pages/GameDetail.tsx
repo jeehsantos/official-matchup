@@ -560,6 +560,109 @@ export default function GameDetail() {
     }
   };
 
+  const handleJoinSession = async () => {
+    if (!gameData || !id || !user) return;
+
+    setActionLoading(true);
+    try {
+      // Check profile completeness first
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const { isComplete, missingFields } = checkProfileComplete(profile);
+
+      if (!isComplete) {
+        setProfileMissingFields(missingFields);
+        setShowProfileAlert(true);
+        setActionLoading(false);
+        return;
+      }
+
+      // Check if already joined
+      const { data: existingPlayer } = await supabase
+        .from("session_players")
+        .select("id")
+        .eq("session_id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (existingPlayer) {
+        toast({
+          title: "Already joined",
+          description: "You're already in this session.",
+        });
+        setActionLoading(false);
+        return;
+      }
+
+      // Add player to session
+      const currentSession = gameData.session;
+      const { error } = await supabase
+        .from("session_players")
+        .insert({
+          session_id: id,
+          user_id: user.id,
+          is_confirmed: currentSession.payment_type === "single",
+          confirmed_at: currentSession.payment_type === "single" ? new Date().toISOString() : null,
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Joined successfully!",
+        description: currentSession.payment_type === "single"
+          ? "You've joined and your presence is confirmed."
+          : "You've joined the session.",
+      });
+      fetchGameData();
+    } catch (error) {
+      console.error("Error joining session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to join the session.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConfirmPresence = async () => {
+    if (!gameData || !id || !user) return;
+
+    setActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from("session_players")
+        .update({
+          is_confirmed: true,
+          confirmed_at: new Date().toISOString(),
+        })
+        .eq("session_id", id)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Presence confirmed!",
+        description: "You've confirmed your attendance for this session.",
+      });
+      fetchGameData();
+    } catch (error) {
+      console.error("Error confirming presence:", error);
+      toast({
+        title: "Error",
+        description: "Failed to confirm presence.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Attendance confirmation is handled automatically by the payment webhook.
   // No manual frontend confirmation is allowed.
 
@@ -991,11 +1094,25 @@ const getGoogleMapsUrl = (address: string): string => {
                           <span className="font-semibold">Confirmed</span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-muted text-muted-foreground rounded-lg">
-                          <Clock className="h-5 w-5" />
-                          <span className="text-sm">Confirmation pending — pay to confirm</span>
-                        </div>
+                        <Button
+                          className="btn-athletic"
+                          onClick={handleConfirmPresence}
+                          disabled={actionLoading}
+                        >
+                          {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          Confirm Presence
+                        </Button>
                       )
+                    )}
+                    {!isOrganizer && !isPlayerInGame && !isInWaitingList && !isGamePast && players.length < session.max_players && (
+                      <Button
+                        className="btn-athletic"
+                        onClick={handleJoinSession}
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Join & Confirm
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -1036,6 +1153,16 @@ const getGoogleMapsUrl = (address: string): string => {
                       {isInWaitingList && (
                         <Button disabled className="opacity-50">
                           Waiting List
+                        </Button>
+                      )}
+                      {!isPlayerInGame && !isInWaitingList && players.length < session.max_players && (
+                        <Button
+                          className="btn-athletic"
+                          onClick={handleJoinSession}
+                          disabled={actionLoading}
+                        >
+                          {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          Join Session
                         </Button>
                       )}
                     </>
