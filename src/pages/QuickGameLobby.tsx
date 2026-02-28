@@ -1013,7 +1013,7 @@ export default function QuickGameLobby() {
           {/* Action Buttons */}
           <div className="mt-6 md:mt-8 flex flex-col items-center gap-4 w-full max-w-2xl">
             <div className="flex flex-row gap-3 w-full">
-              {hasUserJoined && !players.find((p) => p.isMe)?.paymentStatus?.includes("paid") ?
+            {hasUserJoined && !players.find((p) => p.isMe)?.paymentStatus?.includes("paid") && (challenge.price_per_player ?? 0) > 0 ?
               <Button
                 className="flex-1 py-5 md:py-6 font-black text-[10px] md:text-xs uppercase tracking-[0.15em] gap-2"
                 variant="default"
