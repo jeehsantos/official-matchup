@@ -1,52 +1,37 @@
 
 
-## Problem Analysis
+## Problem Root Cause
 
-Two issues found:
+The referral record is **never created** in the database. Here's why:
 
-### Issue 1: Quick Challenge — Credits added but frontend doesn't refresh
-The backend correctly converts payments to credits (confirmed in DB: $150 balance, two $75 credit transactions). However, the `useCancelChallenge` hook only invalidates `quick-challenges` queries — it never invalidates `user-credits`, so the user's displayed balance doesn't update. The toast message also doesn't mention the credit conversion.
+1. After signup, `Auth.tsx` tries to insert a `referrals` row **client-side**
+2. The RLS policy on `referrals` INSERT requires `auth.uid() = referred_user_id`
+3. But at the point of insertion, the user session may not be fully established (email confirmation pending, session race condition)
+4. The insert **silently fails** — no referral row exists
+5. When `process_referral_credit` runs after payment, it finds no pending referral, so no credits are awarded
 
-### Issue 2: Normal Session — No credit conversion on cancel
-The `cancel_session_and_release_court` DB function only releases the court and marks the session cancelled. It does **not** refund paid players' court amounts as credits. This needs a new backend function (edge function) that:
-1. Finds all completed payments for the session
-2. Converts court_amount to credits for each paying user
-3. Marks payments as `converted_to_credits`
-4. Records held_credit_liabilities
-5. Then cancels the session and releases the court
+## Fix Plan
 
-## Implementation Plan
+### Step 1: Pass referral code as signup metadata
+In `Auth.tsx`, when calling `signUp()`, pass the stored referral code in the user metadata so it's available server-side during user creation.
 
-### Step 1: Fix Quick Challenge frontend credit refresh
-- In `src/hooks/useQuickChallenges.ts` (`useCancelChallenge`): also invalidate `user-credits` query key in `onSuccess`
-- Update the success toast to include credit conversion info from the response data
+### Step 2: Update `handle_new_user` trigger to create referral
+Modify the `handle_new_user()` database trigger function (runs as SECURITY DEFINER, bypasses RLS) to:
+- Check if `raw_user_meta_data` contains a `referral_code`
+- Look up the referrer profile by that code
+- Insert the `referrals` row with status `pending`
 
-### Step 2: Also fix `useLeaveChallenge` 
-- Same issue: after leaving with credits, invalidate `user-credits` query key
+This is the most reliable approach because the trigger runs in the same transaction as user creation, with elevated privileges.
 
-### Step 3: Create `cancel-session` edge function
-New backend function at `supabase/functions/cancel-session/index.ts` that:
-- Authenticates the user
-- Verifies user is the group organizer
-- Loads all `completed` payments for the session
-- For each payment: converts `court_amount` (cents → dollars) to credits via `add_user_credits` RPC
-- Creates `held_credit_liabilities` entries
-- Updates payment status to `converted_to_credits`
-- Releases `court_availability` (reset `is_booked`, clear booking references)
-- Removes all `session_players`
-- Marks session `is_cancelled = true`
+### Step 3: Pass referral code through auth context
+Update `signUp()` in `auth-context.tsx` to accept an optional `referralCode` parameter and include it in `options.data`.
 
-### Step 4: Update `GameDetail.tsx` to use new edge function
-- Replace `supabase.rpc('cancel_session_and_release_court')` with `supabase.functions.invoke('cancel-session')`
-- Invalidate `user-credits` query after successful cancellation
-- Show toast with credit conversion info
-
-### Step 5: Update `CourtDetail.tsx` cancel flow
-- Same replacement of the RPC call with the new edge function for the Stripe-cancel cleanup path
+### Step 4: Clean up client-side referral code
+Remove the now-redundant client-side referral insert logic from `Auth.tsx` (lines 168-193), keeping only the `localStorage` read to pass the code to `signUp()`.
 
 ### Technical Details
-- The `add_user_credits` RPC checks `auth.uid()` — when called from edge functions with service role key, `auth.uid()` is NULL, which passes the guard (`IF auth.uid() IS NOT NULL AND NOT has_role(...)`)
-- Credit amount = `court_amount / 100` (stored in cents)
-- Service fee is non-refundable per existing policy
-- Config: add `verify_jwt = false` for the new function in `supabase/config.toml`
+- The `handle_new_user` trigger is `SECURITY DEFINER` with `search_path = 'public'`, so it can insert into `referrals` without RLS restrictions
+- The referral code is passed via `raw_user_meta_data.referral_code` which is set during `supabase.auth.signUp()`
+- The `process_referral_credit` RPC (already called in stripe-webhook and create-payment) will then find the pending referral and award credits correctly
+- No new edge function needed — leverages existing infrastructure
 
