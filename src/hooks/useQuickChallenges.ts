@@ -321,9 +321,12 @@ export function useLeaveChallenge() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["quick-challenges"] });
+      queryClient.invalidateQueries({ queryKey: ["user-credits"] });
       toast({
         title: "Left challenge",
-        description: data?.message || "You've left the challenge.",
+        description: data?.creditsAdded
+          ? `$${data.creditsAdded.toFixed(2)} has been added to your platform credits.`
+          : data?.message || "You've left the challenge.",
       });
     },
     onError: (error: Error) => {
@@ -351,11 +354,12 @@ export function useCancelChallenge() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
     },
-    onSuccess: () => {
+    onSuccess: (_, challengeId) => {
       queryClient.invalidateQueries({ queryKey: ["quick-challenges"] });
+      queryClient.invalidateQueries({ queryKey: ["user-credits"] });
       toast({
         title: "Lobby cancelled",
-        description: "The challenge has been cancelled.",
+        description: "The challenge has been cancelled. Paid players will receive platform credits.",
       });
     },
     onError: (error: Error) => {

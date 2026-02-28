@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -99,6 +100,7 @@ const normalizeCountryCode = (countryCode?: string | null): string | null => {
 export default function GameDetail() {
   const { id } = useParams<{ id: string }>();
   const { user, isLoading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [gameData, setGameData] = useState<GameData | null>(null);
@@ -671,21 +673,23 @@ export default function GameDetail() {
 
     setActionLoading(true);
     try {
-      // Use database function to cancel session and release court availability
-      const { data, error } = await supabase.rpc('cancel_session_and_release_court', {
-        session_id: id
+      const { data, error } = await supabase.functions.invoke("cancel-session", {
+        body: { sessionId: id },
       });
 
       if (error) throw error;
-      
-      if (!data) {
-        throw new Error("You don't have permission to cancel this session");
-      }
+      if (data?.error) throw new Error(data.error);
 
       toast({
         title: "Session cancelled",
-        description: "The session has been cancelled and the court is now available.",
+        description: data?.message || "The session has been cancelled and the court is now available.",
       });
+
+      // Refresh credits if any were converted
+      if (data?.creditsConverted > 0) {
+        queryClient.invalidateQueries({ queryKey: ["user-credits"] });
+      }
+
       navigate(`/groups/${gameData.group.id}`);
     } catch (error) {
       console.error("Error cancelling session:", error);
