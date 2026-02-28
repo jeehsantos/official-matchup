@@ -366,6 +366,7 @@ export default function QuickGameLobby() {
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [isCourtImageOpen, setIsCourtImageOpen] = useState(false);
+  const [isConfirmingPresence, setIsConfirmingPresence] = useState(false);
 
   // Find the challenge
   const challenge = useMemo(
@@ -459,6 +460,36 @@ export default function QuickGameLobby() {
         onSettled: () => setJoiningSlot(null)
       }
     );
+  };
+
+  const handleConfirmPresence = async () => {
+    if (!id || !user) return;
+    setIsConfirmingPresence(true);
+    try {
+      const myPlayer = players.find((p) => p.isMe);
+      if (!myPlayer) throw new Error("You haven't joined this challenge");
+
+      const { error } = await supabase
+        .from("quick_challenge_players")
+        .update({ payment_status: "paid", paid_at: new Date().toISOString() })
+        .eq("challenge_id", id)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Presence confirmed!",
+        description: "You're all set for this match.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Failed to confirm",
+        description: err.message || "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConfirmingPresence(false);
+    }
   };
 
   const handlePayment = async () => {
@@ -1031,14 +1062,19 @@ export default function QuickGameLobby() {
               <Button
                 className="flex-1 py-5 md:py-6 font-black text-[10px] md:text-xs uppercase tracking-[0.15em] gap-2"
                 variant="default"
-                disabled={!hasUserJoined || players.find((p) => p.isMe)?.paymentStatus === "paid"}>
+                onClick={handleConfirmPresence}
+                disabled={!hasUserJoined || players.find((p) => p.isMe)?.paymentStatus === "paid" || isConfirmingPresence}>
 
                   {players.find((p) => p.isMe)?.paymentStatus === "paid" ?
                 <>
                       <CheckCircle2 size={14} />
                       Confirmed
                     </> :
-
+                isConfirmingPresence ?
+                <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Confirming...
+                    </> :
                 "Confirm Presence"
                 }
                 </Button>
