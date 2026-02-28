@@ -167,7 +167,9 @@ export default function CourtDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
-  const { preferredSports, isLoading: profileLoading } = useUserProfile();
+  const { preferredSports: rawPreferredSports, isLoading: profileLoading } = useUserProfile();
+  // Memoize preferredSports to prevent fetchCourt from recreating every render
+  const preferredSports = useMemo(() => rawPreferredSports, [JSON.stringify(rawPreferredSports)]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
   
@@ -408,11 +410,12 @@ export default function CourtDetail() {
   }, [id, profileLoading, fetchCourt]);
 
   // Fetch availability when date or selected court changes
+  const venueId = court?.venues?.id ?? null;
   useEffect(() => {
-    if (court?.venues && selectedDate && selectedCourtId) {
-      fetchAvailability(court.venues.id, selectedCourtId, selectedDate);
+    if (venueId && selectedDate && selectedCourtId) {
+      fetchAvailability(venueId, selectedCourtId, selectedDate);
     }
-  }, [court, selectedDate, selectedCourtId, fetchAvailability]);
+  }, [venueId, selectedDate, selectedCourtId, fetchAvailability]);
 
   // Restore selected slots after availability loads - only if we're in restoration mode
   useEffect(() => {
@@ -485,6 +488,16 @@ export default function CourtDetail() {
     wizardOpenRef.current = showGroupModal || showQuickChallengeWizard;
   }, [showGroupModal, showQuickChallengeWizard]);
 
+  // Refs for realtime callbacks to avoid re-subscribing on every date/venue change
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
+  const venueIdRef = useRef(venueId);
+  venueIdRef.current = venueId;
+  const selectedCourtIdRef = useRef(selectedCourtId);
+  selectedCourtIdRef.current = selectedCourtId;
+  const fetchAvailabilityRef = useRef(fetchAvailability);
+  fetchAvailabilityRef.current = fetchAvailability;
+
   // Subscribe to booking_holds changes for real-time updates
   useEffect(() => {
     if (!court?.id) return;
@@ -501,10 +514,12 @@ export default function CourtDetail() {
         },
         (payload) => {
           console.log('Hold changed:', payload);
-          // Use ref to avoid stale closure — state may not be updated yet
           if (wizardOpenRef.current) return;
-          if (court.venues && selectedDate) {
-            fetchAvailability(court.venues.id, court.id, selectedDate);
+          const vid = venueIdRef.current;
+          const cid = selectedCourtIdRef.current;
+          const date = selectedDateRef.current;
+          if (vid && cid && date) {
+            fetchAvailabilityRef.current(vid, cid, date);
           }
         }
       )
@@ -513,7 +528,7 @@ export default function CourtDetail() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [court?.id, court?.venues, selectedDate, fetchAvailability]);
+  }, [court?.id]);
 
   // Real-time subscription for availability updates
   useEffect(() => {
@@ -531,10 +546,12 @@ export default function CourtDetail() {
         },
         (payload) => {
           console.log('Availability changed:', payload);
-          // Use ref to avoid stale closure — state may not be updated yet
           if (wizardOpenRef.current) return;
-          if (court.venues && selectedDate) {
-            fetchAvailability(court.venues.id, court.id, selectedDate);
+          const vid = venueIdRef.current;
+          const cid = selectedCourtIdRef.current;
+          const date = selectedDateRef.current;
+          if (vid && cid && date) {
+            fetchAvailabilityRef.current(vid, cid, date);
           }
         }
       )
@@ -543,7 +560,7 @@ export default function CourtDetail() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [court?.id, court?.venues, selectedDate, fetchAvailability]);
+  }, [court?.id]);
 
   // Convert time string to minutes for comparison
   const timeToMinutes = (time: string): number => {
