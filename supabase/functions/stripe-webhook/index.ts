@@ -477,7 +477,7 @@ async function handleQuickChallengePayment(
   // Check and update challenge status
   const { data: challenge } = await supabaseAdmin
     .from("quick_challenges")
-    .select("total_slots, quick_challenge_players(payment_status)")
+    .select("status, total_slots, quick_challenge_players(payment_status)")
     .eq("id", challengeId)
     .single();
 
@@ -496,6 +496,11 @@ async function handleQuickChallengePayment(
       await supabaseAdmin
         .from("quick_challenges")
         .update({ status: "full" })
+        .eq("id", challengeId);
+    } else if ((challenge as any).status === "pending_payment" && paidCount > 0) {
+      await supabaseAdmin
+        .from("quick_challenges")
+        .update({ status: "open" })
         .eq("id", challengeId);
     }
   }

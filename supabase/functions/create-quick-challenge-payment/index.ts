@@ -19,7 +19,7 @@ serve(async (req) => {
   );
 
   try {
-    const { challengeId, origin, useCredits, attempt } = await req.json();
+    const { challengeId, origin, useCredits, attempt, cancelToCourt } = await req.json();
 
     if (!challengeId) {
       throw new Error("Challenge ID is required");
@@ -244,7 +244,9 @@ serve(async (req) => {
 
     const baseUrl = origin || "https://sportarenaxp.lovable.app";
     const successUrl = `${baseUrl}/quick-games/${challengeId}?payment=success&checkout_session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${baseUrl}/quick-games/${challengeId}?payment=cancelled`;
+    const cancelUrl = cancelToCourt && challenge.court_id
+      ? `${baseUrl}/courts/${challenge.court_id}?quickGame=true&payment=cancelled&challengeId=${challengeId}`
+      : `${baseUrl}/quick-games/${challengeId}?payment=cancelled`;
 
     const description = [
       sport?.display_name || "Quick Match",
@@ -352,7 +354,7 @@ async function checkAndUpdateChallengeStatus(
 ) {
   const { data: challenge } = await supabaseAdmin
     .from("quick_challenges")
-    .select("total_slots, quick_challenge_players(payment_status)")
+    .select("status, total_slots, quick_challenge_players(payment_status)")
     .eq("id", challengeId)
     .single();
 
@@ -360,7 +362,7 @@ async function checkAndUpdateChallengeStatus(
 
   const players = (challenge as any).quick_challenge_players || [];
   const paidCount = players.filter((p: { payment_status: string }) => p.payment_status === "paid").length;
-  
+
   if (paidCount >= (challenge as any).total_slots) {
     await supabaseAdmin
       .from("quick_challenges")
@@ -370,6 +372,11 @@ async function checkAndUpdateChallengeStatus(
     await supabaseAdmin
       .from("quick_challenges")
       .update({ status: "full" })
+      .eq("id", challengeId);
+  } else if ((challenge as any).status === "pending_payment" && paidCount > 0) {
+    await supabaseAdmin
+      .from("quick_challenges")
+      .update({ status: "open" })
       .eq("id", challengeId);
   }
 }

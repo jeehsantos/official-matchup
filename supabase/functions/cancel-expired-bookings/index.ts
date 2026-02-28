@@ -27,7 +27,7 @@ async function cancelStaleQuickChallenges(supabase: SupabaseClient) {
       courts (payment_timing),
       quick_challenge_players (payment_status)
     `)
-    .in("status", ["open", "full"])
+    .in("status", ["open", "full", "pending_payment"])
     .lt("created_at", cutoffIso)
     .not("court_id", "is", null)
     .not("scheduled_date", "is", null)
@@ -80,7 +80,7 @@ async function cancelStaleQuickChallenges(supabase: SupabaseClient) {
       .from("quick_challenges")
       .update({ status: "cancelled" })
       .eq("id", challenge.id)
-      .in("status", ["open", "full"]);
+      .in("status", ["open", "full", "pending_payment"]);
 
     if (cancelError) {
       throw cancelError;
