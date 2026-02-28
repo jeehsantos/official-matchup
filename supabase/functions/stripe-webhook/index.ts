@@ -189,6 +189,11 @@ async function handleSessionPayment(
   // deno-lint-ignore no-explicit-any
   supabaseAdmin: any
 ): Promise<boolean> {
+  // Check for deferred at_booking flow (no DB session exists yet)
+  if (metadata.deferred === "true") {
+    return await handleDeferredSessionPayment(session, metadata, supabaseAdmin);
+  }
+
   const sessionId = metadata.session_id;
   const userId = metadata.payer_user_id || metadata.user_id;
   const paymentIntentId = session.payment_intent as string;
@@ -371,6 +376,259 @@ async function handleSessionPayment(
     courtAmount: courtAmountSnapshot,
     serviceFee: serviceFeeSnapshot,
     paymentType: paymentTypeSnapshot,
+    paymentIntentId,
+  });
+
+  return false;
+}
+
+// ── Deferred at_booking: create all records on payment confirmation ────────
+async function handleDeferredSessionPayment(
+  stripeSession: Stripe.Checkout.Session,
+  metadata: Record<string, string>,
+  // deno-lint-ignore no-explicit-any
+  supabaseAdmin: any
+): Promise<boolean> {
+  const userId = metadata.user_id;
+  const paymentIntentId = stripeSession.payment_intent as string;
+
+  if (!userId) {
+    throw new WebhookProcessingError("Missing user_id in deferred metadata", {
+      operation: "deferred.validate",
+      sessionId: stripeSession.id,
+    });
+  }
+
+  // Idempotency: check if payment already exists for this PI
+  const { data: existing } = await supabaseAdmin
+    .from("payments")
+    .select("id, status, session_id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle();
+
+  if (existing?.status === "completed" || existing?.status === "transferred") {
+    console.log("Deferred payment already processed, skipping:", paymentIntentId);
+    return true;
+  }
+
+  // Extract booking details from metadata
+  const groupId = metadata.group_id;
+  const courtId = metadata.court_id;
+  const sessionDate = metadata.session_date;
+  const startTime = metadata.start_time;
+  const endTime = metadata.end_time;
+  const durationMinutes = parseInt(metadata.duration_minutes || "60");
+  const paymentType = metadata.payment_type || "single";
+  const splitPlayers = metadata.split_players ? parseInt(metadata.split_players) : null;
+  const sportCategoryId = metadata.sport_category_id;
+  const courtCapacity = parseInt(metadata.court_capacity || "10");
+  const courtPriceDollars = parseFloat(metadata.court_price_dollars || "0");
+  const holdId = metadata.hold_id || null;
+  const equipmentJson = metadata.equipment_json || "[]";
+
+  let equipment: any[] = [];
+  try { equipment = JSON.parse(equipmentJson); } catch { equipment = []; }
+
+  if (!groupId || !courtId || !sessionDate || !startTime || !endTime) {
+    throw new WebhookProcessingError("Missing booking details in deferred metadata", {
+      operation: "deferred.validate",
+      metadata,
+    });
+  }
+
+  // Convert hold if provided
+  if (holdId) {
+    try {
+      const { data: holdResult } = await supabaseAdmin.rpc("convert_hold_to_booking", {
+        p_hold_id: holdId,
+      });
+      if (holdResult && !holdResult.success) {
+        console.error("Hold conversion failed (continuing anyway):", holdResult.error);
+        // If slot was taken during payment, we still need to process since Stripe charged the user
+        // The admin will need to handle refunds manually for this edge case
+        if (holdResult.error === "SLOT_TAKEN_DURING_PAYMENT") {
+          console.error("CRITICAL: Slot was taken during payment, Stripe already charged. Manual refund may be needed.");
+          // Still attempt to create records — the court_availability insert will fail with overlap
+        }
+      }
+    } catch (holdErr) {
+      console.error("Hold conversion error (non-fatal):", holdErr);
+    }
+  }
+
+  // Create session
+  const { data: session, error: sessionError } = await supabaseAdmin
+    .from("sessions")
+    .insert({
+      group_id: groupId,
+      court_id: courtId,
+      session_date: sessionDate,
+      start_time: startTime,
+      duration_minutes: durationMinutes,
+      court_price: courtPriceDollars,
+      min_players: paymentType === "split" && splitPlayers ? splitPlayers : 6,
+      max_players: courtCapacity,
+      payment_deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      state: "protected",
+      payment_type: paymentType,
+      sport_category_id: sportCategoryId,
+    })
+    .select("id")
+    .single();
+
+  if (sessionError || !session) {
+    throw new WebhookProcessingError("Failed to create deferred session", {
+      operation: "sessions.insert",
+      error: sessionError,
+    });
+  }
+
+  const sessionId = session.id;
+  console.log("Deferred session created:", sessionId);
+
+  // Create session_player
+  const { error: spError } = await supabaseAdmin.from("session_players").insert({
+    session_id: sessionId,
+    user_id: userId,
+    is_confirmed: true,
+    confirmed_at: new Date().toISOString(),
+  });
+  if (spError) {
+    throw new WebhookProcessingError("Failed to create session player", {
+      operation: "session_players.insert",
+      error: spError,
+    });
+  }
+
+  // Create court_availability
+  const { data: bookingRecord, error: caError } = await supabaseAdmin
+    .from("court_availability")
+    .insert({
+      court_id: courtId,
+      available_date: sessionDate,
+      start_time: startTime,
+      end_time: endTime,
+      is_booked: true,
+      booked_by_user_id: userId,
+      booked_by_group_id: groupId,
+      booked_by_session_id: sessionId,
+      payment_status: "completed",
+    })
+    .select("id")
+    .single();
+
+  if (caError) {
+    throw new WebhookProcessingError("Failed to create court availability", {
+      operation: "court_availability.insert",
+      error: caError,
+    });
+  }
+
+  // Handle equipment
+  if (equipment.length > 0 && bookingRecord) {
+    const { error: eqError } = await supabaseAdmin.from("booking_equipment").insert(
+      equipment.map((item: any) => ({
+        booking_id: bookingRecord.id,
+        equipment_id: item.equipmentId,
+        quantity: item.quantity,
+        price_at_booking: item.pricePerUnit,
+      }))
+    );
+    if (eqError) console.error("Equipment insert error (non-fatal):", eqError);
+  }
+
+  // Create payment record with Stripe snapshots
+  const serviceFeeCents = parseFloat(metadata.service_fee_total || "0");
+  const platformProfitCents = parseFloat(metadata.platform_fee_target || "0");
+  const courtAmountCents = parseFloat(metadata.court_amount || "0");
+  const totalChargeCents = parseFloat(metadata.total_charge || "0");
+  const creditsApplied = parseFloat(metadata.credits_applied || "0");
+
+  let stripeFeeActual: number | null = null;
+  if (paymentIntentId) {
+    try {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+        expand: ["latest_charge.balance_transaction"],
+      });
+      const latestCharge = pi.latest_charge as Stripe.Charge | null;
+      const balanceTx = latestCharge?.balance_transaction as Stripe.BalanceTransaction | null;
+      if (balanceTx?.fee != null) {
+        stripeFeeActual = balanceTx.fee / 100;
+      }
+    } catch (feeErr) {
+      console.error("Unable to retrieve Stripe fee (non-fatal):", feeErr);
+    }
+  }
+
+  const totalChargeDollars = totalChargeCents > 0
+    ? totalChargeCents / 100
+    : (stripeSession.amount_total || 0) / 100;
+
+  const { error: paymentError } = await supabaseAdmin.from("payments").insert({
+    session_id: sessionId,
+    user_id: userId,
+    amount: totalChargeDollars,
+    paid_with_credits: creditsApplied,
+    platform_fee: platformProfitCents / 100,
+    court_amount: courtAmountCents > 0 ? courtAmountCents / 100 : null,
+    service_fee: serviceFeeCents > 0 ? serviceFeeCents / 100 : null,
+    payment_type_snapshot: paymentType,
+    stripe_fee_actual: stripeFeeActual,
+    status: "completed",
+    paid_at: new Date().toISOString(),
+    stripe_payment_intent_id: paymentIntentId,
+  });
+
+  if (paymentError) {
+    throw new WebhookProcessingError("Failed to create deferred payment", {
+      operation: "payments.insert",
+      error: paymentError,
+    });
+  }
+
+  // Process referral credit
+  try {
+    await supabaseAdmin.rpc("process_referral_credit", { p_referred_user_id: userId });
+  } catch (refErr) {
+    console.error("Referral credit error (non-fatal):", refErr);
+  }
+
+  // Recalculate session confirmation
+  try {
+    const { data: rpcResult } = await supabaseAdmin.rpc("recalculate_and_maybe_confirm_session", {
+      p_session_id: sessionId,
+    });
+    const result = rpcResult as any;
+    if (result?.session_confirmed) {
+      console.log("Deferred session confirmed — triggering payout:", sessionId);
+      try {
+        const payoutResponse = await fetch(
+          `${Deno.env.get("SUPABASE_URL")}/functions/v1/payout-session`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({ sessionId }),
+          }
+        );
+        const payoutResult = await payoutResponse.json();
+        if (!payoutResult.success) {
+          console.error("Payout failed (non-fatal):", payoutResult.error);
+        }
+      } catch (payoutErr) {
+        console.error("Payout call error (non-fatal):", payoutErr);
+      }
+    }
+  } catch (rpcErr) {
+    console.error("Session recalculation error (non-fatal):", rpcErr);
+  }
+
+  console.log("Deferred session payment processed:", {
+    sessionId,
+    userId,
+    totalCharge: totalChargeDollars,
     paymentIntentId,
   });
 
