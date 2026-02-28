@@ -137,6 +137,7 @@ export default function CourtDetail() {
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   
   const [pendingPaymentSessionId, setPendingPaymentSessionId] = useState<string | null>(null);
+  const [pendingDeferredDetails, setPendingDeferredDetails] = useState<any | null>(null);
   
   // Quick game mode detection
   const isQuickGameMode = searchParams.get("quickGame") === "true";
@@ -300,16 +301,16 @@ export default function CourtDetail() {
   // Clean up unpaid flows when user cancels Stripe checkout
   useEffect(() => {
     const cancelledSessionId = searchParams.get("cancelled_session");
-    const cancelledChallengeId =
-      searchParams.get("payment") === "cancelled"
-        ? searchParams.get("challengeId")
-        : null;
+    const paymentCancelled = searchParams.get("payment") === "cancelled";
+    const cancelledChallengeId = paymentCancelled ? searchParams.get("challengeId") : null;
+    // Deferred normal booking cancel: payment=cancelled but no challengeId and no cancelled_session
+    const isDeferredCancel = paymentCancelled && !cancelledChallengeId && !cancelledSessionId;
 
-    if (!cancelledSessionId && !cancelledChallengeId) return;
+    if (!cancelledSessionId && !cancelledChallengeId && !isDeferredCancel) return;
 
     const newParams = new URLSearchParams(searchParams);
     if (cancelledSessionId) newParams.delete("cancelled_session");
-    if (cancelledChallengeId) {
+    if (paymentCancelled) {
       newParams.delete("payment");
       newParams.delete("challengeId");
     }
@@ -329,6 +330,15 @@ export default function CourtDetail() {
       toast({
         title: "Payment cancelled",
         description: "Your booking has been cancelled since payment was not completed.",
+        variant: "destructive",
+      });
+    }
+
+    if (isDeferredCancel) {
+      // No DB cleanup needed — no session was created. Hold expires naturally.
+      toast({
+        title: "Payment cancelled",
+        description: "Your booking was not created. The slot will be released shortly.",
         variant: "destructive",
       });
     }
@@ -772,6 +782,7 @@ export default function CourtDetail() {
 
     const totalDuration = getTotalDuration();
     const startTime = getStartTime();
+    const endTime = getEndTime();
     const bookingCourtId = selectedCourtId || court.id;
 
     try {
@@ -787,17 +798,16 @@ export default function CourtDetail() {
           splitPlayers: data.splitPlayers,
           sportCategoryId,
           equipment,
+          holdId: holdId || undefined,
         },
       });
 
       if (bookingError) throw bookingError;
 
-      const sessionId = bookingData?.session_id as string | undefined;
-      const totalPrice = Number(bookingData?.total_charge ?? 0);
-      if (!sessionId) throw new Error("Booking created without session id");
-
-      if (court.payment_timing === "at_booking") {
-        setPendingPaymentSessionId(sessionId);
+      // ── Deferred at_booking flow: no session created yet ──
+      if (bookingData?.deferred) {
+        const totalPrice = Number(bookingData?.total_charge ?? 0);
+        const bookingDetails = bookingData.booking_details;
 
         toast({
           title: isNewGroup ? "Group created!" : "Booking reserved!",
@@ -805,12 +815,18 @@ export default function CourtDetail() {
         });
 
         if (credits >= totalPrice && !loadingCredits) {
+          // Store deferred details for credits modal path
+          setPendingDeferredDetails(bookingDetails);
           setShowCreditsModal(true);
         } else {
-          await processCourtPayment(sessionId, false);
+          await processDeferredPayment(bookingDetails, false);
         }
         return;
       }
+
+      // ── Non-deferred (before_session) flow: session already created ──
+      const sessionId = bookingData?.session_id as string | undefined;
+      if (!sessionId) throw new Error("Booking created without session id");
 
       toast({
         title: isNewGroup ? "Group created & court booked!" : "Court booked!",
@@ -962,12 +978,36 @@ export default function CourtDetail() {
     method: "credits" | "payment",
     creditsToUse?: number
   ) => {
-    if (!pendingPaymentSessionId || !court) return;
+    if (!court) return;
+
+    // Deferred at_booking flow
+    if (pendingDeferredDetails) {
+      setBooking(true);
+      try {
+        await processDeferredPayment(
+          pendingDeferredDetails,
+          method === "credits",
+          method === "credits" ? creditsToUse : undefined
+        );
+      } catch (error) {
+        console.error("Error processing deferred payment:", error);
+        toast({
+          title: "Payment Error",
+          description: "Failed to process payment. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setBooking(false);
+      }
+      return;
+    }
+
+    // Legacy session-based flow (before_session courts that somehow reach this)
+    if (!pendingPaymentSessionId) return;
     
     setBooking(true);
     try {
       if (method === "credits") {
-        // Let backend decide if credits cover the full amount
         const { data, error } = await supabase.functions.invoke("create-payment", {
           body: {
             sessionId: pendingPaymentSessionId,
@@ -1010,7 +1050,6 @@ export default function CourtDetail() {
           return;
         }
 
-        // Backend returned a checkout URL (partial credits)
         if (data?.url) {
           setShowCreditsModal(false);
           setPendingPaymentSessionId(null);
@@ -1026,7 +1065,6 @@ export default function CourtDetail() {
 
         throw new Error("Unexpected payment response");
       } else {
-        // Pay with card only
         await processCourtPayment(pendingPaymentSessionId, false);
       }
     } catch (error) {
@@ -1105,6 +1143,77 @@ export default function CourtDetail() {
       toast({
         title: "Payment redirect failed",
         description: "Your booking is saved. Please make payment from the game details page.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Process deferred at_booking payment (no session exists yet)
+  const processDeferredPayment = async (bookingDetails: any, useCredits: boolean, creditsAmount?: number) => {
+    if (!court) return;
+
+    try {
+      const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-payment", {
+        body: {
+          deferred: true,
+          ...bookingDetails,
+          returnUrl: `/courts/${court.id}`,
+          origin: window.location.origin,
+          useCredits,
+          creditsAmount,
+        },
+      });
+
+      if (paymentError) {
+        const msg = paymentError?.message || "";
+        if (msg.includes("SLOT_UNAVAILABLE")) {
+          toast({
+            title: "Slot Unavailable",
+            description: "This slot was just taken. Please pick another time.",
+            variant: "destructive",
+          });
+          setShowCreditsModal(false);
+          setPendingDeferredDetails(null);
+          return;
+        }
+        throw paymentError;
+      }
+
+      if (paymentData?.url) {
+        setShowCreditsModal(false);
+        setPendingDeferredDetails(null);
+        const isInIframe = window.self !== window.top;
+        if (isInIframe) {
+          const opened = window.open(paymentData.url, "_blank", "noopener,noreferrer");
+          if (!opened) window.location.href = paymentData.url;
+        } else {
+          window.location.href = paymentData.url;
+        }
+        return;
+      } else if (paymentData?.success) {
+        // Credits-only payment completed
+        toast({
+          title: "Payment Complete",
+          description: paymentData.message || "Payment completed successfully.",
+        });
+        setShowCreditsModal(false);
+        setPendingDeferredDetails(null);
+        refetchCredits();
+        setSelectedSlots([]);
+        setSelectedEquipment([]);
+        if (court.venues && selectedDate) {
+          fetchAvailability(court.venues.id, court.id, selectedDate);
+        }
+        // Redirect to game page
+        if (paymentData.sessionId) {
+          navigate(`/games/${paymentData.sessionId}`);
+        }
+      }
+    } catch (paymentErr) {
+      console.error("Error initiating deferred payment:", paymentErr);
+      toast({
+        title: "Payment failed",
+        description: "Could not process payment. Please try again.",
         variant: "destructive",
       });
     }
