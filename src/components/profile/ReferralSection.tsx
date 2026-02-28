@@ -61,7 +61,9 @@ export function ReferralSection() {
   });
 
   const referralCode = profile?.referral_code || "";
-  const referralUrl = `${window.location.origin}/auth?tab=signup&ref=${referralCode}`;
+  const referralUrl = referralCode
+    ? `${window.location.origin}/auth?tab=signup&ref=${referralCode}`
+    : "";
   const completedReferrals = referrals.filter(r => r.status === "completed");
   const pendingReferrals = referrals.filter(r => r.status === "pending");
   const totalEarned = completedReferrals.reduce((sum, r) => sum + (r.credited_amount || 0), 0);
@@ -113,14 +115,14 @@ export function ReferralSection() {
         {/* Referral link */}
         <div className="flex gap-2">
           <Input
-            value={referralUrl}
+            value={referralUrl || "Loading your referral link..."}
             readOnly
             className="text-xs bg-muted/50 font-mono"
           />
-          <Button size="icon" variant="outline" onClick={handleCopy} className="shrink-0">
+          <Button size="icon" variant="outline" onClick={handleCopy} className="shrink-0" disabled={!referralCode}>
             {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
           </Button>
-          <Button size="icon" variant="default" onClick={handleShare} className="shrink-0">
+          <Button size="icon" variant="default" onClick={handleShare} className="shrink-0" disabled={!referralCode}>
             <Share2 className="h-4 w-4" />
           </Button>
         </div>
