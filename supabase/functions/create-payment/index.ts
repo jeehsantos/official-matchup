@@ -233,7 +233,10 @@ serve(async (req) => {
 
     const baseUrl = origin || "https://sportarenaxp.lovable.app";
     const successUrl = `${baseUrl}/payment-success?checkout_session_id={CHECKOUT_SESSION_ID}&session_id=${sessionId}`;
-    const cancelUrl = returnUrl ? `${baseUrl}${returnUrl}` : `${baseUrl}/courts`;
+    // Include cancelled_session param so frontend can clean up at_booking sessions
+    const cancelBase = returnUrl ? `${baseUrl}${returnUrl}` : `${baseUrl}/courts`;
+    const separator = cancelBase.includes("?") ? "&" : "?";
+    const cancelUrl = `${cancelBase}${separator}cancelled_session=${sessionId}`;
 
     // Separate line items for transparency
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [

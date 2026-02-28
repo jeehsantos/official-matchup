@@ -172,10 +172,15 @@ serve(async (req) => {
     const totalAmount = courtAmountWithEquipment + serviceFee;
 
     const sessionStart = new Date(`${sessionDate}T${startTime}`);
-    const paymentDeadline = new Date(
-      sessionStart.getTime() - (court.payment_hours_before ?? 24) * 60 * 60 * 1000
-    ).toISOString();
     const requiresPaymentFirst = court.payment_timing === "at_booking";
+
+    // For at_booking courts, set a short 15-minute deadline so the auto-cancel
+    // cron cleans up abandoned sessions quickly if the user never completes payment.
+    const paymentDeadline = requiresPaymentFirst
+      ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
+      : new Date(
+          sessionStart.getTime() - (court.payment_hours_before ?? 24) * 60 * 60 * 1000
+        ).toISOString();
 
     const { data: session, error: sessionError } = await supabaseAdmin
       .from("sessions")

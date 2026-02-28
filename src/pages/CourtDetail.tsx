@@ -297,6 +297,34 @@ export default function CourtDetail() {
     }
   }, []);
 
+  // Clean up at_booking session when user cancels Stripe checkout
+  useEffect(() => {
+    const cancelledSessionId = searchParams.get("cancelled_session");
+    if (!cancelledSessionId) return;
+
+    // Remove param from URL to prevent re-triggering
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete("cancelled_session");
+    const newSearch = newParams.toString();
+    navigate(`${window.location.pathname}${newSearch ? `?${newSearch}` : ""}`, { replace: true });
+
+    // Cancel the unpaid session via existing RPC
+    supabase.rpc("cancel_session_and_release_court", { session_id: cancelledSessionId })
+      .then(({ error }) => {
+        if (error) {
+          console.error("Failed to cancel session after Stripe cancel:", error);
+        } else {
+          console.log("Cancelled at_booking session after Stripe cancel:", cancelledSessionId);
+        }
+      });
+
+    toast({
+      title: "Payment cancelled",
+      description: "Your booking has been cancelled since payment was not completed.",
+      variant: "destructive",
+    });
+  }, [searchParams, navigate, toast]);
+
   // Restore booking state from localStorage after auth redirect - only runs once
   useEffect(() => {
     if (hasRestoredRef.current) return;
