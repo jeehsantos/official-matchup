@@ -126,6 +126,7 @@ serve(async (req) => {
         total_slots: totalPlayers,
         price_per_player: pricePerPlayer,
         status: initialStatus,
+        payment_type: effectivePaymentType,
         created_by: user.id,
       })
       .select("id")

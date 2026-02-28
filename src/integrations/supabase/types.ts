@@ -982,6 +982,7 @@ export type Database = {
           created_by: string
           game_mode: string
           id: string
+          payment_type: string
           price_per_player: number
           scheduled_date: string | null
           scheduled_time: string | null
@@ -997,6 +998,7 @@ export type Database = {
           created_by: string
           game_mode: string
           id?: string
+          payment_type?: string
           price_per_player?: number
           scheduled_date?: string | null
           scheduled_time?: string | null
@@ -1012,6 +1014,7 @@ export type Database = {
           created_by?: string
           game_mode?: string
           id?: string
+          payment_type?: string
           price_per_player?: number
           scheduled_date?: string | null
           scheduled_time?: string | null

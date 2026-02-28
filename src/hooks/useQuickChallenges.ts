@@ -33,6 +33,7 @@ interface QuickChallenge {
   scheduled_time: string | null;
   price_per_player: number;
   total_slots: number;
+  payment_type?: string;
   created_by: string;
   created_at: string;
   sport_categories?: {
