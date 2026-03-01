@@ -107,7 +107,7 @@ export function MobileCourtSheet({
               touchAction: 'pan-y',
             }}
           >
-            <div className="p-4 space-y-4">
+            <div className="p-4 pb-32 space-y-4">
               {loading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="animate-pulse">
