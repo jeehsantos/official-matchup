@@ -1271,6 +1271,17 @@ export default function CourtDetail() {
     setCurrentImageIndex((prev) => (prev - 1 + photos.length) % photos.length);
   };
 
+  const handleLoginToBook = () => {
+    localStorage.setItem('redirectAfterAuth', window.location.pathname);
+    localStorage.setItem('pendingBookingState', JSON.stringify({
+      courtId: id,
+      selectedDate: selectedDate?.toISOString(),
+      selectedSlots: selectedSlots,
+      selectedEquipment: selectedEquipment,
+    }));
+    navigate("/auth");
+  };
+
   // Format duration for display
   const formatDuration = (minutes: number): string => {
     if (minutes < 60) return `${minutes}min`;
@@ -1763,7 +1774,7 @@ export default function CourtDetail() {
 
                     {/* Selected slots summary */}
                     {selectedSlots.length > 0 && (
-                      <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3">
+                      <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3 lg:hidden">
                         <div className="flex items-center justify-between">
                           <span className="font-medium">Selected Time</span>
                           <button 
@@ -1816,13 +1827,13 @@ export default function CourtDetail() {
           </div>
 
           {/* Right Column - Photo Gallery (Desktop only) */}
-          <div className="hidden lg:block">
+          <div className="hidden lg:block lg:w-[90%] xl:w-[86%] 2xl:w-[82%] lg:max-w-[860px] lg:ml-auto">
             <div className="sticky top-24 space-y-4">
               {photos.length > 0 ? (
                 <>
                   {/* Main Photo */}
                   <div 
-                    className="aspect-square rounded-xl overflow-hidden bg-muted cursor-pointer relative group"
+                    className="aspect-[4/3] rounded-xl overflow-hidden bg-muted cursor-pointer relative group"
                     onClick={() => setShowGallery(true)}
                   >
                     <img 
@@ -1840,7 +1851,7 @@ export default function CourtDetail() {
                   
                   {/* Thumbnail strip */}
                   {photos.length > 1 && (
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-4 gap-2 max-w-full">
                       {photos.slice(0, 4).map((photo, index) => (
                         <button
                           key={index}
@@ -1866,6 +1877,75 @@ export default function CourtDetail() {
                           )}
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {selectedSlots.length > 0 && (
+                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">Selected Time</span>
+                        <button
+                          onClick={() => setSelectedSlots([])}
+                          className="text-sm text-muted-foreground hover:text-foreground"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 text-lg font-semibold">
+                        <Clock className="h-5 w-5 text-primary" />
+                        {getStartTime()} - {getEndTime()}
+                        <span className="text-muted-foreground font-normal text-sm">
+                          ({formatDuration(totalDuration)})
+                        </span>
+                      </div>
+
+                      {isHoldValid && remainingSeconds > 0 && (
+                        <HoldCountdown remainingSeconds={remainingSeconds} />
+                      )}
+
+                      <div className="space-y-1 pt-2 border-t border-primary/10">
+                        <div className="flex justify-between text-sm">
+                          <span>Court ({formatDuration(totalDuration)})</span>
+                          <span>${courtPrice.toFixed(2)}</span>
+                        </div>
+                        {selectedEquipment.length > 0 && (
+                          <>
+                            {selectedEquipment.map(item => (
+                              <div key={item.equipmentId} className="flex justify-between text-sm text-muted-foreground">
+                                <span>{item.name} × {item.quantity}</span>
+                                <span>${(item.quantity * item.pricePerUnit).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                        <div className="flex justify-between text-lg font-bold text-primary pt-1">
+                          <span>Total</span>
+                          <span>${totalPrice.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-primary/10">
+                        {user ? (
+                          <Button onClick={handleBookSlot} disabled={booking} className="gap-2 w-full">
+                            {booking ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Booking...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="h-4 w-4" />
+                                Book Now
+                              </>
+                            )}
+                          </Button>
+                        ) : (
+                          <Button className="gap-2 w-full" onClick={handleLoginToBook}>
+                            <LogIn className="h-4 w-4" />
+                            Login to Book
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </>
@@ -1945,7 +2025,7 @@ export default function CourtDetail() {
         {/* Booking Footer */}
         {selectedSlots.length > 0 && selectedDate && (
           <div 
-            className="fixed left-0 right-0 p-4 glass border-t border-border z-40" 
+            className="fixed left-0 right-0 p-4 glass border-t border-border z-40 lg:hidden" 
             style={{ 
               bottom: user ? 'calc(4rem + env(safe-area-inset-bottom, 0px))' : 'env(safe-area-inset-bottom, 0px)'
             }}
@@ -1973,19 +2053,7 @@ export default function CourtDetail() {
                   )}
                 </Button>
               ) : (
-                <Button 
-                  className="gap-2"
-                  onClick={() => {
-                    localStorage.setItem('redirectAfterAuth', window.location.pathname);
-                    localStorage.setItem('pendingBookingState', JSON.stringify({
-                      courtId: id,
-                      selectedDate: selectedDate?.toISOString(),
-                      selectedSlots: selectedSlots,
-                      selectedEquipment: selectedEquipment,
-                    }));
-                    navigate("/auth");
-                  }}
-                >
+                <Button className="gap-2" onClick={handleLoginToBook}>
                   <LogIn className="h-4 w-4" />
                   Login to Book
                 </Button>

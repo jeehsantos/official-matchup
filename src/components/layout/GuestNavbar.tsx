@@ -22,12 +22,12 @@ export function GuestNavbar({ className }: GuestNavbarProps) {
 
   return (
     <header className={cn("fixed top-0 left-0 right-0 z-50 border-b border-slate-200/70 bg-white/75 backdrop-blur-md", className)}>
-      <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-4 sm:px-6">
-        <Link to="/" className="flex items-center" aria-label="Sport Arena home">
+      <div className="mx-auto flex h-20 w-full items-center px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-20">
+        <Link to="/" className="flex items-center lg:flex-1" aria-label="Sport Arena home">
           <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-36 w-auto object-contain sm:h-36" />
         </Link>
 
-        <nav className="hidden items-center gap-8 text-sm font-medium text-slate-600 md:flex">
+        <nav className="hidden items-center justify-center gap-8 text-sm font-medium text-slate-600 md:flex lg:flex-1">
           {navLinks.map((link) => {
             const isActive =
             link.href === "/" ?
@@ -49,7 +49,7 @@ export function GuestNavbar({ className }: GuestNavbarProps) {
           })}
         </nav>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 lg:flex-1 lg:justify-end">
           <Link to="/auth" className="hidden sm:block">
             <Button variant="ghost" className="font-semibold text-slate-700">
               Sign In
