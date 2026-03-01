@@ -103,6 +103,15 @@ export default function Courts() {
 
   // Build sport filter options from user's preferred sports only
   const sportFilterOptions = useMemo(() => {
+    // In quick game mode, only show the selected sport
+    if (isQuickGameMode && quickGameSport) {
+      const matchedCat = sportCategories.find((cat) => cat.name === quickGameSport);
+      if (matchedCat) {
+        return [{ value: matchedCat.name, label: matchedCat.display_name, emoji: matchedCat.icon || "🎯" }];
+      }
+      return [{ value: quickGameSport, label: quickGameSport, emoji: "🎯" }];
+    }
+
     const preferredSportSet = new Set(preferredSports);
     const preferredOptions = sportCategories
       .filter((cat) => preferredSportSet.has(cat.name))
@@ -125,10 +134,16 @@ export default function Courts() {
 
     // Fallback: no preferred sports (shouldn't happen with profile gate)
     return [{ value: "all", label: "All Sports", emoji: "🎯" }];
-  }, [sportCategories, preferredSports]);
+  }, [sportCategories, preferredSports, isQuickGameMode, quickGameSport]);
 
-  // Auto-select default sport filter
+  // Auto-select default sport filter (quick game mode overrides)
   useEffect(() => {
+    if (isQuickGameMode && quickGameSport) {
+      // In quick game mode, lock the sport filter to the selected sport
+      setSelectedSport(quickGameSport);
+      setHasAppliedPreferredSportDefault(true);
+      return;
+    }
     if (!hasAppliedPreferredSportDefault && preferredSports.length > 0) {
       if (sportFilterOptions.length === 1) {
         setSelectedSport(sportFilterOptions[0].value);
@@ -137,7 +152,7 @@ export default function Courts() {
       }
       setHasAppliedPreferredSportDefault(true);
     }
-  }, [preferredSports, sportFilterOptions, hasAppliedPreferredSportDefault]);
+  }, [preferredSports, sportFilterOptions, hasAppliedPreferredSportDefault, isQuickGameMode, quickGameSport]);
 
   useEffect(() => {
     fetchCourts();
