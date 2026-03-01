@@ -85,15 +85,15 @@ export default function Landing() {
       <GuestNavbar />
 
       <main>
-        <section className="overflow-hidden bg-gradient-to-br from-[#f0f9ff] to-[#e0f2fe] px-6 pb-20 pt-36">
-          <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-2">
+        <section className="overflow-hidden bg-gradient-to-br from-[#f0f9ff] to-[#e0f2fe] px-6 pb-20 pt-36 lg:pb-12 lg:pt-24 xl:pb-20 xl:pt-36">
+          <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-2 lg:gap-8 xl:gap-12">
             <div>
-              <h1 className="mb-6 text-5xl font-extrabold leading-tight md:text-6xl">
+              <h1 className="mb-6 text-5xl font-extrabold leading-tight md:text-6xl lg:text-5xl lg:leading-[1.05] xl:text-6xl">
                 Book courts faster. <br />
                 <span className="text-[#0e8ddd]">Play harder.</span>
               </h1>
 
-              <p className="mb-10 max-w-lg text-lg leading-relaxed text-slate-700">
+              <p className="mb-10 max-w-lg text-lg leading-relaxed text-slate-700 lg:mb-7 xl:mb-10">
                 Find and book
                 <span
                   className="relative mx-1 inline-flex h-8 items-end overflow-hidden align-bottom text-[#0e8ddd] transition-[width] duration-500 ease-out"
@@ -124,7 +124,7 @@ export default function Landing() {
                 </Link>
               </div>
 
-              <div className="mt-12 flex gap-8">
+              <div className="mt-12 flex gap-8 lg:mt-8 xl:mt-12">
                 <div>
                   <div className="text-2xl font-bold">52K+</div>
                   <div className="text-xs uppercase tracking-wider text-slate-500">Active Players</div>
@@ -137,7 +137,7 @@ export default function Landing() {
             </div>
 
             <div className="relative hidden lg:block">
-              <div className="relative aspect-[4/5] overflow-hidden rounded-[3rem] border-8 border-white shadow-2xl">
+              <div className="relative aspect-[4/5] overflow-hidden rounded-[3rem] border-8 border-white shadow-2xl lg:aspect-[11/10] xl:aspect-[4/5]">
                 <img src="/homeCourt.png" alt="Sport court" className="h-full w-full object-cover" />
                 <div className="absolute bottom-8 left-6 z-20 w-56 rounded-xl border border-slate-100 bg-white p-4 shadow-xl">
                   <div className="flex items-center gap-3">
