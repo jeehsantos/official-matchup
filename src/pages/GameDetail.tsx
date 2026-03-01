@@ -8,8 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SessionBadge } from "@/components/ui/session-badge";
-import { PlayerCount } from "@/components/ui/player-count";
 import { SportIcon } from "@/components/ui/sport-icon";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { EditPlayerLimits } from "@/components/session/EditPlayerLimits";
 import { supabase } from "@/integrations/supabase/client";
@@ -602,20 +603,25 @@ export default function GameDetail() {
 
       // Add player to session
       const currentSession = gameData.session;
+      const allPlayers = [...gameData.players, ...gameData.waitingList];
+      const isJoiningWaitlist = allPlayers.length >= currentSession.max_players || gameData.players.length >= currentSession.max_players;
+
       const { error } = await supabase
         .from("session_players")
         .insert({
           session_id: id,
           user_id: user.id,
-          is_confirmed: currentSession.payment_type === "single",
-          confirmed_at: currentSession.payment_type === "single" ? new Date().toISOString() : null,
+          is_confirmed: !isJoiningWaitlist && currentSession.payment_type === "single",
+          confirmed_at: !isJoiningWaitlist && currentSession.payment_type === "single" ? new Date().toISOString() : null,
         });
 
       if (error) throw error;
 
       toast({
-        title: "Joined successfully!",
-        description: currentSession.payment_type === "single"
+        title: isJoiningWaitlist ? "Added to waitlist" : "Joined successfully!",
+        description: isJoiningWaitlist
+          ? "You've been added to the waiting list. You'll be promoted when a spot opens."
+          : currentSession.payment_type === "single"
           ? "You've joined and your presence is confirmed."
           : "You've joined the session.",
       });
@@ -836,48 +842,6 @@ const getGoogleMapsUrl = (address: string): string => {
               </CardContent>
             )}
           </Card>
-
-          {/* Organizer Rescue Controls */}
-          {isOrganizer && !isGamePast && (
-            <Card className="border-warning/50 bg-warning/5">
-              <CardContent className="p-4 lg:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                      <LifeBuoy className="h-5 w-5 text-warning" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">Rescue Mode</p>
-                      <p className="text-sm text-muted-foreground">
-                        {isRescueActive 
-                          ? "External players can join this session" 
-                          : "Allow external players to fill empty spots"}
-                      </p>
-                    </div>
-                  </div>
-                  {isRescueActive ? (
-                    <Button 
-                      variant="outline" 
-                      onClick={handleDeactivateRescue}
-                      disabled={actionLoading}
-                    >
-                      {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Deactivate Rescue
-                    </Button>
-                  ) : (
-                    <Button 
-                      className="bg-warning text-warning-foreground hover:bg-warning/90"
-                      onClick={handleActivateRescue}
-                      disabled={actionLoading}
-                    >
-                      {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Activate Rescue
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Join Rescue Session - For external players */}
           {canJoinRescue && (
@@ -1108,15 +1072,20 @@ const getGoogleMapsUrl = (address: string): string => {
                         </Button>
                       )
                     )}
-                    {!isOrganizer && !isPlayerInGame && !isInWaitingList && !isGamePast && players.length < session.max_players && (
+                    {!isOrganizer && !isPlayerInGame && !isInWaitingList && !isGamePast && (
                       <Button
                         className="btn-athletic"
                         onClick={handleJoinSession}
                         disabled={actionLoading}
                       >
                         {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                        Join & Confirm
+                        {players.length >= session.max_players ? "Join Waitlist" : "Join & Confirm"}
                       </Button>
+                    )}
+                    {!isOrganizer && isInWaitingList && !isGamePast && (
+                      <Badge variant="secondary" className="px-4 py-2">
+                        You're on the waitlist
+                      </Badge>
                     )}
                   </div>
                 </div>
@@ -1155,18 +1124,18 @@ const getGoogleMapsUrl = (address: string): string => {
                         )
                       )}
                       {isInWaitingList && (
-                        <Button disabled className="opacity-50">
-                          Waiting List
-                        </Button>
+                        <Badge variant="secondary" className="px-4 py-2">
+                          You're on the waitlist
+                        </Badge>
                       )}
-                      {!isPlayerInGame && !isInWaitingList && players.length < session.max_players && (
+                      {!isPlayerInGame && !isInWaitingList && (
                         <Button
                           className="btn-athletic"
                           onClick={handleJoinSession}
                           disabled={actionLoading}
                         >
                           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Join Session
+                          {players.length >= session.max_players ? "Join Waitlist" : "Join Session"}
                         </Button>
                       )}
                     </>
@@ -1181,29 +1150,194 @@ const getGoogleMapsUrl = (address: string): string => {
             <PaymentDeadlineWarning paymentDeadline={session.payment_deadline} />
           )}
 
-          {/* Player Count with Organizer Edit */}
+          {/* Unified Players Section */}
           <Card>
-            <CardContent className="p-4 lg:p-6">
-              <div className="flex items-center justify-between mb-4">
+            <CardContent className="p-4 lg:p-6 space-y-4">
+              {/* Header: Players count + Rescue Mode toggle */}
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-muted-foreground" />
                   <span className="font-semibold">Players</span>
+                  <span className="text-muted-foreground font-medium">
+                    {players.length} / {session.max_players}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   {session.payment_type === "split" && (
-                    <Badge variant="outline">
+                    <Badge variant="outline" className="text-xs">
                       {paidCount}/{players.length} paid
                     </Badge>
                   )}
+                  {isOrganizer && !isGamePast && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground hidden sm:inline">Rescue Mode</span>
+                            <Switch
+                              checked={isRescueActive}
+                              onCheckedChange={(checked) => {
+                                if (checked) handleActivateRescue();
+                                else handleDeactivateRescue();
+                              }}
+                              disabled={actionLoading}
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Allow external players to fill empty spots</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                 </div>
               </div>
-              <PlayerCount
-                current={players.length}
-                min={session.min_players}
-                max={session.max_players}
-              />
-              
-              {/* Organizer can edit player limits */}
+
+              {/* Progress bar */}
+              {(() => {
+                const percentage = Math.min((players.length / session.min_players) * 100, 100);
+                const isFull = players.length >= session.max_players;
+                const hasMinimum = players.length >= session.min_players;
+                return (
+                  <div className="space-y-1">
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${hasMinimum ? "bg-primary" : "bg-warning"}`}
+                        style={{ width: `${Math.min((players.length / session.max_players) * 100, 100)}%` }}
+                      />
+                    </div>
+                    {!hasMinimum && (
+                      <p className="text-xs text-warning font-medium">
+                        Need {session.min_players - players.length} more to confirm
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Confirmed Players */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-muted-foreground">
+                  Confirmed ({players.length})
+                </h4>
+                {players.length > 0 ? (
+                  <div className="space-y-2">
+                    {players.map((player) => {
+                      const normalizedNationality = normalizeCountryCode(player.profile?.nationality_code);
+                      const flagCode = normalizedNationality?.toLowerCase() ?? null;
+                      const flagUrl = flagCode ? `https://flagcdn.com/w40/${flagCode}.png` : null;
+                      const isConfirmed = session.payment_type === "single" ? player.is_confirmed : player.isPaid;
+
+                      return (
+                        <div key={player.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={player.profile?.avatar_url || undefined} />
+                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                              {player.profile?.full_name?.split(" ").map(n => n[0]).join("") || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="flex items-center gap-1.5 font-medium text-sm">
+                              <span className="truncate">
+                                {player.profile?.full_name || "Player"}
+                              </span>
+                              {player.user_id === user.id && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">You</Badge>
+                              )}
+                              {flagUrl && (
+                                <img
+                                  className="h-4 w-auto rounded-sm shadow-sm shrink-0"
+                                  src={flagUrl}
+                                  alt={`Flag of ${normalizedNationality}`}
+                                  title={normalizedNationality ?? undefined}
+                                  loading="lazy"
+                                />
+                              )}
+                            </p>
+                            {isConfirmed ? (
+                              <span className="text-xs text-success flex items-center gap-1">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-success" /> Confirmed
+                              </span>
+                            ) : (
+                              <span className="text-xs text-warning flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3" /> Pending Payment
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-2">No players yet</p>
+                )}
+              </div>
+
+              {/* Empty spots */}
+              {players.length < session.max_players && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-1">
+                  <Users className="h-4 w-4" />
+                  <span>{session.max_players - players.length} Spots Available</span>
+                </div>
+              )}
+
+              {/* Waitlist */}
+              {waitingList.length > 0 && (
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-muted-foreground">
+                      Waitlist ({waitingList.length})
+                    </h4>
+                    <Badge variant="outline" className="text-[10px] tracking-wider">QUEUE</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {waitingList.map((player, index) => {
+                      const normalizedNationality = normalizeCountryCode(player.profile?.nationality_code);
+                      const flagCode = normalizedNationality?.toLowerCase() ?? null;
+                      const flagUrl = flagCode ? `https://flagcdn.com/w40/${flagCode}.png` : null;
+                      const joinedAgo = (() => {
+                        const diffMs = Date.now() - new Date(player.joined_at).getTime();
+                        const diffH = Math.floor(diffMs / 3600000);
+                        if (diffH < 1) return "Joined recently";
+                        return `Joined ${diffH}h ago`;
+                      })();
+
+                      return (
+                        <div key={player.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-dashed">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={player.profile?.avatar_url || undefined} />
+                            <AvatarFallback className="bg-muted text-muted-foreground font-semibold">
+                              {player.profile?.full_name?.split(" ").map(n => n[0]).join("") || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="flex items-center gap-1.5 font-medium text-sm">
+                              <span className="truncate">
+                                {player.profile?.full_name || "Player"}
+                              </span>
+                              {player.user_id === user.id && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">You</Badge>
+                              )}
+                              {flagUrl && (
+                                <img
+                                  className="h-4 w-auto rounded-sm shadow-sm shrink-0"
+                                  src={flagUrl}
+                                  alt={`Flag of ${normalizedNationality}`}
+                                  loading="lazy"
+                                />
+                              )}
+                            </p>
+                            <span className="text-xs text-muted-foreground">{joinedAgo}</span>
+                          </div>
+                          <span className="text-sm font-semibold text-muted-foreground">#{index + 1}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Edit Player Limits - organizer only */}
               {isOrganizer && !isGamePast && (
                 <EditPlayerLimits 
                   sessionId={session.id}
@@ -1216,132 +1350,6 @@ const getGoogleMapsUrl = (address: string): string => {
               )}
             </CardContent>
           </Card>
-
-          {/* Players List */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                {isGamePast ? "Players who attended" : "Confirmed Players"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 lg:p-6 pt-2">
-              {players.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {players.map((player) => {
-                    const normalizedNationality = normalizeCountryCode(
-                      player.profile?.nationality_code
-                    );
-                    const flagCode = normalizedNationality?.toLowerCase() ?? null;
-                    const flagUrl = flagCode ? `https://flagcdn.com/w40/${flagCode}.png` : null;
-
-                    return (
-                      <div
-                        key={player.id}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
-                      >
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={player.profile?.avatar_url || undefined} />
-                          <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                            {player.profile?.full_name?.split(" ").map(n => n[0]).join("") || "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="flex items-center gap-1 font-medium">
-                            <span className="truncate">
-                              {player.profile?.full_name || "Player"}
-                              {player.user_id === user.id && " (You)"}
-                            </span>
-                            {flagUrl && (
-                              <img
-                                className="h-4 w-4 rounded-full shadow-sm"
-                                src={flagUrl}
-                                alt={`Flag of ${normalizedNationality}`}
-                                title={normalizedNationality ?? undefined}
-                                loading="lazy"
-                              />
-                            )}
-                          </p>
-                          <div className="flex items-center gap-1">
-                            {session.payment_type === "single" ? (
-                              // For organizer-paid sessions, check is_confirmed
-                              player.is_confirmed ? (
-                                <span className="text-xs text-success flex items-center gap-1">
-                                  <CheckCircle2 className="h-3 w-3" /> Confirmed
-                                </span>
-                              ) : (
-                                <span className="text-xs text-warning flex items-center gap-1">
-                                  <XCircle className="h-3 w-3" /> Pending
-                                </span>
-                              )
-                            ) : (
-                              // For split payment sessions, check isPaid
-                              player.isPaid ? (
-                                <span className="text-xs text-success flex items-center gap-1">
-                                  <CheckCircle2 className="h-3 w-3" /> Confirmed
-                                </span>
-                              ) : (
-                                <span className="text-xs text-warning flex items-center gap-1">
-                                  <XCircle className="h-3 w-3" /> Pending
-                                </span>
-                              )
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-center text-muted-foreground py-4">No players yet</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Waiting List */}
-          {waitingList.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ListOrdered className="h-5 w-5" />
-                  Waiting List
-                  <Badge variant="secondary" className="ml-2">{waitingList.length}</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 lg:p-6 pt-2">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {waitingList.map((player, index) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-dashed"
-                    >
-                      <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-semibold">
-                        {index + 1}
-                      </div>
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={player.profile?.avatar_url || undefined} />
-                        <AvatarFallback className="bg-muted text-muted-foreground font-semibold">
-                          {player.profile?.full_name?.split(" ").map(n => n[0]).join("") || "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">
-                          {player.profile?.full_name || "Player"}
-                          {player.user_id === user.id && " (You)"}
-                        </p>
-                        <span className="text-xs text-muted-foreground">
-                          In queue
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-sm text-muted-foreground mt-4 text-center">
-                  Players on the waiting list will be automatically added when a spot opens up.
-                </p>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Notes */}
           {session.notes && (
