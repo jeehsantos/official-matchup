@@ -173,6 +173,11 @@ serve(async (req) => {
 
       await applyHeldLiabilities(supabaseAdmin, user.id, sessionId, courtAmountForThisPayerCents, 0);
 
+      // Process referral credit for credits-only payment
+      try {
+        await supabaseAdmin.rpc("process_referral_credit", { p_referred_user_id: user.id });
+      } catch (e) { console.error("Referral credit error (non-fatal):", e); }
+
       try {
         const { data: rpcResult } = await supabaseAdmin.rpc("recalculate_and_maybe_confirm_session", {
           p_session_id: sessionId,

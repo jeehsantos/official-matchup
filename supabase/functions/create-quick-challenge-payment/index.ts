@@ -208,6 +208,11 @@ serve(async (req) => {
 
       await checkAndUpdateChallengeStatus(supabaseAdmin, challengeId);
 
+      // Process referral credit for credits-only payment
+      try {
+        await supabaseAdmin.rpc("process_referral_credit", { p_referred_user_id: user.id });
+      } catch (e) { console.error("Referral credit error (non-fatal):", e); }
+
       console.log(`Quick challenge paid with credits - User: ${user.id}, Amount: $${pricePerPlayer}`);
 
       return new Response(JSON.stringify({

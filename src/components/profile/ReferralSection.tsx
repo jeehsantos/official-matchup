@@ -27,7 +27,7 @@ export function ReferralSection() {
       return data;
     },
     enabled: !!user,
-    staleTime: 1000 * 60 * 30,
+    staleTime: 1000 * 60 * 5,
   });
 
   // Fetch referral stats
@@ -43,7 +43,9 @@ export function ReferralSection() {
       return data || [];
     },
     enabled: !!user,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 30,
+    refetchInterval: 1000 * 30,
+    refetchOnWindowFocus: true,
   });
 
   // Fetch referral settings for display
