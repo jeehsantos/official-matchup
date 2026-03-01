@@ -20,15 +20,17 @@ interface CourtsMapProps {
 
 // Custom price marker icon
 const createPriceIcon = (price: number, isHighlighted: boolean) => {
+  const label = `$${price}`;
+  const estimatedWidth = label.length * 8 + 16;
   return L.divIcon({
     className: "custom-price-marker",
     html: `
       <div class="price-marker ${isHighlighted ? "highlighted" : ""}">
-        $${price}
+        ${label}
       </div>
     `,
-    iconSize: [0, 0],
-    iconAnchor: [0, 0],
+    iconSize: [estimatedWidth, 28],
+    iconAnchor: [estimatedWidth / 2, 14],
   });
 };
 
@@ -219,16 +221,12 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
         closeOnClick: true
       });
 
-      // Open popup on click
+      // Leaflet auto-opens bound popups on click; just track hover state
       marker.on("click", () => {
-        mapRef.current?.closePopup();
-        marker.openPopup();
         onMarkerHover?.(court.id);
       });
       marker.on("popupclose", () => {
-        if (onMarkerHover) {
-          onMarkerHover(null);
-        }
+        onMarkerHover?.(null);
       });
 
       marker.addTo(mapRef.current!);

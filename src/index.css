@@ -335,16 +335,16 @@
   white-space: nowrap;
   transition: all 0.2s ease;
   border: 1px solid hsl(var(--border));
-  transform: translate(-50%, -50%);
   cursor: pointer;
   width: max-content;
+  text-align: center;
 }
 
 .price-marker:hover,
 .price-marker.highlighted {
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
-  transform: translate(-50%, -50%) scale(1.1);
+  transform: scale(1.1);
   z-index: 1000 !important;
 }
 
