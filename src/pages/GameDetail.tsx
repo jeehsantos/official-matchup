@@ -1260,7 +1260,7 @@ const getGoogleMapsUrl = (address: string): string => {
                               </span>
                             ) : (
                               <span className="text-xs text-warning flex items-center gap-1">
-                                <AlertTriangle className="h-3 w-3" /> Pending Payment
+                                <AlertTriangle className="h-3 w-3" /> {session?.payment_type === 'single' ? 'Pending Confirmation' : 'Pending Payment'}
                               </span>
                             )}
                           </div>
