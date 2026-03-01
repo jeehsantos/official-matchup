@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SessionBadge } from "@/components/ui/session-badge";
 import { PlayerCount } from "@/components/ui/player-count";
 import { SportIcon } from "@/components/ui/sport-icon";
-import { SessionChat } from "@/components/chat/SessionChat";
+
 import { EditPlayerLimits } from "@/components/session/EditPlayerLimits";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -1358,17 +1358,6 @@ const getGoogleMapsUrl = (address: string): string => {
             </Card>
           )}
 
-          {/* Session Chat - Only for organizer or court manager */}
-          {(isOrganizer || isCourtManager) && courtManagerId && (
-            <SessionChat
-              sessionId={session.id}
-              sessionDate={session.session_date}
-              sessionStartTime={session.start_time}
-              sessionDurationMinutes={session.duration_minutes}
-              courtManagerId={courtManagerId}
-              isOrganizer={isOrganizer}
-            />
-          )}
 
           {/* Organizer Cancel Session */}
           {isOrganizer && !isGamePast && (
