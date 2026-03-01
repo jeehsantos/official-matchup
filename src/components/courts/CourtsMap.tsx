@@ -1,7 +1,9 @@
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import L from "leaflet";
 import { getCityCoordinates, nzCenter } from "@/data/nzLocations";
 import type { Database } from "@/integrations/supabase/types";
+import { Link } from "react-router-dom";
+import { X } from "lucide-react";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
 type Venue = Database["public"]["Tables"]["venues"]["Row"];
@@ -14,21 +16,17 @@ interface CourtsMapProps {
   courts: CourtWithVenue[];
   highlightedCourtId: string | null;
   onMarkerHover?: (courtId: string | null) => void;
-  /** Preserve the current search params when linking to /courts/:id (e.g. ?quickGame=true) */
   linkSearch?: string;
 }
 
-// Custom price marker icon
 const createPriceIcon = (price: number, isHighlighted: boolean) => {
+  const label = `$${price}`;
+  const estimatedWidth = label.length * 8 + 16;
   return L.divIcon({
     className: "custom-price-marker",
-    html: `
-      <div class="price-marker ${isHighlighted ? "highlighted" : ""}">
-        $${price} NZD
-      </div>
-    `,
-    iconSize: [80, 28],
-    iconAnchor: [40, 14],
+    html: `<div class="price-marker ${isHighlighted ? "highlighted" : ""}">${label}</div>`,
+    iconSize: [estimatedWidth, 28],
+    iconAnchor: [estimatedWidth / 2, 14],
   });
 };
 
@@ -45,6 +43,17 @@ const getVenueOffset = (seed: string) => {
   return { latOffset, lngOffset };
 };
 
+interface PopupData {
+  courtId: string;
+  courtName: string;
+  venueName: string;
+  cityName: string;
+  price: number;
+  image: string;
+  href: string;
+  pixelPos: { x: number; y: number };
+}
+
 export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearch = "" }: CourtsMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -53,29 +62,30 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
   const geocodeInFlightRef = useRef<Set<string>>(new Set());
   const geocodeControllersRef = useRef<Map<string, AbortController>>(new Map());
   const [geocodedPositions, setGeocodedPositions] = useState<Record<string, { lat: number; lng: number }>>({});
+  const [popup, setPopup] = useState<PopupData | null>(null);
 
+  const closePopup = useCallback(() => {
+    setPopup(null);
+    onMarkerHover?.(null);
+  }, [onMarkerHover]);
+
+  // Geocoding effect
   useEffect(() => {
     const venuesToGeocode = new Map<string, string>();
-
     courts.forEach((court) => {
       const venue = court.venues;
       if (!venue) return;
       if (venue.latitude != null && venue.longitude != null) return;
       if (geocodedPositions[court.venue_id]) return;
-
       const addressParts = [venue.address, venue.city, venue.country].filter(Boolean);
       if (addressParts.length === 0) return;
-
       if (!geocodeInFlightRef.current.has(court.venue_id)) {
         venuesToGeocode.set(court.venue_id, addressParts.join(", "));
       }
     });
-
     if (venuesToGeocode.size === 0) return;
-
     const fetchGeocodes = async () => {
       const nextPositions: Record<string, { lat: number; lng: number }> = {};
-
       for (const [venueId, query] of venuesToGeocode.entries()) {
         geocodeInFlightRef.current.add(venueId);
         const controller = new AbortController();
@@ -104,14 +114,11 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
           geocodeControllersRef.current.delete(venueId);
         }
       }
-
       if (Object.keys(nextPositions).length > 0) {
         setGeocodedPositions((prev) => ({ ...prev, ...nextPositions }));
       }
     };
-
     fetchGeocodes();
-
     return () => {
       geocodeControllersRef.current.forEach((controller) => controller.abort());
       geocodeControllersRef.current.clear();
@@ -119,31 +126,17 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
     };
   }, [courts, geocodedPositions]);
 
-  // Get courts with coordinates (real or city-based fallback)
   const courtsWithPosition = useMemo(() => {
     return courts.map((court) => {
       if (court.venues?.latitude != null && court.venues?.longitude != null) {
-        return {
-          ...court,
-          position: { lat: court.venues.latitude, lng: court.venues.longitude },
-        };
+        return { ...court, position: { lat: court.venues.latitude, lng: court.venues.longitude } };
       } else if (geocodedPositions[court.venue_id]) {
         const position = geocodedPositions[court.venue_id];
-        return {
-          ...court,
-          position: { lat: position.lat, lng: position.lng },
-        };
+        return { ...court, position: { lat: position.lat, lng: position.lng } };
       } else if (court.venues?.city) {
         const cityCoords = getCityCoordinates(court.venues.city);
         const { latOffset, lngOffset } = getVenueOffset(court.venue_id);
-        // Add slight deterministic offset for courts in same city
-        return {
-          ...court,
-          position: {
-            lat: cityCoords.lat + latOffset,
-            lng: cityCoords.lng + lngOffset,
-          },
-        };
+        return { ...court, position: { lat: cityCoords.lat + latOffset, lng: cityCoords.lng + lngOffset } };
       }
       return null;
     }).filter(Boolean) as (CourtWithVenue & { position: { lat: number; lng: number } })[];
@@ -152,7 +145,6 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
   // Initialize map
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-
     mapRef.current = L.map(containerRef.current, {
       center: [nzCenter.lat, nzCenter.lng],
       zoom: 5,
@@ -162,13 +154,27 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
       doubleClickZoom: true,
       boxZoom: true,
     });
-
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     }).addTo(mapRef.current);
-
-    // Add zoom control to top-right
     L.control.zoom({ position: "topright" }).addTo(mapRef.current);
+
+    // Close popup when clicking empty map area
+    mapRef.current.on("click", () => {
+      setPopup(null);
+      onMarkerHover?.(null);
+    });
+
+    // Update popup position on zoom/pan
+    mapRef.current.on("moveend", () => {
+      setPopup((prev) => {
+        if (!prev || !mapRef.current) return prev;
+        const court = courtsWithPosition.find((c) => c.id === prev.courtId);
+        if (!court) return prev;
+        const point = mapRef.current!.latLngToContainerPoint([court.position.lat, court.position.lng]);
+        return { ...prev, pixelPos: { x: point.x, y: point.y } };
+      });
+    });
 
     return () => {
       if (mapRef.current) {
@@ -179,79 +185,53 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
     };
   }, []);
 
-  // Update markers when courts change
+  // Update markers
   useEffect(() => {
     if (!mapRef.current) return;
-
-    // Clear existing markers
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current.clear();
 
-    // Add new markers
     courtsWithPosition.forEach((court) => {
       const marker = L.marker([court.position.lat, court.position.lng], {
         icon: createPriceIcon(court.hourly_rate, court.id === highlightedCourtId),
       });
 
-      // Build popup with image - escape quotes properly
-      const venueImage = court.photo_urls?.[0] || court.photo_url || court.venues?.photo_url || '/placeholder.svg';
-      const courtName = court.name.replace(/'/g, "\\'");
-      const venueName = court.venues?.name?.replace(/'/g, "\\'") || '';
-      const cityName = court.venues?.city?.replace(/'/g, "\\'") || '';
-      const courtHref = `/courts/${court.id}${linkSearch || ''}`;
-      
-      const popupContent = `
-        <div style="min-width: 200px;">
-          <a href="${courtHref}" style="display: block; text-decoration: none; color: inherit;">
-            <img 
-              src="${venueImage}" 
-              alt="${courtName}"
-              style="width: 100%; height: 128px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;"
-              onerror="this.src='/placeholder.svg'"
-            />
-            <div style="font-weight: 600; font-size: 16px; margin-bottom: 4px;">${courtName}</div>
-            ${venueName ? `<div style="font-size: 14px; color: #666; margin-bottom: 2px;">${venueName}</div>` : ''}
-            ${cityName ? `<div style="font-size: 12px; color: #999;">${cityName}</div>` : ''}
-            <div style="font-size: 14px; font-weight: 700; color: hsl(174 72% 40%); margin-top: 8px;">$${court.hourly_rate} NZD/hour</div>
-          </a>
-        </div>
-      `;
-      
-      marker.bindPopup(popupContent, {
-        maxWidth: 250,
-        minWidth: 200,
-        className: 'court-popup',
-        closeButton: true,
-        autoClose: true,
-        closeOnClick: true
-      });
+      marker.addTo(mapRef.current!);
 
-      // Open popup on click
-      marker.on("click", () => {
-        mapRef.current?.closePopup();
-        marker.openPopup();
-        onMarkerHover?.(court.id);
-      });
-      marker.on("popupclose", () => {
-        if (onMarkerHover) {
-          onMarkerHover(null);
-        }
-      });
+      // Attach click handler directly on the rendered DOM element
+      const el = marker.getElement();
+      if (el) {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if (!mapRef.current) return;
+          const point = mapRef.current.latLngToContainerPoint([court.position.lat, court.position.lng]);
+          const venueImage = court.photo_urls?.[0] || court.photo_url || court.venues?.photo_url || '/placeholder.svg';
+          setPopup({
+            courtId: court.id,
+            courtName: court.name,
+            venueName: court.venues?.name || '',
+            cityName: court.venues?.city || '',
+            price: court.hourly_rate,
+            image: venueImage,
+            href: `/courts/${court.id}${linkSearch || ''}`,
+            pixelPos: { x: point.x, y: point.y },
+          });
+          onMarkerHover?.(court.id);
+        });
+      }
 
       marker.addTo(mapRef.current!);
       markersRef.current.set(court.id, marker);
     });
 
-    // Only fit bounds on initial load, not on every filter change
     if (!hasInitializedBoundsRef.current && courtsWithPosition.length > 0) {
       const courtsWithRealCoords = courtsWithPosition.filter(
         (c) => c.venues?.latitude != null && c.venues?.longitude != null
       );
-
       if (courtsWithRealCoords.length > 0) {
-        const bounds = L.latLngBounds(
-          courtsWithRealCoords.map((c) => [c.position.lat, c.position.lng])
-        );
+        const bounds = L.latLngBounds(courtsWithRealCoords.map((c) => [c.position.lat, c.position.lng]));
         mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
       } else if (courtsWithPosition[0]?.venues?.city) {
         const cityCoords = getCityCoordinates(courtsWithPosition[0].venues.city);
@@ -261,7 +241,7 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
     }
   }, [courtsWithPosition, linkSearch]);
 
-  // Update marker icons when highlighted court changes (without recreating markers)
+  // Update marker icons on highlight change
   useEffect(() => {
     markersRef.current.forEach((marker, courtId) => {
       const court = courtsWithPosition.find((c) => c.id === courtId);
@@ -271,5 +251,49 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
     });
   }, [highlightedCourtId, courtsWithPosition]);
 
-  return <div ref={containerRef} className="w-full h-full" />;
+  return (
+    <div className="relative w-full h-full">
+      <div ref={containerRef} className="w-full h-full" />
+      {popup && (
+        <div
+          className="absolute z-[1000] pointer-events-auto"
+          style={{
+            left: popup.pixelPos.x,
+            top: popup.pixelPos.y - 8,
+            transform: 'translate(-50%, -100%)',
+          }}
+        >
+          <div className="bg-card rounded-xl shadow-lg border border-border overflow-hidden w-[220px]">
+            <button
+              onClick={closePopup}
+              className="absolute top-1 right-1 z-10 bg-background/80 rounded-full p-0.5 hover:bg-background"
+            >
+              <X className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+            <Link to={popup.href} className="block text-inherit no-underline">
+              <img
+                src={popup.image}
+                alt={popup.courtName}
+                className="w-full h-[120px] object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
+              />
+              <div className="p-2.5">
+                <p className="font-semibold text-sm text-foreground leading-tight mb-0.5">
+                  {popup.venueName || popup.courtName}
+                </p>
+                {popup.cityName && (
+                  <p className="text-xs text-muted-foreground mb-1.5">{popup.cityName}</p>
+                )}
+                <p className="text-sm font-bold text-primary">${popup.price} /hour</p>
+              </div>
+            </Link>
+          </div>
+          {/* Arrow pointing down */}
+          <div className="flex justify-center -mt-px">
+            <div className="w-3 h-3 bg-card border-r border-b border-border rotate-45 -translate-y-1.5" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

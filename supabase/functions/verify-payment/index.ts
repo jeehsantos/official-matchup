@@ -4,173 +4,203 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Platform fee: $1.50 fixed
-const PLATFORM_FEE = 1.50;
+const WEBHOOK_WAITING_STATUS = "paid_but_waiting_for_webhook";
+const PENDING_STATUS = "pending";
+const NEXT_ACTION = "poll_payments_table";
+
+class HttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+function buildResponse(payload: Record<string, unknown>) {
+  return new Response(JSON.stringify(payload), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    status: 200,
+  });
+}
+
+function buildPendingOrWaitingResponse({
+  status,
+  payment,
+}: {
+  status: typeof PENDING_STATUS | typeof WEBHOOK_WAITING_STATUS;
+  payment: { amount: unknown; paid_with_credits: unknown; paid_at: unknown } | null | undefined;
+}) {
+  return buildResponse({
+    success: true,
+    status,
+    isConfirmed: false,
+    webhookAuthority: true,
+    payment: payment
+      ? { amount: payment.amount, paidWithCredits: payment.paid_with_credits, paidAt: payment.paid_at }
+      : null,
+    nextAction: NEXT_ACTION,
+  });
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseClient = createClient(
+  const supabaseAdmin = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
 
-  try {
-    const { checkoutSessionId, sessionId, userId } = await req.json();
-
-    if (!checkoutSessionId && !sessionId) {
-      throw new Error("Checkout session ID or session ID is required");
-    }
-
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2024-12-18.acacia",
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
     });
+  }
 
-    let paymentSuccessful = false;
-    let paymentIntentId: string | null = null;
-    let amountPaid = 0;
-    let actualUserId = userId;
-    let actualSessionId = sessionId;
+  const supabaseAuth = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    { global: { headers: { Authorization: authHeader } } }
+  );
 
-    if (checkoutSessionId) {
-      // Verify the checkout session
-      const checkoutSession = await stripe.checkout.sessions.retrieve(checkoutSessionId);
-      
-      if (checkoutSession.payment_status === "paid") {
-        paymentSuccessful = true;
-        paymentIntentId = checkoutSession.payment_intent as string;
-        amountPaid = (checkoutSession.amount_total || 0) / 100;
-        actualUserId = checkoutSession.metadata?.user_id || userId;
-        actualSessionId = checkoutSession.metadata?.session_id || sessionId;
-      }
+  try {
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
+    if (userError || !user) {
+      throw new HttpError(401, "Invalid or expired JWT");
     }
 
-    if (!paymentSuccessful) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        message: "Payment not completed" 
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
+    const { sessionId, userId, checkoutSessionId } = await req.json();
+
+    if (!userId) {
+      throw new Error("userId is required");
+    }
+
+    if (user.id !== userId) {
+      throw new HttpError(403, "Forbidden: user mismatch");
+    }
+
+    // ─── Deferred at_booking flow: sessionId may not be known yet ───
+    if (!sessionId && checkoutSessionId) {
+      return await handleDeferredVerification(checkoutSessionId, user.id, supabaseAdmin);
+    }
+
+    if (!sessionId) {
+      throw new Error("sessionId is required");
+    }
+
+    // ─── Standard session-based verification ───
+    const { data: payment, error: paymentError } = await supabaseAdmin
+      .from("payments")
+      .select("id, status, amount, paid_with_credits, paid_at, stripe_payment_intent_id")
+      .eq("session_id", sessionId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (paymentError) {
+      throw new Error("Failed to fetch payment status");
+    }
+
+    const isAlreadyCompleted = payment?.status === "completed" || payment?.status === "transferred";
+
+    if (isAlreadyCompleted) {
+      const { data: player } = await supabaseAdmin
+        .from("session_players")
+        .select("is_confirmed")
+        .eq("session_id", sessionId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      return buildResponse({
+        success: true,
+        status: payment.status,
+        isConfirmed: player?.is_confirmed === true,
+        payment: {
+          amount: payment.amount,
+          paidWithCredits: payment.paid_with_credits,
+          paidAt: payment.paid_at,
+        },
+        nextAction: "none",
       });
     }
 
-    // Update payment record in database
-    const { data: existingPayment } = await supabaseClient
-      .from("payments")
-      .select("id")
-      .eq("session_id", actualSessionId)
-      .eq("user_id", actualUserId)
-      .maybeSingle();
+    if (checkoutSessionId) {
+      const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+        apiVersion: "2024-12-18.acacia",
+      });
 
-    if (existingPayment) {
-      // Update existing payment
-      await supabaseClient
-        .from("payments")
-        .update({
-          status: "completed",
-          paid_at: new Date().toISOString(),
-          stripe_payment_intent_id: paymentIntentId,
-          platform_fee: PLATFORM_FEE,
-        })
-        .eq("id", existingPayment.id);
-    } else {
-      // Create new payment record
-      await supabaseClient
-        .from("payments")
-        .insert({
-          session_id: actualSessionId,
-          user_id: actualUserId,
-          amount: amountPaid,
-          status: "completed",
-          paid_at: new Date().toISOString(),
-          stripe_payment_intent_id: paymentIntentId,
-          platform_fee: PLATFORM_FEE,
-        });
-    }
+      const checkoutSession = await stripe.checkout.sessions.retrieve(checkoutSessionId);
 
-    // Update court_availability payment status
-    const { data: session } = await supabaseClient
-      .from("sessions")
-      .select("id")
-      .eq("id", actualSessionId)
-      .single();
-
-    if (session) {
-      await supabaseClient
-        .from("court_availability")
-        .update({ payment_status: "completed" })
-        .eq("booked_by_session_id", actualSessionId);
-    }
-
-    // Update session_players to confirmed after successful payment
-    const { error: playerUpdateError } = await supabaseClient
-      .from("session_players")
-      .update({ 
-        is_confirmed: true, 
-        confirmed_at: new Date().toISOString() 
-      })
-      .eq("session_id", actualSessionId)
-      .eq("user_id", actualUserId);
-
-    if (playerUpdateError) {
-      console.error("Error updating session player:", playerUpdateError);
-    }
-
-    // Trigger payment transfer to venue owner after confirmation
-    if (!playerUpdateError) {
-      try {
-        const transferResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/transfer-payment`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          },
-          body: JSON.stringify({
-            sessionId: actualSessionId,
-            userId: actualUserId,
-          }),
-        });
-
-        const transferResult = await transferResponse.json();
-        if (!transferResult.success) {
-          console.error("Payment transfer failed:", transferResult.error);
-          // Don't fail the payment verification - transfer can be retried
-        } else {
-          console.log("Payment transferred to venue owner:", transferResult);
-        }
-      } catch (transferError) {
-        console.error("Error calling transfer-payment function:", transferError);
-        // Don't fail the payment verification - transfer can be retried
+      if (checkoutSession.payment_status === "paid") {
+        return buildPendingOrWaitingResponse({ status: WEBHOOK_WAITING_STATUS, payment });
       }
+
+      return buildPendingOrWaitingResponse({ status: PENDING_STATUS, payment });
     }
 
-    console.log("Payment verified and recorded:", {
-      sessionId: actualSessionId,
-      userId: actualUserId,
-      amount: amountPaid,
-      playerConfirmed: !playerUpdateError,
-    });
-
-    return new Response(JSON.stringify({ 
-      success: true,
-      message: "Payment verified and recorded",
-      sessionId: actualSessionId,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    return buildPendingOrWaitingResponse({ status: PENDING_STATUS, payment });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error("Error verifying payment:", errorMessage);
+    const status = error instanceof HttpError ? error.status : 500;
+    console.error("Error in verify-payment:", errorMessage);
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+      status,
     });
   }
 });
+
+// ─── Deferred verification: look up payment by Stripe checkout session ────
+async function handleDeferredVerification(
+  checkoutSessionId: string,
+  userId: string,
+  // deno-lint-ignore no-explicit-any
+  supabaseAdmin: any
+) {
+  const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+    apiVersion: "2024-12-18.acacia",
+  });
+
+  const checkoutSession = await stripe.checkout.sessions.retrieve(checkoutSessionId);
+  const paymentIntentId = checkoutSession.payment_intent as string;
+
+  if (!paymentIntentId) {
+    return buildPendingOrWaitingResponse({ status: PENDING_STATUS, payment: null });
+  }
+
+  // Look up payment by stripe_payment_intent_id (webhook creates this row)
+  const { data: payment } = await supabaseAdmin
+    .from("payments")
+    .select("id, status, amount, paid_with_credits, paid_at, session_id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (payment && (payment.status === "completed" || payment.status === "transferred")) {
+    return buildResponse({
+      success: true,
+      status: payment.status,
+      isConfirmed: true,
+      sessionId: payment.session_id, // Return the webhook-created session_id
+      payment: {
+        amount: payment.amount,
+        paidWithCredits: payment.paid_with_credits,
+        paidAt: payment.paid_at,
+      },
+      nextAction: "none",
+    });
+  }
+
+  // Stripe shows paid but webhook hasn't processed yet
+  if (checkoutSession.payment_status === "paid") {
+    return buildPendingOrWaitingResponse({ status: WEBHOOK_WAITING_STATUS, payment: null });
+  }
+
+  return buildPendingOrWaitingResponse({ status: PENDING_STATUS, payment: null });
+}

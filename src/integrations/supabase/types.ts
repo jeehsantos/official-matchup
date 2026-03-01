@@ -97,89 +97,6 @@ export type Database = {
           },
         ]
       }
-      chat_conversations: {
-        Row: {
-          booking_id: string | null
-          court_manager_id: string
-          created_at: string
-          expires_at: string | null
-          id: string
-          organizer_id: string
-          session_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          booking_id?: string | null
-          court_manager_id: string
-          created_at?: string
-          expires_at?: string | null
-          id?: string
-          organizer_id: string
-          session_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          booking_id?: string | null
-          court_manager_id?: string
-          created_at?: string
-          expires_at?: string | null
-          id?: string
-          organizer_id?: string
-          session_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "chat_conversations_booking_id_fkey"
-            columns: ["booking_id"]
-            isOneToOne: false
-            referencedRelation: "court_availability"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "chat_conversations_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: true
-            referencedRelation: "sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      chat_messages: {
-        Row: {
-          content: string
-          conversation_id: string
-          created_at: string
-          id: string
-          is_read: boolean | null
-          sender_id: string
-        }
-        Insert: {
-          content: string
-          conversation_id: string
-          created_at?: string
-          id?: string
-          is_read?: boolean | null
-          sender_id: string
-        }
-        Update: {
-          content?: string
-          conversation_id?: string
-          created_at?: string
-          id?: string
-          is_read?: boolean | null
-          sender_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "chat_messages_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "chat_conversations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       contact_messages: {
         Row: {
           created_at: string
@@ -282,6 +199,7 @@ export type Database = {
       }
       courts: {
         Row: {
+          allowed_sports: string[] | null
           capacity: number
           created_at: string
           ground_type: Database["public"]["Enums"]["ground_type"] | null
@@ -297,11 +215,11 @@ export type Database = {
           photo_url: string | null
           photo_urls: string[] | null
           rules: string | null
-          sport_type: Database["public"]["Enums"]["sport_type"]
           updated_at: string
           venue_id: string
         }
         Insert: {
+          allowed_sports?: string[] | null
           capacity?: number
           created_at?: string
           ground_type?: Database["public"]["Enums"]["ground_type"] | null
@@ -317,11 +235,11 @@ export type Database = {
           photo_url?: string | null
           photo_urls?: string[] | null
           rules?: string | null
-          sport_type: Database["public"]["Enums"]["sport_type"]
           updated_at?: string
           venue_id: string
         }
         Update: {
+          allowed_sports?: string[] | null
           capacity?: number
           created_at?: string
           ground_type?: Database["public"]["Enums"]["ground_type"] | null
@@ -337,7 +255,6 @@ export type Database = {
           photo_url?: string | null
           photo_urls?: string[] | null
           rules?: string | null
-          sport_type?: Database["public"]["Enums"]["sport_type"]
           updated_at?: string
           venue_id?: string
         }
@@ -603,6 +520,64 @@ export type Database = {
           },
         ]
       }
+      held_credit_liabilities: {
+        Row: {
+          amount_cents: number
+          applied_at: string | null
+          applied_session_id: string | null
+          created_at: string
+          id: string
+          source_payment_id: string
+          source_session_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          amount_cents: number
+          applied_at?: string | null
+          applied_session_id?: string | null
+          created_at?: string
+          id?: string
+          source_payment_id: string
+          source_session_id: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          applied_at?: string | null
+          applied_session_id?: string | null
+          created_at?: string
+          id?: string
+          source_payment_id?: string
+          source_session_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "held_credit_liabilities_applied_session_id_fkey"
+            columns: ["applied_session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "held_credit_liabilities_source_payment_id_fkey"
+            columns: ["source_payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "held_credit_liabilities_source_session_id_fkey"
+            columns: ["source_session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
@@ -639,40 +614,61 @@ export type Database = {
       payments: {
         Row: {
           amount: number
+          court_amount: number | null
           created_at: string
           id: string
           paid_at: string | null
           paid_with_credits: number | null
+          payment_type_snapshot: string | null
           platform_fee: number | null
+          service_fee: number | null
           session_id: string
           status: Database["public"]["Enums"]["payment_status"]
+          stripe_fee_actual: number | null
           stripe_payment_intent_id: string | null
+          stripe_transfer_id: string | null
+          transfer_amount: number | null
+          transferred_at: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           amount: number
+          court_amount?: number | null
           created_at?: string
           id?: string
           paid_at?: string | null
           paid_with_credits?: number | null
+          payment_type_snapshot?: string | null
           platform_fee?: number | null
+          service_fee?: number | null
           session_id: string
           status?: Database["public"]["Enums"]["payment_status"]
+          stripe_fee_actual?: number | null
           stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
+          transfer_amount?: number | null
+          transferred_at?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           amount?: number
+          court_amount?: number | null
           created_at?: string
           id?: string
           paid_at?: string | null
           paid_with_credits?: number | null
+          payment_type_snapshot?: string | null
           platform_fee?: number | null
+          service_fee?: number | null
           session_id?: string
           status?: Database["public"]["Enums"]["payment_status"]
+          stripe_fee_actual?: number | null
           stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
+          transfer_amount?: number | null
+          transferred_at?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -686,6 +682,39 @@ export type Database = {
           },
         ]
       }
+      platform_settings: {
+        Row: {
+          id: string
+          is_active: boolean
+          manager_fee_percentage: number
+          player_fee: number
+          stripe_fixed: number
+          stripe_percent: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          is_active?: boolean
+          manager_fee_percentage?: number
+          player_fee?: number
+          stripe_fixed?: number
+          stripe_percent?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          is_active?: boolean
+          manager_fee_percentage?: number
+          player_fee?: number
+          stripe_fixed?: number
+          stripe_percent?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -696,6 +725,7 @@ export type Database = {
           nationality_code: string | null
           phone: string | null
           preferred_sports: string[] | null
+          referral_code: string | null
           updated_at: string
           user_id: string
         }
@@ -708,6 +738,7 @@ export type Database = {
           nationality_code?: string | null
           phone?: string | null
           preferred_sports?: string[] | null
+          referral_code?: string | null
           updated_at?: string
           user_id: string
         }
@@ -720,6 +751,7 @@ export type Database = {
           nationality_code?: string | null
           phone?: string | null
           preferred_sports?: string[] | null
+          referral_code?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -753,6 +785,62 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "quick_challenge_messages_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "quick_challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quick_challenge_payments: {
+        Row: {
+          amount: number
+          challenge_id: string
+          court_amount: number
+          created_at: string
+          id: string
+          paid_at: string | null
+          payment_method_type: string | null
+          platform_profit_target: number | null
+          service_fee_total: number | null
+          status: string
+          stripe_fee_actual: number | null
+          stripe_payment_intent_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          challenge_id: string
+          court_amount?: number
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          payment_method_type?: string | null
+          platform_profit_target?: number | null
+          service_fee_total?: number | null
+          status?: string
+          stripe_fee_actual?: number | null
+          stripe_payment_intent_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          challenge_id?: string
+          court_amount?: number
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          payment_method_type?: string | null
+          platform_profit_target?: number | null
+          service_fee_total?: number | null
+          status?: string
+          stripe_fee_actual?: number | null
+          stripe_payment_intent_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_challenge_payments_challenge_id_fkey"
             columns: ["challenge_id"]
             isOneToOne: false
             referencedRelation: "quick_challenges"
@@ -811,6 +899,7 @@ export type Database = {
           created_by: string
           game_mode: string
           id: string
+          payment_type: string
           price_per_player: number
           scheduled_date: string | null
           scheduled_time: string | null
@@ -826,6 +915,7 @@ export type Database = {
           created_by: string
           game_mode: string
           id?: string
+          payment_type?: string
           price_per_player?: number
           scheduled_date?: string | null
           scheduled_time?: string | null
@@ -841,6 +931,7 @@ export type Database = {
           created_by?: string
           game_mode?: string
           id?: string
+          payment_type?: string
           price_per_player?: number
           scheduled_date?: string | null
           scheduled_time?: string | null
@@ -873,6 +964,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      referral_settings: {
+        Row: {
+          credit_amount: number
+          id: string
+          is_active: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          credit_amount?: number
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          credit_amount?: number
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      referrals: {
+        Row: {
+          created_at: string
+          credited_amount: number | null
+          credited_at: string | null
+          id: string
+          referral_code: string
+          referred_user_id: string
+          referrer_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          credited_amount?: number | null
+          credited_at?: string | null
+          id?: string
+          referral_code: string
+          referred_user_id: string
+          referrer_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          credited_amount?: number | null
+          credited_at?: string | null
+          id?: string
+          referral_code?: string
+          referred_user_id?: string
+          referrer_id?: string
+          status?: string
+        }
+        Relationships: []
       }
       session_players: {
         Row: {
@@ -1290,6 +1438,7 @@ export type Database = {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
       }
+      cancel_expired_unpaid_sessions: { Args: never; Returns: number }
       cancel_session_and_release_court: {
         Args: { session_id: string }
         Returns: boolean
@@ -1313,6 +1462,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_valid_invitation: { Args: { _group_id: string }; Returns: boolean }
       is_challenge_participant: {
         Args: { _challenge_id: string; _user_id: string }
         Returns: boolean
@@ -1320,6 +1470,14 @@ export type Database = {
       is_group_member: {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
+      }
+      process_referral_credit: {
+        Args: { p_referred_user_id: string }
+        Returns: boolean
+      }
+      recalculate_and_maybe_confirm_session: {
+        Args: { p_session_id: string }
+        Returns: Json
       }
       release_booking_hold: {
         Args: { p_hold_id: string; p_user_id: string }
@@ -1347,7 +1505,14 @@ export type Database = {
         | "slot_released"
         | "player_joined"
         | "group_invite"
-      payment_status: "pending" | "completed" | "failed" | "refunded"
+        | "session_cancelled"
+      payment_status:
+        | "pending"
+        | "completed"
+        | "failed"
+        | "refunded"
+        | "transferred"
+        | "cancelled"
       payment_timing: "at_booking" | "before_session"
       session_state: "protected" | "rescue" | "released"
       session_type:
@@ -1502,8 +1667,16 @@ export const Constants = {
         "slot_released",
         "player_joined",
         "group_invite",
+        "session_cancelled",
       ],
-      payment_status: ["pending", "completed", "failed", "refunded"],
+      payment_status: [
+        "pending",
+        "completed",
+        "failed",
+        "refunded",
+        "transferred",
+        "cancelled",
+      ],
       payment_timing: ["at_booking", "before_session"],
       session_state: ["protected", "rescue", "released"],
       session_type: [

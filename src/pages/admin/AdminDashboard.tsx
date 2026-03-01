@@ -5,12 +5,13 @@ import {
   Settings, 
   Layers, 
   Activity,
-  ArrowLeft,
   Shield,
-  Archive
+  Archive,
+  Gift,
+  DollarSign
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { MobileLayout } from "@/components/layout/MobileLayout";
+import { AdminLayout } from "@/components/layout/AdminLayout";
 
 function AdminDashboardContent() {
   const navigate = useNavigate();
@@ -34,26 +35,23 @@ function AdminDashboardContent() {
       icon: Archive,
       href: "/admin/archiving",
     },
+    {
+      title: "Referral Program",
+      description: "Configure referral credit amount and view stats",
+      icon: Gift,
+      href: "/admin/referrals",
+    },
+    {
+      title: "Platform Fees",
+      description: "Configure commission fees for players and managers",
+      icon: DollarSign,
+      href: "/admin/fees",
+    },
   ];
 
   return (
-    <MobileLayout showHeader={false} showBottomNav={false}>
-      <div className="min-h-screen bg-background">
-        {/* Header */}
-        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-          <div className="flex items-center gap-4 p-4 max-w-4xl mx-auto">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/games")}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              <h1 className="font-display font-semibold text-xl">Admin Dashboard</h1>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 space-y-6 max-w-4xl mx-auto">
-          {/* Overview Card */}
+    <AdminLayout title="Admin Dashboard">
+      <div className="space-y-6">
           <Card className="border-primary/20 bg-primary/5">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
@@ -70,7 +68,6 @@ function AdminDashboardContent() {
             </CardContent>
           </Card>
 
-          {/* Menu Grid */}
           <div className="grid gap-4 sm:grid-cols-2">
             {menuItems.map((item) => (
               <Card
@@ -94,9 +91,8 @@ function AdminDashboardContent() {
               </Card>
             ))}
           </div>
-        </div>
       </div>
-    </MobileLayout>
+    </AdminLayout>
   );
 }
 

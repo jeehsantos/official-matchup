@@ -33,6 +33,7 @@ interface QuickChallenge {
   scheduled_time: string | null;
   price_per_player: number;
   total_slots: number;
+  payment_type?: string;
   created_by: string;
   created_at: string;
   sport_categories?: {
@@ -52,6 +53,9 @@ interface QuickChallenge {
     id: string;
     name: string;
     photo_url?: string | null;
+    ground_type?: string | null;
+    payment_timing?: string | null;
+    payment_hours_before?: number | null;
   } | null;
   quick_challenge_players?: QuickChallengePlayer[];
 }
@@ -71,7 +75,7 @@ export function useQuickChallenges(filters?: {
           *,
           sport_categories (id, name, display_name, icon),
           venues (id, name, address, city, photo_url),
-          courts (id, name, photo_url),
+          courts (id, name, photo_url, ground_type, payment_timing, payment_hours_before),
           quick_challenge_players (
             id,
             challenge_id,
@@ -317,9 +321,12 @@ export function useLeaveChallenge() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["quick-challenges"] });
+      queryClient.invalidateQueries({ queryKey: ["user-credits"] });
       toast({
         title: "Left challenge",
-        description: data?.message || "You've left the challenge.",
+        description: data?.creditsAdded
+          ? `$${data.creditsAdded.toFixed(2)} has been added to your platform credits.`
+          : data?.message || "You've left the challenge.",
       });
     },
     onError: (error: Error) => {
@@ -340,45 +347,19 @@ export function useCancelChallenge() {
     mutationFn: async (challengeId: string) => {
       if (!user) throw new Error("Must be logged in");
 
-      // Verify user is the organizer and check for paid players
-      const { data: challenge } = await supabase
-        .from("quick_challenges")
-        .select("created_by, quick_challenge_players(id, payment_status)")
-        .eq("id", challengeId)
-        .single();
-
-      if (!challenge || challenge.created_by !== user.id) {
-        throw new Error("Only the organizer can cancel this challenge");
-      }
-
-      // Check if any player has already paid
-      const hasPaidPlayers = challenge.quick_challenge_players?.some(
-        (player) => player.payment_status === "paid"
-      );
-
-      if (hasPaidPlayers) {
-        throw new Error("Cannot cancel - some players have already paid. Please refund them first.");
-      }
-
-      // Delete all players first (due to FK constraint)
-      await supabase
-        .from("quick_challenge_players")
-        .delete()
-        .eq("challenge_id", challengeId);
-
-      // Delete the challenge entirely instead of just updating status
-      const { error } = await supabase
-        .from("quick_challenges")
-        .delete()
-        .eq("id", challengeId);
+      const { data, error } = await supabase.functions.invoke("cancel-quick-challenge", {
+        body: { challengeId },
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
-    onSuccess: () => {
+    onSuccess: (_, challengeId) => {
       queryClient.invalidateQueries({ queryKey: ["quick-challenges"] });
+      queryClient.invalidateQueries({ queryKey: ["user-credits"] });
       toast({
         title: "Lobby cancelled",
-        description: "The challenge has been cancelled.",
+        description: "The challenge has been cancelled. Paid players will receive platform credits.",
       });
     },
     onError: (error: Error) => {

@@ -44,9 +44,9 @@ export function useUserCredits(): UseUserCreditsReturn {
       return Number(data) || 0;
     },
     enabled: !!user,
-    staleTime: 1000 * 60 * 5, // 5 minutes - credits don't change often
-    refetchOnWindowFocus: true, // Refetch when user returns to tab
-    refetchInterval: 1000 * 60 * 10, // Refetch every 10 minutes
+    staleTime: 1000 * 30, // 30 seconds for faster credit updates
+    refetchOnWindowFocus: true,
+    refetchInterval: 1000 * 30, // Refetch every 30 seconds
   });
 
   const addCredits = async (

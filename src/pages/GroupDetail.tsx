@@ -334,8 +334,8 @@ export default function GroupDetail() {
     );
   }
 
-  const admins = members.filter(m => m.is_admin);
-  const regularMembers = members.filter(m => !m.is_admin);
+  const admins = members.filter(m => m.is_admin && m.user_id !== group.organizer_id);
+  const regularMembers = members.filter(m => !m.is_admin && m.user_id !== group.organizer_id);
 
   return (
     <MobileLayout showHeader={false} showBottomNav={false}>

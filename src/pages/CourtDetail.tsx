@@ -27,6 +27,7 @@ import {
   Users
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { format, getDay } from "date-fns";
@@ -39,7 +40,7 @@ import { checkProfileComplete } from "@/lib/profile-utils";
 import { useVenueEquipment } from "@/hooks/useVenueEquipment";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
-import { PaymentTimingChoice } from "@/components/booking/PaymentTimingChoice";
+
 import { HoldCountdown } from "@/components/booking/HoldCountdown";
 import { SlotStatusBadge } from "@/components/booking/SlotStatusBadge";
 import { useBookingHold } from "@/hooks/useBookingHold";
@@ -73,6 +74,7 @@ interface AvailableCourt {
   ground_type: string | null;
   rules: string | null;
   photo_urls: string[] | null;
+  allowed_sports?: string[] | null;
 }
 
 type SlotStatus = "AVAILABLE" | "HELD" | "CONFIRMED";
@@ -99,10 +101,26 @@ interface AvailabilityResponse {
   venue_courts?: AvailableCourt[];
 }
 
+// Map facility names to emoji icons
+function getFacilityIcon(facility: string): string {
+  const lower = facility.toLowerCase();
+  if (lower.includes("changing") || lower.includes("locker room")) return "🚪";
+  if (lower.includes("shower")) return "🚿";
+  if (lower.includes("locker")) return "🔒";
+  if (lower.includes("parking")) return "🅿️";
+  if (lower.includes("restroom") || lower.includes("toilet")) return "🚻";
+  if (lower.includes("water") || lower.includes("fountain")) return "💧";
+  if (lower.includes("first aid")) return "🩹";
+  if (lower.includes("wi-fi") || lower.includes("wifi")) return "📶";
+  if (lower.includes("seat") || lower.includes("spectator")) return "💺";
+  if (lower.includes("cafe") || lower.includes("food")) return "☕";
+  return "✅";
+}
+
 export default function CourtDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -117,9 +135,9 @@ export default function CourtDetail() {
   const [showProfileAlert, setShowProfileAlert] = useState(false);
   const [profileMissingFields, setProfileMissingFields] = useState<string[]>([]);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
-  const [showPaymentTimingChoice, setShowPaymentTimingChoice] = useState(false);
+  
   const [pendingPaymentSessionId, setPendingPaymentSessionId] = useState<string | null>(null);
-  const [pendingPaymentAmount, setPendingPaymentAmount] = useState<number>(0);
+  const [pendingDeferredDetails, setPendingDeferredDetails] = useState<any | null>(null);
   
   // Quick game mode detection
   const isQuickGameMode = searchParams.get("quickGame") === "true";
@@ -149,8 +167,12 @@ export default function CourtDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  const { preferredSports: rawPreferredSports, isLoading: profileLoading } = useUserProfile();
+  // Memoize preferredSports to prevent fetchCourt from recreating every render
+  const preferredSports = useMemo(() => rawPreferredSports, [JSON.stringify(rawPreferredSports)]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
+  
   
   // Equipment state
   const [selectedEquipment, setSelectedEquipment] = useState<SelectedEquipment[]>([]);
@@ -182,6 +204,12 @@ export default function CourtDetail() {
   // Refs to prevent race conditions during state restoration
   const isRestoringRef = useRef(false);
   const hasRestoredRef = useRef(false);
+  
+  // Ref to track if wizard is open (avoids stale closure in real-time subscriptions)
+  const wizardOpenRef = useRef(false);
+
+  // Prevents auto-selecting a preferred court more than once per page load
+  const hasAutoSelectedRef = useRef(false);
 
   // Function declarations first (before useEffects that use them)
   const fetchCourt = useCallback(async () => {
@@ -196,15 +224,57 @@ export default function CourtDetail() {
         .single();
 
       if (error) throw error;
-      setCourt(data as CourtWithVenue);
-      setSelectedCourtId(data.id);
+
+      let resolvedCourt = data as CourtWithVenue;
+      let resolvedCourtId = data.id;
+
+      // For multi-court venues, check if we should show a different court
+      // that matches the user's preferred sports
+      if (preferredSports.length > 0 && !profileLoading) {
+        const isMultiCourt = data.is_multi_court || data.parent_court_id;
+
+        if (isMultiCourt) {
+          const courtSports = data.allowed_sports || [];
+          const matchesPreferred =
+            courtSports.length === 0 ||
+            courtSports.some((s: string) => preferredSports.includes(s));
+
+          if (!matchesPreferred) {
+            // Fetch sibling courts from the same venue
+            const venueId = data.venue_id;
+            const { data: siblings } = await supabase
+              .from("courts")
+              .select("*, venues (*)")
+              .eq("venue_id", venueId)
+              .eq("is_active", true)
+              .order("name");
+
+            if (siblings && siblings.length > 1) {
+              const betterCourt = siblings.find((c: any) => {
+                const sports = c.allowed_sports || [];
+                return sports.length === 0 ||
+                  sports.some((s: string) => preferredSports.includes(s));
+              });
+
+              if (betterCourt) {
+                resolvedCourt = betterCourt as CourtWithVenue;
+                resolvedCourtId = betterCourt.id;
+              }
+            }
+          }
+        }
+      }
+
+      hasAutoSelectedRef.current = true;
+      setCourt(resolvedCourt);
+      setSelectedCourtId(resolvedCourtId);
     } catch (error) {
       console.error("Error fetching court:", error);
       navigate("/courts");
     } finally {
       setLoading(false);
     }
-  }, [id, navigate]);
+  }, [id, navigate, preferredSports, profileLoading]);
 
   const fetchAvailability = useCallback(async (venueId: string, courtId: string, date: Date) => {
     setAvailabilityLoading(true);
@@ -229,6 +299,73 @@ export default function CourtDetail() {
       setAvailabilityLoading(false);
     }
   }, []);
+
+  // Clean up unpaid flows when user cancels Stripe checkout
+  useEffect(() => {
+    const cancelledSessionId = searchParams.get("cancelled_session");
+    const paymentCancelled = searchParams.get("payment") === "cancelled";
+    const cancelledChallengeId = paymentCancelled ? searchParams.get("challengeId") : null;
+    // Deferred normal booking cancel: payment=cancelled but no challengeId and no cancelled_session
+    const isDeferredCancel = paymentCancelled && !cancelledChallengeId && !cancelledSessionId;
+
+    if (!cancelledSessionId && !cancelledChallengeId && !isDeferredCancel) return;
+
+    const newParams = new URLSearchParams(searchParams);
+    if (cancelledSessionId) newParams.delete("cancelled_session");
+    if (paymentCancelled) {
+      newParams.delete("payment");
+      newParams.delete("challengeId");
+    }
+    setSearchParams(newParams, { replace: true });
+
+    if (cancelledSessionId) {
+      supabase.functions
+        .invoke("cancel-session", { body: { sessionId: cancelledSessionId } })
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to cancel session after Stripe cancel:", error);
+          } else {
+            console.log("Cancelled at_booking session after Stripe cancel:", cancelledSessionId);
+          }
+        });
+
+      toast({
+        title: "Payment cancelled",
+        description: "Your booking has been cancelled. Any payments will be converted to platform credits.",
+        variant: "destructive",
+      });
+    }
+
+    if (isDeferredCancel) {
+      // No DB cleanup needed — no session was created. Hold expires naturally.
+      toast({
+        title: "Payment cancelled",
+        description: "Your booking was not created. The slot will be released shortly.",
+        variant: "destructive",
+      });
+    }
+
+    if (cancelledChallengeId) {
+      supabase.functions
+        .invoke("cancel-quick-challenge", {
+          body: { challengeId: cancelledChallengeId },
+        })
+        .then(({ error }) => {
+          if (error) {
+            console.error("Failed to cancel quick challenge after Stripe cancel:", error);
+            return;
+          }
+
+          console.log("Cancelled unpaid quick challenge after Stripe cancel:", cancelledChallengeId);
+        });
+
+      toast({
+        title: "Payment cancelled",
+        description: "The quick challenge was not created and the slot was released.",
+        variant: "destructive",
+      });
+    }
+  }, [searchParams, setSearchParams, toast]);
 
   // Restore booking state from localStorage after auth redirect - only runs once
   useEffect(() => {
@@ -264,18 +401,21 @@ export default function CourtDetail() {
     }
   }, [id]);
 
+  // Fetch court data — gated on profile loading so preferredSports is available
+  // for resolving the correct sub-court before any render
   useEffect(() => {
-    if (id) {
+    if (id && !profileLoading) {
       fetchCourt();
     }
-  }, [id, fetchCourt]);
+  }, [id, profileLoading, fetchCourt]);
 
   // Fetch availability when date or selected court changes
+  const venueId = court?.venues?.id ?? null;
   useEffect(() => {
-    if (court?.venues && selectedDate && selectedCourtId) {
-      fetchAvailability(court.venues.id, selectedCourtId, selectedDate);
+    if (venueId && selectedDate && selectedCourtId) {
+      fetchAvailability(venueId, selectedCourtId, selectedDate);
     }
-  }, [court, selectedDate, selectedCourtId, fetchAvailability]);
+  }, [venueId, selectedDate, selectedCourtId, fetchAvailability]);
 
   // Restore selected slots after availability loads - only if we're in restoration mode
   useEffect(() => {
@@ -314,6 +454,11 @@ export default function CourtDetail() {
   }, [availabilityData, availabilityLoading, toast]);
 
   // Reset selected slots when date changes - but NOT during restoration
+  // NOTE: releaseHold is intentionally excluded from deps to avoid clearing slots
+  // when holdId changes (which changes releaseHold's identity).
+  const releaseHoldRef = useRef(releaseHold);
+  releaseHoldRef.current = releaseHold;
+
   useEffect(() => {
     // Skip reset during restoration
     if (isRestoringRef.current) return;
@@ -322,8 +467,9 @@ export default function CourtDetail() {
     setSelectedSlots([]);
     setSelectedEquipment([]);
     // Release any existing hold when date changes
-    releaseHold();
-  }, [selectedDate, releaseHold]);
+    releaseHoldRef.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
 
   // Track presence when slots are selected
   useEffect(() => {
@@ -336,6 +482,21 @@ export default function CourtDetail() {
     const endTime = getEndTime();
     trackSelection(startTime, endTime);
   }, [selectedSlots, trackSelection]);
+
+  // Keep wizardOpenRef in sync with wizard state
+  useEffect(() => {
+    wizardOpenRef.current = showGroupModal || showQuickChallengeWizard;
+  }, [showGroupModal, showQuickChallengeWizard]);
+
+  // Refs for realtime callbacks to avoid re-subscribing on every date/venue change
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
+  const venueIdRef = useRef(venueId);
+  venueIdRef.current = venueId;
+  const selectedCourtIdRef = useRef(selectedCourtId);
+  selectedCourtIdRef.current = selectedCourtId;
+  const fetchAvailabilityRef = useRef(fetchAvailability);
+  fetchAvailabilityRef.current = fetchAvailability;
 
   // Subscribe to booking_holds changes for real-time updates
   useEffect(() => {
@@ -353,9 +514,12 @@ export default function CourtDetail() {
         },
         (payload) => {
           console.log('Hold changed:', payload);
-          // Refetch availability when holds change
-          if (court.venues && selectedDate) {
-            fetchAvailability(court.venues.id, court.id, selectedDate);
+          if (wizardOpenRef.current) return;
+          const vid = venueIdRef.current;
+          const cid = selectedCourtIdRef.current;
+          const date = selectedDateRef.current;
+          if (vid && cid && date) {
+            fetchAvailabilityRef.current(vid, cid, date);
           }
         }
       )
@@ -364,7 +528,7 @@ export default function CourtDetail() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [court?.id, court?.venues, selectedDate, fetchAvailability]);
+  }, [court?.id]);
 
   // Real-time subscription for availability updates
   useEffect(() => {
@@ -382,9 +546,12 @@ export default function CourtDetail() {
         },
         (payload) => {
           console.log('Availability changed:', payload);
-          // Refetch availability when changes occur
-          if (court.venues && selectedDate) {
-            fetchAvailability(court.venues.id, court.id, selectedDate);
+          if (wizardOpenRef.current) return;
+          const vid = venueIdRef.current;
+          const cid = selectedCourtIdRef.current;
+          const date = selectedDateRef.current;
+          if (vid && cid && date) {
+            fetchAvailabilityRef.current(vid, cid, date);
           }
         }
       )
@@ -393,7 +560,7 @@ export default function CourtDetail() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [court?.id, court?.venues, selectedDate, fetchAvailability]);
+  }, [court?.id]);
 
   // Convert time string to minutes for comparison
   const timeToMinutes = (time: string): number => {
@@ -552,6 +719,9 @@ export default function CourtDetail() {
       return;
     }
 
+    // Mark wizard as "opening" before creating hold so real-time callbacks won't refetch
+    wizardOpenRef.current = true;
+
     // Create a hold on the slot before proceeding to wizard
     const dateStr = format(selectedDate, "yyyy-MM-dd");
     const startTime = getStartTime();
@@ -562,6 +732,8 @@ export default function CourtDetail() {
     const holdResult = await createHold(bookingCourtId, startDatetime, endDatetime);
 
     if (!holdResult.success) {
+      // Reset ref since wizard won't open
+      wizardOpenRef.current = false;
       // Hold failed - slot is taken
       if (holdResult.error === "SLOT_UNAVAILABLE") {
         toast({
@@ -616,9 +788,9 @@ export default function CourtDetail() {
     paymentType: "single" | "split";
     equipment: SelectedEquipment[];
     sportCategoryId: string;
+    splitPlayers?: number;
   }) => {
     const { groupId, isNewGroup, paymentType, equipment, sportCategoryId } = data;
-    // Update selected equipment from wizard
     setSelectedEquipment(equipment);
     if (selectedSlots.length === 0 || !court || !user || !selectedDate) return;
 
@@ -629,144 +801,55 @@ export default function CourtDetail() {
     const startTime = getStartTime();
     const endTime = getEndTime();
     const bookingCourtId = selectedCourtId || court.id;
-    const selectedCourtData = getSelectedCourt();
-    const courtRate = selectedCourtData?.hourly_rate || court.hourly_rate;
 
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-      const slotDate = new Date(dateStr);
-      const paymentDeadline = new Date(slotDate);
-      paymentDeadline.setHours(paymentDeadline.getHours() - 24);
-
-      // Calculate price based on duration + equipment
-      const hours = totalDuration / 60;
-      const courtPrice = courtRate * hours;
-      const equipmentTotal = getEquipmentTotal();
-      const totalPrice = courtPrice + equipmentTotal;
-
-      // Create a session for this booking
-      const { data: session, error: sessionError } = await supabase
-        .from("sessions")
-        .insert({
-          group_id: groupId,
-          court_id: bookingCourtId,
-          session_date: dateStr,
-          start_time: startTime,
-          duration_minutes: totalDuration,
-          court_price: totalPrice,
-          min_players: 6,
-          max_players: court.capacity,
-          payment_deadline: paymentDeadline.toISOString(),
-          state: "protected",
-          payment_type: paymentType,
-          sport_category_id: sportCategoryId,
-        })
-        .select()
-        .single();
-
-      if (sessionError) throw sessionError;
-
-      // Add the organizer as a session player automatically
-      const { error: playerError } = await supabase
-        .from("session_players")
-        .insert({
-          session_id: session.id,
-          user_id: user.id,
-          is_confirmed: true,
-          confirmed_at: new Date().toISOString(),
-        });
-
-      if (playerError) {
-        console.error("Error adding organizer as player:", playerError);
-      }
-
-      // Create a court_availability record for this booking (for tracking)
-      const { data: bookingRecord, error: bookingError } = await supabase
-        .from("court_availability")
-        .insert({
-          court_id: bookingCourtId,
-          available_date: dateStr,
-          start_time: startTime,
-          end_time: endTime,
-          is_booked: true,
-          booked_by_user_id: user.id,
-          booked_by_group_id: groupId,
-          booked_by_session_id: session.id,
-          payment_status: "pending",
-        })
-        .select()
-        .single();
+      const { data: bookingData, error: bookingError } = await supabase.functions.invoke("create-booking", {
+        body: {
+          groupId,
+          courtId: bookingCourtId,
+          sessionDate: dateStr,
+          startTime,
+          durationMinutes: totalDuration,
+          paymentType,
+          splitPlayers: data.splitPlayers,
+          sportCategoryId,
+          equipment,
+          holdId: holdId || undefined,
+        },
+      });
 
       if (bookingError) throw bookingError;
 
-      // Save equipment selections if any
-      if (selectedEquipment.length > 0) {
-        const equipmentInserts = selectedEquipment.map(item => ({
-          booking_id: bookingRecord.id,
-          equipment_id: item.equipmentId,
-          quantity: item.quantity,
-          price_at_booking: item.pricePerUnit,
-        }));
-
-        const { error: equipmentError } = await supabase
-          .from("booking_equipment")
-          .insert(equipmentInserts);
-
-        if (equipmentError) {
-          console.error("Error saving equipment:", equipmentError);
-        }
-      }
-
-      // Create chat conversation for this session
-      if (court.venues) {
-        const { data: venue } = await supabase
-          .from("venues")
-          .select("owner_id")
-          .eq("id", court.venue_id)
-          .single();
-
-        if (venue) {
-          const sessionEndTime = new Date(`${dateStr}T${endTime}`);
-          const expiresAt = new Date(sessionEndTime.getTime() + 48 * 60 * 60 * 1000);
-
-          try {
-            await supabase
-              .from("chat_conversations")
-              .insert({
-                organizer_id: user.id,
-                court_manager_id: venue.owner_id,
-                booking_id: bookingRecord.id,
-                session_id: session.id,
-                expires_at: expiresAt.toISOString(),
-              } as any);
-          } catch (chatError) {
-            console.error("Error creating chat conversation:", chatError);
-          }
-        }
-      }
-
-      // Check if court requires payment at booking
-      if (court.payment_timing === "at_booking") {
-        // Store session ID and amount for payment processing
-        setPendingPaymentSessionId(session.id);
-        setPendingPaymentAmount(totalPrice);
+      // ── Deferred at_booking flow: no session created yet ──
+      if (bookingData?.deferred) {
+        const totalPrice = Number(bookingData?.total_charge ?? 0);
+        const bookingDetails = bookingData.booking_details;
 
         toast({
           title: isNewGroup ? "Group created!" : "Booking reserved!",
-          description: "Choose when to complete your payment...",
+          description: "Redirecting to payment...",
         });
 
-        // Show pay now/later choice dialog
-        setShowPaymentTimingChoice(true);
+        if (credits >= totalPrice && !loadingCredits) {
+          // Store deferred details for credits modal path
+          setPendingDeferredDetails(bookingDetails);
+          setShowCreditsModal(true);
+        } else {
+          await processDeferredPayment(bookingDetails, false);
+        }
         return;
-      } else {
-        toast({
-          title: isNewGroup ? "Group created & court booked!" : "Court booked!",
-          description: `You've booked ${court.name} on ${format(selectedDate, "MMMM d")} at ${startTime}. Check your games for details.`,
-        });
       }
 
-      // Update UI
+      // ── Non-deferred (before_session) flow: session already created ──
+      const sessionId = bookingData?.session_id as string | undefined;
+      if (!sessionId) throw new Error("Booking created without session id");
+
+      toast({
+        title: isNewGroup ? "Group created & court booked!" : "Court booked!",
+        description: `You've booked ${court.name} on ${format(selectedDate, "MMMM d")} at ${startTime}. Check your games for details.`,
+      });
+
       setSelectedSlots([]);
       setSelectedEquipment([]);
       if (court.venues) {
@@ -790,7 +873,7 @@ export default function CourtDetail() {
   }) => {
     const { paymentType, equipment } = data;
     setSelectedEquipment(equipment);
-    
+
     if (selectedSlots.length === 0 || !court || !user || !selectedDate || !quickGameConfig) return;
 
     setShowQuickChallengeWizard(false);
@@ -798,88 +881,96 @@ export default function CourtDetail() {
 
     const totalDuration = getTotalDuration();
     const startTime = getStartTime();
-    const endTime = getEndTime();
     const bookingCourtId = selectedCourtId || court.id;
-    const selectedCourtData = getSelectedCourt();
-    const courtRate = selectedCourtData?.hourly_rate || court.hourly_rate;
 
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-
-      // Calculate price based on duration + equipment
-      const hours = totalDuration / 60;
-      const courtPriceCalc = courtRate * hours;
-      const equipmentTotal = equipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0);
-      const totalPrice = courtPriceCalc + equipmentTotal;
-      const pricePerPlayer = paymentType === "split" 
-        ? Math.ceil((totalPrice / quickGameConfig.totalPlayers) * 100) / 100 
-        : 0;
-
-      // Create quick_challenges record
-      const { data: challenge, error: challengeError } = await supabase
-        .from("quick_challenges")
-        .insert({
-          sport_category_id: quickGameConfig.sportCategoryId,
-          game_mode: quickGameConfig.gameMode,
-          venue_id: court.venue_id,
-          court_id: bookingCourtId,
-          scheduled_date: dateStr,
-          scheduled_time: startTime,
-          total_slots: quickGameConfig.totalPlayers,
-          price_per_player: paymentType === "split" ? pricePerPlayer : 0,
-          status: "open",
-          created_by: user.id,
-        })
-        .select()
-        .single();
+      const { data: challengeData, error: challengeError } = await supabase.functions.invoke("create-quick-challenge", {
+        body: {
+          sportCategoryId: quickGameConfig.sportCategoryId,
+          gameMode: quickGameConfig.gameMode,
+          venueId: court.venue_id,
+          courtId: bookingCourtId,
+          scheduledDate: dateStr,
+          scheduledTime: startTime,
+          durationMinutes: totalDuration,
+          totalPlayers: quickGameConfig.totalPlayers,
+          paymentType,
+          equipment,
+        },
+      });
 
       if (challengeError) throw challengeError;
 
-      // Create court_availability record to mark the slot as booked
-      const { data: bookingRecord, error: bookingError } = await supabase
-        .from("court_availability")
-        .insert({
-          court_id: bookingCourtId,
-          available_date: dateStr,
-          start_time: startTime,
-          end_time: endTime,
-          is_booked: true,
-          booked_by_user_id: user.id,
-          payment_status: "pending",
-        })
-        .select()
-        .single();
+      const challengeId = challengeData?.challenge_id as string | undefined;
+      if (!challengeId) throw new Error("Challenge created without id");
 
-      if (bookingError) throw bookingError;
+      if (court.payment_timing === "at_booking") {
+        try {
+          const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-quick-challenge-payment", {
+            body: {
+              challengeId,
+              origin: window.location.origin,
+              useCredits: false,
+              cancelToCourt: true,
+            },
+          });
 
-      // Save equipment selections if any
-      if (equipment.length > 0) {
-        const equipmentInserts = equipment.map(item => ({
-          booking_id: bookingRecord.id,
-          equipment_id: item.equipmentId,
-          quantity: item.quantity,
-          price_at_booking: item.pricePerUnit,
-        }));
+          if (paymentError) {
+            const msg = paymentError?.message || "";
+            if (msg.includes("SLOT_UNAVAILABLE")) {
+              toast({
+                title: "Slot Unavailable",
+                description: "This slot was just taken. Please pick another time.",
+                variant: "destructive",
+              });
+              throw paymentError;
+            }
+            throw paymentError;
+          }
 
-        await supabase.from("booking_equipment").insert(equipmentInserts);
+          if (paymentData?.url) {
+            const isInIframe = window.self !== window.top;
+            if (isInIframe) {
+              const opened = window.open(paymentData.url, "_blank", "noopener,noreferrer");
+              if (!opened) window.location.href = paymentData.url;
+            } else {
+              window.location.href = paymentData.url;
+            }
+            return;
+          }
+
+          if (paymentData?.success && !paymentData?.url) {
+            sessionStorage.removeItem("quickGameConfig");
+            toast({
+              title: "Challenge Created & Paid!",
+              description: paymentData.message || "Your spot has been confirmed.",
+            });
+            navigate(`/quick-games/${challengeId}`);
+            return;
+          }
+
+          throw new Error("No checkout URL returned");
+        } catch (payErr: any) {
+          console.error("Payment error:", payErr);
+
+          const { error: cancelError } = await supabase.functions.invoke("cancel-quick-challenge", {
+            body: { challengeId },
+          });
+
+          if (cancelError) {
+            console.error("Failed to rollback unpaid quick challenge:", cancelError);
+          }
+
+          toast({
+            title: "Payment not completed",
+            description: "Quick challenge was not created. Please try again.",
+            variant: "destructive",
+          });
+          return;
+        }
       }
 
-      // Auto-add creator as first player
-      const { error: playerError } = await supabase
-        .from("quick_challenge_players")
-        .insert({
-          challenge_id: challenge.id,
-          user_id: user.id,
-          team: "left",
-          slot_position: 0,
-          payment_status: paymentType === "single" ? "pending" : "pending",
-        });
-
-      if (playerError) {
-        console.error("Error adding creator as player:", playerError);
-      }
-
-      // Clear quick game state
       sessionStorage.removeItem("quickGameConfig");
 
       toast({
@@ -887,9 +978,7 @@ export default function CourtDetail() {
         description: `Your ${quickGameConfig.gameMode} challenge is now open for players to join.`,
       });
 
-      // Navigate to discover page with quick games filter
       navigate("/discover?tab=quickgames");
-
     } catch (error: any) {
       console.error("Error creating quick challenge:", error);
       toast({
@@ -906,57 +995,93 @@ export default function CourtDetail() {
     method: "credits" | "payment",
     creditsToUse?: number
   ) => {
-    if (!pendingPaymentSessionId || !court) return;
+    if (!court) return;
+
+    // Deferred at_booking flow
+    if (pendingDeferredDetails) {
+      setBooking(true);
+      try {
+        await processDeferredPayment(
+          pendingDeferredDetails,
+          method === "credits",
+          method === "credits" ? creditsToUse : undefined
+        );
+      } catch (error) {
+        console.error("Error processing deferred payment:", error);
+        toast({
+          title: "Payment Error",
+          description: "Failed to process payment. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setBooking(false);
+      }
+      return;
+    }
+
+    // Legacy session-based flow (before_session courts that somehow reach this)
+    if (!pendingPaymentSessionId) return;
     
     setBooking(true);
     try {
       if (method === "credits") {
-        // Calculate total cost
-        const equipmentTotal = selectedEquipment.reduce(
-          (sum, item) => sum + item.quantity * item.pricePerUnit,
-          0
-        );
-        const totalCost = court.hourly_rate + equipmentTotal;
+        const { data, error } = await supabase.functions.invoke("create-payment", {
+          body: {
+            sessionId: pendingPaymentSessionId,
+            paymentType: "at_booking",
+            returnUrl: `/courts/${court.id}`,
+            origin: window.location.origin,
+            useCredits: true,
+            creditsAmount: creditsToUse,
+          },
+        });
 
-        // If credits cover the full amount, process with credits only
-        if (credits >= totalCost) {
-          const { data, error } = await supabase.functions.invoke("create-payment", {
-            body: {
-              sessionId: pendingPaymentSessionId,
-              paymentType: "at_booking",
-              returnUrl: `/courts/${court.id}`,
-              origin: window.location.origin,
-              useCredits: true,
-              creditsAmount: creditsToUse,
-            },
-          });
-
-          if (error) throw error;
-
-          if (data?.success) {
-            // Payment completed with credits only
+        if (error) {
+          const msg = error?.message || "";
+          if (msg.includes("SLOT_UNAVAILABLE")) {
             toast({
-              title: "Payment Complete",
-              description: data.message || "Payment completed using your credits.",
+              title: "Slot Unavailable",
+              description: "This slot was just taken. Please pick another time.",
+              variant: "destructive",
             });
             setShowCreditsModal(false);
             setPendingPaymentSessionId(null);
-            refetchCredits();
-            
-            // Update UI
-            setSelectedSlots([]);
-            setSelectedEquipment([]);
-            if (court.venues) {
-              fetchAvailability(court.venues.id, court.id, selectedDate);
-            }
             return;
           }
+          throw error;
         }
 
-        // Partial credits - proceed to Stripe with credits applied
-        await processCourtPayment(pendingPaymentSessionId, true, creditsToUse);
+        if (data?.success) {
+          toast({
+            title: "Payment Complete",
+            description: data.message || "Payment completed using your credits.",
+          });
+          setShowCreditsModal(false);
+          setPendingPaymentSessionId(null);
+          refetchCredits();
+          setSelectedSlots([]);
+          setSelectedEquipment([]);
+          if (court.venues) {
+            fetchAvailability(court.venues.id, court.id, selectedDate);
+          }
+          return;
+        }
+
+        if (data?.url) {
+          setShowCreditsModal(false);
+          setPendingPaymentSessionId(null);
+          const isInIframe = window.self !== window.top;
+          if (isInIframe) {
+            const opened = window.open(data.url, "_blank", "noopener,noreferrer");
+            if (!opened) window.location.href = data.url;
+          } else {
+            window.location.href = data.url;
+          }
+          return;
+        }
+
+        throw new Error("Unexpected payment response");
       } else {
-        // Pay with card only
         await processCourtPayment(pendingPaymentSessionId, false);
       }
     } catch (error) {
@@ -971,48 +1096,6 @@ export default function CourtDetail() {
     }
   };
 
-  // Handler for pay now/later choice
-  const handlePaymentTimingChoice = async (choice: "now" | "later") => {
-    if (!pendingPaymentSessionId || !court) return;
-
-    setBooking(true);
-    try {
-      if (choice === "now") {
-        // User chose to pay now - check for credits first
-        const totalCost = court.hourly_rate + selectedEquipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0);
-        if (credits >= totalCost && !loadingCredits) {
-          setShowPaymentTimingChoice(false);
-          setShowCreditsModal(true);
-        } else {
-          // No credits, proceed directly to Stripe
-          setShowPaymentTimingChoice(false);
-          await processCourtPayment(pendingPaymentSessionId, false);
-        }
-      } else {
-        // User chose to pay later - booking is already created with pending status
-        setShowPaymentTimingChoice(false);
-        setPendingPaymentSessionId(null);
-        setPendingPaymentAmount(0);
-        
-        toast({
-          title: "Booking Reserved!",
-          description: "Your court is reserved. Complete payment from the game details page before the session starts.",
-        });
-        
-        // Navigate to the game details page
-        navigate(`/games`);
-      }
-    } catch (error) {
-      console.error("Error processing payment choice:", error);
-      toast({
-        title: "Error",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setBooking(false);
-    }
-  };
 
   const processCourtPayment = async (sessionId: string, useCredits: boolean, creditsAmount?: number) => {
     if (!court) return;
@@ -1029,7 +1112,20 @@ export default function CourtDetail() {
         },
       });
 
-      if (paymentError) throw paymentError;
+      if (paymentError) {
+        const msg = paymentError?.message || "";
+        if (msg.includes("SLOT_UNAVAILABLE")) {
+          toast({
+            title: "Slot Unavailable",
+            description: "This slot was just taken. Please pick another time.",
+            variant: "destructive",
+          });
+          setShowCreditsModal(false);
+          setPendingPaymentSessionId(null);
+          return;
+        }
+        throw paymentError;
+      }
 
       if (paymentData?.url) {
         setShowCreditsModal(false);
@@ -1064,6 +1160,77 @@ export default function CourtDetail() {
       toast({
         title: "Payment redirect failed",
         description: "Your booking is saved. Please make payment from the game details page.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Process deferred at_booking payment (no session exists yet)
+  const processDeferredPayment = async (bookingDetails: any, useCredits: boolean, creditsAmount?: number) => {
+    if (!court) return;
+
+    try {
+      const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-payment", {
+        body: {
+          deferred: true,
+          ...bookingDetails,
+          returnUrl: `/courts/${court.id}`,
+          origin: window.location.origin,
+          useCredits,
+          creditsAmount,
+        },
+      });
+
+      if (paymentError) {
+        const msg = paymentError?.message || "";
+        if (msg.includes("SLOT_UNAVAILABLE")) {
+          toast({
+            title: "Slot Unavailable",
+            description: "This slot was just taken. Please pick another time.",
+            variant: "destructive",
+          });
+          setShowCreditsModal(false);
+          setPendingDeferredDetails(null);
+          return;
+        }
+        throw paymentError;
+      }
+
+      if (paymentData?.url) {
+        setShowCreditsModal(false);
+        setPendingDeferredDetails(null);
+        const isInIframe = window.self !== window.top;
+        if (isInIframe) {
+          const opened = window.open(paymentData.url, "_blank", "noopener,noreferrer");
+          if (!opened) window.location.href = paymentData.url;
+        } else {
+          window.location.href = paymentData.url;
+        }
+        return;
+      } else if (paymentData?.success) {
+        // Credits-only payment completed
+        toast({
+          title: "Payment Complete",
+          description: paymentData.message || "Payment completed successfully.",
+        });
+        setShowCreditsModal(false);
+        setPendingDeferredDetails(null);
+        refetchCredits();
+        setSelectedSlots([]);
+        setSelectedEquipment([]);
+        if (court.venues && selectedDate) {
+          fetchAvailability(court.venues.id, court.id, selectedDate);
+        }
+        // Redirect to game page
+        if (paymentData.sessionId) {
+          navigate(`/games/${paymentData.sessionId}`);
+        }
+      }
+    } catch (paymentErr) {
+      console.error("Error initiating deferred payment:", paymentErr);
+      toast({
+        title: "Payment failed",
+        description: "Could not process payment. Please try again.",
         variant: "destructive",
       });
     }
@@ -1104,6 +1271,17 @@ export default function CourtDetail() {
     setCurrentImageIndex((prev) => (prev - 1 + photos.length) % photos.length);
   };
 
+  const handleLoginToBook = () => {
+    localStorage.setItem('redirectAfterAuth', window.location.pathname);
+    localStorage.setItem('pendingBookingState', JSON.stringify({
+      courtId: id,
+      selectedDate: selectedDate?.toISOString(),
+      selectedSlots: selectedSlots,
+      selectedEquipment: selectedEquipment,
+    }));
+    navigate("/auth");
+  };
+
   // Format duration for display
   const formatDuration = (minutes: number): string => {
     if (minutes < 60) return `${minutes}min`;
@@ -1119,6 +1297,38 @@ export default function CourtDetail() {
     const rate = selectedCourtData?.hourly_rate || court?.hourly_rate || 0;
     return rate * (durationMinutes / 60);
   };
+
+  // Filter venue courts by user's preferred sports
+  const allVenueCourts = availabilityData?.venue_courts || [];
+  const venueCourts = useMemo(() => {
+    if (preferredSports.length === 0 || allVenueCourts.length <= 1) return allVenueCourts;
+
+    const filtered = allVenueCourts.filter(c => {
+      const courtSports = c.allowed_sports || [];
+      if (courtSports.length === 0) return true;
+      return courtSports.some(sport => preferredSports.includes(sport));
+    });
+
+    const courtsToShow = filtered.length > 0 ? filtered : allVenueCourts;
+    if (!selectedCourtId || courtsToShow.some(c => c.id === selectedCourtId)) {
+      return courtsToShow;
+    }
+
+    const selectedCourt = allVenueCourts.find(c => c.id === selectedCourtId);
+    return selectedCourt ? [selectedCourt, ...courtsToShow] : courtsToShow;
+  }, [allVenueCourts, preferredSports, selectedCourtId]);
+
+  // Fallback: if the selected court no longer exists in venue availability, reset to first available
+  useEffect(() => {
+    if (!selectedCourtId || allVenueCourts.length === 0) return;
+
+    const selectedCourtExists = allVenueCourts.some(c => c.id === selectedCourtId);
+    if (!selectedCourtExists) {
+      setSelectedCourtId(allVenueCourts[0].id);
+      setSelectedSlots([]);
+      setCurrentImageIndex(0);
+    }
+  }, [allVenueCourts, selectedCourtId]);
 
   // Use public layout for unauthenticated users
   const Layout = user ? MobileLayout : PublicLayout;
@@ -1147,10 +1357,24 @@ export default function CourtDetail() {
   }
 
   const totalDuration = getTotalDuration();
+
+  // Compute effective payment timing: if court uses 'before_session' but we're already
+  // within the payment window (deadline has passed), force 'at_booking'.
+  const effectivePaymentTiming = (() => {
+    if (!court || court.payment_timing !== "before_session" || !selectedDate) {
+      return court?.payment_timing ?? "at_booking";
+    }
+    const dateStr = format(selectedDate, "yyyy-MM-dd");
+    const startTime = getStartTime();
+    const sessionStart = new Date(`${dateStr}T${startTime}`);
+    const hoursBeforeSession = court.payment_hours_before ?? 24;
+    const deadline = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
+    return new Date() >= deadline ? "at_booking" : "before_session";
+  })() as "at_booking" | "before_session";
+
   const courtPrice = calculatePrice(totalDuration);
   const equipmentTotal = getEquipmentTotal();
   const totalPrice = courtPrice + equipmentTotal;
-  const venueCourts = availabilityData?.venue_courts || [];
 
   return (
     <Layout>
@@ -1193,8 +1417,8 @@ export default function CourtDetail() {
             <div className="px-4 lg:px-0">
               <div className="flex items-start gap-3 mb-3">
                 <Badge className="capitalize shrink-0">
-                  <SportIcon sport={court.sport_type} className="h-3 w-3 mr-1" />
-                  {court.sport_type}
+                  <SportIcon sport={(getSelectedCourt()?.allowed_sports?.[0] || court.allowed_sports?.[0] || "other")} className="h-3 w-3 mr-1" />
+                  {(getSelectedCourt()?.allowed_sports || court.allowed_sports)?.join(", ") || "Other"}
                 </Badge>
                 <Badge variant="outline" className="shrink-0">
                   {court.is_indoor ? "Indoor" : "Outdoor"}
@@ -1271,7 +1495,7 @@ export default function CourtDetail() {
                 </div>
               ) : (
                 <div className="aspect-video bg-muted flex items-center justify-center">
-                  <SportIcon sport={court.sport_type} className="h-16 w-16 text-muted-foreground" />
+                  <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-16 w-16 text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -1334,17 +1558,52 @@ export default function CourtDetail() {
               </div>
             </div>
 
-            {/* Amenities */}
-            {court.venues?.amenities && court.venues.amenities.length > 0 && (
-              <div className="px-4 lg:px-0">
-                <h3 className="font-semibold mb-3">Amenities</h3>
-                <div className="flex flex-wrap gap-2">
-                  {court.venues.amenities.map((amenity, i) => (
-                    <Badge key={i} variant="secondary">{amenity}</Badge>
-                  ))}
-                </div>
+            {/* Venue Details: Allowed Sports + Amenities */}
+            {(() => {
+              const displaySports = getSelectedCourt()?.allowed_sports || court.allowed_sports || [];
+              return ((court.venues?.amenities && court.venues.amenities.length > 0) || displaySports.length > 0) ? (
+              <div className="px-4 lg:px-0 space-y-4">
+                {/* Allowed Sports */}
+                {displaySports.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <span className="text-lg">🏅</span>
+                      Sports Available
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {displaySports.map((sport: string, i: number) => (
+                        <Badge key={i} variant="secondary" className="gap-1.5 py-1 px-3">
+                          <SportIcon sport={sport} size="sm" className="w-5 h-5 text-xs" />
+                          <span className="capitalize">{sport.replace(/_/g, " ")}</span>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Facilities / Amenities */}
+                {court.venues?.amenities && court.venues.amenities.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <span className="text-lg">🏢</span>
+                      Facilities
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {court.venues.amenities.map((amenity, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2 text-sm border border-border"
+                        >
+                          <span className="text-base">{getFacilityIcon(amenity)}</span>
+                          {amenity}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+              ) : null;
+            })()}
 
             {/* Court Rules - Dynamic based on selected court */}
             {(getSelectedCourt()?.rules || (court as any).rules) && (
@@ -1398,7 +1657,7 @@ export default function CourtDetail() {
                   Available Times for {format(selectedDate, "MMMM d")}
                 </h3>
                 
-                {availabilityLoading ? (
+                {(availabilityLoading || profileLoading) ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                     <span className="ml-2 text-muted-foreground">Loading availability...</span>
@@ -1515,7 +1774,7 @@ export default function CourtDetail() {
 
                     {/* Selected slots summary */}
                     {selectedSlots.length > 0 && (
-                      <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3">
+                      <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3 lg:hidden">
                         <div className="flex items-center justify-between">
                           <span className="font-medium">Selected Time</span>
                           <button 
@@ -1568,13 +1827,13 @@ export default function CourtDetail() {
           </div>
 
           {/* Right Column - Photo Gallery (Desktop only) */}
-          <div className="hidden lg:block">
+          <div className="hidden lg:block lg:w-[90%] xl:w-[86%] 2xl:w-[82%] lg:max-w-[860px] lg:ml-auto">
             <div className="sticky top-24 space-y-4">
               {photos.length > 0 ? (
                 <>
                   {/* Main Photo */}
                   <div 
-                    className="aspect-square rounded-xl overflow-hidden bg-muted cursor-pointer relative group"
+                    className="aspect-[4/3] rounded-xl overflow-hidden bg-muted cursor-pointer relative group"
                     onClick={() => setShowGallery(true)}
                   >
                     <img 
@@ -1592,7 +1851,7 @@ export default function CourtDetail() {
                   
                   {/* Thumbnail strip */}
                   {photos.length > 1 && (
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-4 gap-2 max-w-full">
                       {photos.slice(0, 4).map((photo, index) => (
                         <button
                           key={index}
@@ -1620,10 +1879,79 @@ export default function CourtDetail() {
                       ))}
                     </div>
                   )}
+
+                  {selectedSlots.length > 0 && (
+                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">Selected Time</span>
+                        <button
+                          onClick={() => setSelectedSlots([])}
+                          className="text-sm text-muted-foreground hover:text-foreground"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 text-lg font-semibold">
+                        <Clock className="h-5 w-5 text-primary" />
+                        {getStartTime()} - {getEndTime()}
+                        <span className="text-muted-foreground font-normal text-sm">
+                          ({formatDuration(totalDuration)})
+                        </span>
+                      </div>
+
+                      {isHoldValid && remainingSeconds > 0 && (
+                        <HoldCountdown remainingSeconds={remainingSeconds} />
+                      )}
+
+                      <div className="space-y-1 pt-2 border-t border-primary/10">
+                        <div className="flex justify-between text-sm">
+                          <span>Court ({formatDuration(totalDuration)})</span>
+                          <span>${courtPrice.toFixed(2)}</span>
+                        </div>
+                        {selectedEquipment.length > 0 && (
+                          <>
+                            {selectedEquipment.map(item => (
+                              <div key={item.equipmentId} className="flex justify-between text-sm text-muted-foreground">
+                                <span>{item.name} × {item.quantity}</span>
+                                <span>${(item.quantity * item.pricePerUnit).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                        <div className="flex justify-between text-lg font-bold text-primary pt-1">
+                          <span>Total</span>
+                          <span>${totalPrice.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-primary/10">
+                        {user ? (
+                          <Button onClick={handleBookSlot} disabled={booking} className="gap-2 w-full">
+                            {booking ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Booking...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="h-4 w-4" />
+                                Book Now
+                              </>
+                            )}
+                          </Button>
+                        ) : (
+                          <Button className="gap-2 w-full" onClick={handleLoginToBook}>
+                            <LogIn className="h-4 w-4" />
+                            Login to Book
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="aspect-square rounded-xl bg-muted flex items-center justify-center">
-                  <SportIcon sport={court.sport_type} className="h-20 w-20 text-muted-foreground" />
+                  <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-20 w-20 text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -1697,7 +2025,7 @@ export default function CourtDetail() {
         {/* Booking Footer */}
         {selectedSlots.length > 0 && selectedDate && (
           <div 
-            className="fixed left-0 right-0 p-4 glass border-t border-border z-40" 
+            className="fixed left-0 right-0 p-4 glass border-t border-border z-40 lg:hidden" 
             style={{ 
               bottom: user ? 'calc(4rem + env(safe-area-inset-bottom, 0px))' : 'env(safe-area-inset-bottom, 0px)'
             }}
@@ -1725,19 +2053,7 @@ export default function CourtDetail() {
                   )}
                 </Button>
               ) : (
-                <Button 
-                  className="gap-2"
-                  onClick={() => {
-                    localStorage.setItem('redirectAfterAuth', window.location.pathname);
-                    localStorage.setItem('pendingBookingState', JSON.stringify({
-                      courtId: id,
-                      selectedDate: selectedDate?.toISOString(),
-                      selectedSlots: selectedSlots,
-                      selectedEquipment: selectedEquipment,
-                    }));
-                    navigate("/auth");
-                  }}
-                >
+                <Button className="gap-2" onClick={handleLoginToBook}>
                   <LogIn className="h-4 w-4" />
                   Login to Book
                 </Button>
@@ -1752,7 +2068,7 @@ export default function CourtDetail() {
             open={showGroupModal}
             onOpenChange={setShowGroupModal}
             onConfirm={handleBookingConfirm}
-            sportType={court.sport_type}
+            sportType={(court.allowed_sports?.[0] || "other") as any}
             courtPrice={courtPrice}
             dayOfWeek={getDay(selectedDate)}
             startTime={getStartTime()}
@@ -1766,7 +2082,7 @@ export default function CourtDetail() {
             equipment={venueEquipment}
             selectedEquipment={selectedEquipment}
             onEquipmentChange={setSelectedEquipment}
-            paymentTiming={court.payment_timing}
+            paymentTiming={effectivePaymentTiming}
           />
         )}
 
@@ -1787,7 +2103,7 @@ export default function CourtDetail() {
             equipment={venueEquipment}
             selectedEquipment={selectedEquipment}
             onEquipmentChange={setSelectedEquipment}
-            paymentTiming={court.payment_timing}
+            paymentTiming={effectivePaymentTiming}
             sportName={quickGameConfig.sportName}
             gameMode={quickGameConfig.gameMode}
             totalPlayers={quickGameConfig.totalPlayers}
@@ -1820,14 +2136,6 @@ export default function CourtDetail() {
           />
         )}
 
-        {/* Pay Now/Later Choice Modal */}
-        <PaymentTimingChoice
-          open={showPaymentTimingChoice}
-          onOpenChange={setShowPaymentTimingChoice}
-          onChoice={handlePaymentTimingChoice}
-          isLoading={booking}
-          totalAmount={pendingPaymentAmount}
-        />
       </div>
     </Layout>
   );

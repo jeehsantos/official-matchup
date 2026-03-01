@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 
-type SessionState = "protected" | "rescue" | "released";
+type SessionState = "protected" | "pending" | "rescue" | "released";
 type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "hockey" | "other";
 type SportCategory = Database["public"]["Tables"]["sport_categories"]["Row"];
 
@@ -27,6 +27,9 @@ interface GameCardProps {
   maxPlayers: number;
   state: SessionState;
   isPaid?: boolean;
+  /** @deprecated Service fee is calculated at checkout by the backend */
+  serviceFee?: number;
+  linkTo?: string;
 }
 
 export function GameCard({
@@ -44,12 +47,16 @@ export function GameCard({
   maxPlayers,
   state,
   isPaid = false,
+  linkTo,
 }: GameCardProps) {
+  const totalPrice = price; // Service fee added at checkout
   // Use sport category display name if available, otherwise fallback to "Sport TBD"
   const sportDisplayName = sportCategory?.display_name || "Sport TBD";
+  // Show "Booked" (protected) only when paid, otherwise "Pending"
+  const badgeState = state === "protected" ? (isPaid ? "protected" : "pending") : state;
   
   return (
-    <Link to={`/games/${id}`}>
+    <Link to={linkTo || `/games/${id}`}>
       <Card className="overflow-hidden hover:shadow-card-hover transition-shadow duration-200 h-full">
         <CardContent className="p-4 space-y-3">
           {/* Header */}
@@ -69,7 +76,7 @@ export function GameCard({
                 </p>
               </div>
             </div>
-            <SessionBadge state={state} />
+            <SessionBadge state={badgeState} />
           </div>
 
           {/* Details */}
@@ -87,14 +94,14 @@ export function GameCard({
               <span>{time}</span>
             </div>
             <div className="flex items-center gap-2 font-semibold text-foreground">
-              {price === 0 ? (
+              {totalPrice === 0 ? (
                 <Badge className="bg-success text-success-foreground border-0 shadow-sm">
                   ✓ FREE
                 </Badge>
               ) : (
                 <>
                   <DollarSign className="h-4 w-4 shrink-0" />
-                  <span>${price.toFixed(2)}</span>
+                  <span>${totalPrice.toFixed(2)}</span>
                 </>
               )}
             </div>

@@ -2,14 +2,14 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-type AppRole = "court_manager" | "organizer" | "player";
+type AppRole = "court_manager" | "organizer" | "player" | "admin";
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   userRole: AppRole | null;
   isLoading: boolean;
-  signUp: (email: string, password: string, fullName: string, role?: AppRole) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string, role?: AppRole, referralCode?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; role?: AppRole }>;
   signOut: () => Promise<void>;
   refreshRole: () => Promise<void>;
@@ -109,20 +109,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchUserRole]);
 
-  const signUp = async (email: string, password: string, fullName: string, role: AppRole = "player") => {
+  const signUp = async (email: string, password: string, fullName: string, role: AppRole = "player", referralCode?: string) => {
     const redirectUrl = role === "court_manager" 
       ? `${window.location.origin}/manager`
       : `${window.location.origin}/`;
     
+    const metadata: Record<string, string> = {
+      full_name: fullName,
+      role: role,
+    };
+    if (referralCode) {
+      metadata.referral_code = referralCode;
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
-          role: role,
-        },
+        data: metadata,
       },
     });
 

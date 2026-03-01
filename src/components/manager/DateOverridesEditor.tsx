@@ -154,7 +154,7 @@ export function DateOverridesEditor({ venueId, onOverridesUpdated }: DateOverrid
 
   if (loading) {
     return (
-      <Card>
+      <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">
         <CardContent className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </CardContent>
@@ -163,8 +163,8 @@ export function DateOverridesEditor({ venueId, onOverridesUpdated }: DateOverrid
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between">
+    <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">
+      <CardHeader className="flex flex-row items-start justify-between gap-3">
         <div>
           <CardTitle className="flex items-center gap-2">
             <CalendarX className="h-5 w-5" />
@@ -177,7 +177,7 @@ export function DateOverridesEditor({ venueId, onOverridesUpdated }: DateOverrid
         
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-1">
+            <Button size="sm" className="gap-1 shrink-0">
               <Plus className="h-4 w-4" />
               Add Exception
             </Button>

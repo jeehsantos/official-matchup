@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
-import { MobileLayout } from "@/components/layout/MobileLayout";
+import { AdminLayout } from "@/components/layout/AdminLayout";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,25 +35,16 @@ interface TableSize {
   dead_rows: number;
 }
 
-export default function AdminArchiving() {
-  const { user, isLoading: authLoading } = useAuth();
-  const navigate = useNavigate();
+function AdminArchivingContent() {
   const [logs, setLogs] = useState<ArchivingLog[]>([]);
   const [tableSizes, setTableSizes] = useState<TableSize[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/auth", { replace: true });
-    }
-  }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    if (user) {
-      loadData();
-    }
-  }, [user]);
+    loadData();
+  }, []);
 
   const loadData = async () => {
     try {
@@ -117,7 +107,7 @@ export default function AdminArchiving() {
     return `${seconds.toFixed(2)}s`;
   };
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -125,11 +115,9 @@ export default function AdminArchiving() {
     );
   }
 
-  if (!user) return null;
-
   return (
-    <MobileLayout>
-      <div className="px-4 py-4 space-y-4">
+    <AdminLayout title="Data Archiving">
+      <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -265,6 +253,14 @@ export default function AdminArchiving() {
           </CardContent>
         </Card>
       </div>
-    </MobileLayout>
+    </AdminLayout>
+  );
+}
+
+export default function AdminArchiving() {
+  return (
+    <ProtectedRoute requiredRole="admin">
+      <AdminArchivingContent />
+    </ProtectedRoute>
   );
 }

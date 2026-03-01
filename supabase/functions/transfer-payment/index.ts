@@ -77,6 +77,44 @@ serve(async (req) => {
       });
     }
 
+    // Claim this payment for transfer processing so only one request can continue.
+    const claimTime = new Date().toISOString();
+    const { data: claimedPayment, error: claimError } = await supabaseAdmin
+      .from("payments")
+      .update({ transferring_at: claimTime })
+      .eq("id", payment.id)
+      .eq("status", "completed")
+      .is("transferred_at", null)
+      .is("transferring_at", null)
+      .select("*")
+      .maybeSingle();
+
+    if (claimError) {
+      throw new Error("Failed to claim payment for transfer");
+    }
+
+    if (!claimedPayment) {
+      console.log("Payment already claimed or transferred by another request:", payment.id);
+      return new Response(JSON.stringify({
+        success: true,
+        alreadyProcessing: true,
+        message: "Payment transfer is already processing or completed",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    payment = claimedPayment;
+
+    const releaseClaim = async () => {
+      await supabaseAdmin
+        .from("payments")
+        .update({ transferring_at: null })
+        .eq("id", payment.id)
+        .is("transferred_at", null);
+    };
+
     // Check player confirmation status
     const { data: sessionPlayer, error: playerError } = await supabaseAdmin
       .from("session_players")
@@ -86,10 +124,12 @@ serve(async (req) => {
       .single();
 
     if (playerError || !sessionPlayer) {
+      await releaseClaim();
       throw new Error("Session player record not found");
     }
 
     if (!sessionPlayer.is_confirmed) {
+      await releaseClaim();
       throw new Error("Player has not confirmed participation. Transfer blocked.");
     }
 
@@ -112,6 +152,7 @@ serve(async (req) => {
       .single();
 
     if (sessionError || !session) {
+      await releaseClaim();
       throw new Error("Session not found");
     }
 
@@ -126,6 +167,7 @@ serve(async (req) => {
         .update({
           status: "transferred",
           transferred_at: new Date().toISOString(),
+          transferring_at: null,
           transfer_amount: 0, // No transfer made
         })
         .eq("id", payment.id);
@@ -153,6 +195,7 @@ serve(async (req) => {
         .update({
           status: "transferred",
           transferred_at: new Date().toISOString(),
+          transferring_at: null,
           transfer_amount: 0,
         })
         .eq("id", payment.id);
@@ -172,20 +215,31 @@ serve(async (req) => {
       apiVersion: "2024-12-18.acacia",
     });
 
-    // Create transfer to connected account
-    const transfer = await stripe.transfers.create({
-      amount: Math.round(transferAmount * 100), // Convert to cents
-      currency: "nzd",
-      destination: connectedAccountId,
-      description: `Payment for session ${payment.session_id}`,
-      metadata: {
-        payment_id: payment.id,
-        session_id: payment.session_id,
-        user_id: payment.user_id,
-        venue_id: venue.id,
-        venue_name: venue.name,
-      },
-    });
+    // Create transfer to connected account with deterministic idempotency.
+    const transferIdempotencyKey = `transfer:${payment.id}`;
+
+    let transfer;
+    try {
+      transfer = await stripe.transfers.create(
+        {
+          amount: Math.round(transferAmount * 100), // Convert to cents
+          currency: "nzd",
+          destination: connectedAccountId,
+          description: `Payment for session ${payment.session_id}`,
+          metadata: {
+            payment_id: payment.id,
+            session_id: payment.session_id,
+            user_id: payment.user_id,
+            venue_id: venue.id,
+            venue_name: venue.name,
+          },
+        },
+        { idempotencyKey: transferIdempotencyKey }
+      );
+    } catch (stripeError) {
+      await releaseClaim();
+      throw stripeError;
+    }
 
     // Update payment record with transfer details
     const { error: updateError } = await supabaseAdmin
@@ -193,6 +247,7 @@ serve(async (req) => {
       .update({
         status: "transferred",
         transferred_at: new Date().toISOString(),
+        transferring_at: null,
         stripe_transfer_id: transfer.id,
         transfer_amount: transferAmount,
       })
@@ -200,6 +255,7 @@ serve(async (req) => {
 
     if (updateError) {
       console.error("Error updating payment record:", updateError);
+      await releaseClaim();
       throw new Error("Failed to update payment record after transfer");
     }
 

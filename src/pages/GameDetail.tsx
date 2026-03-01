@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -7,9 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SessionBadge } from "@/components/ui/session-badge";
-import { PlayerCount } from "@/components/ui/player-count";
 import { SportIcon } from "@/components/ui/sport-icon";
-import { SessionChat } from "@/components/chat/SessionChat";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 import { EditPlayerLimits } from "@/components/session/EditPlayerLimits";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -17,8 +19,11 @@ import { useToast } from "@/hooks/use-toast";
 import { checkProfileComplete } from "@/lib/profile-utils";
 import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
 import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
+import { PaymentDeadlineWarning } from "@/components/booking/PaymentDeadlineWarning";
 import { useUserCredits } from "@/hooks/useUserCredits";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { getSportCategory } from "@/lib/sport-category-utils";
+
 import {
   Dialog,
   DialogContent,
@@ -96,6 +101,7 @@ const normalizeCountryCode = (countryCode?: string | null): string | null => {
 export default function GameDetail() {
   const { id } = useParams<{ id: string }>();
   const { user, isLoading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [gameData, setGameData] = useState<GameData | null>(null);
@@ -107,6 +113,7 @@ export default function GameDetail() {
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
+  
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -314,7 +321,9 @@ export default function GameDetail() {
 
         toast({
           title: "Left session",
-          description: data?.message || "You have left this game session.",
+          description: data?.creditsAwarded 
+            ? `Refund of $${Number(data.creditsAwarded).toFixed(2)} issued as credits. Service fee is non-refundable.`
+            : data?.message || "You have left this game session.",
         });
 
         // Refetch credits after cancellation
@@ -416,9 +425,8 @@ export default function GameDetail() {
   const handleMakePayment = async () => {
     if (!gameData || !id || !user) return;
 
-    // Check if user has enough credits to cover full amount
-    const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
-    if (credits >= pricePerPlayer && !loadingCredits) {
+    // If user has credits, show payment method dialog; backend validates amounts
+    if (credits > 0 && !loadingCredits) {
       setShowCreditsModal(true);
       return;
     }
@@ -432,44 +440,50 @@ export default function GameDetail() {
     creditsToUse?: number
   ) => {
     if (!gameData || !id || !user) return;
-    
+
     setActionLoading(true);
     try {
-      const pricePerPlayer = gameData.session.court_price / gameData.session.min_players;
-      
       if (method === "credits") {
-        // If credits cover the full amount, process with credits only
-        if (credits >= pricePerPlayer) {
-          const { data, error } = await supabase.functions.invoke("create-payment", {
-            body: {
-              sessionId: id,
-              paymentType: "before_session",
-              returnUrl: `/games/${id}`,
-              origin: window.location.origin,
-              useCredits: true,
-              creditsAmount: creditsToUse,
-            },
+        // Let backend decide if credits cover the full amount
+        const { data, error } = await supabase.functions.invoke("create-payment", {
+          body: {
+            sessionId: id,
+            paymentType: "before_session",
+            returnUrl: `/games/${id}`,
+            origin: window.location.origin,
+            useCredits: true,
+            creditsAmount: creditsToUse,
+          },
+        });
+
+        if (error) throw error;
+
+        if (data?.success) {
+          toast({
+            title: "Payment Complete",
+            description: data.message || "Payment completed using your credits.",
           });
-
-          if (error) throw error;
-
-          if (data?.success) {
-            // Payment completed with credits only
-            toast({
-              title: "Payment Complete",
-              description: data.message || "Payment completed using your credits.",
-            });
-            setShowCreditsModal(false);
-            refetchCredits();
-            fetchGameData();
-            return;
-          }
+          setShowCreditsModal(false);
+          refetchCredits();
+          fetchGameData();
+          return;
         }
 
-        // Partial credits - proceed to Stripe with credits applied
-        await processCardPayment(true, creditsToUse);
+        // Backend returned a checkout URL (partial credits)
+        if (data?.url) {
+          setShowCreditsModal(false);
+          const isInIframe = window.self !== window.top;
+          if (isInIframe) {
+            const opened = window.open(data.url, "_blank", "noopener,noreferrer");
+            if (!opened) window.location.href = data.url;
+          } else {
+            window.location.href = data.url;
+          }
+          return;
+        }
+
+        throw new Error("Unexpected payment response");
       } else {
-        // Pay with card only
         await processCardPayment(false);
       }
     } catch (error) {
@@ -500,7 +514,18 @@ export default function GameDetail() {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        const msg = error?.message || "";
+        if (msg.includes("SLOT_UNAVAILABLE")) {
+          toast({
+            title: "Slot Unavailable",
+            description: "This slot was just taken. Please pick another time.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw error;
+      }
 
       if (data?.url) {
         setShowCreditsModal(false);
@@ -538,32 +563,74 @@ export default function GameDetail() {
     }
   };
 
-  const handleConfirmAttendance = async () => {
+  const handleJoinSession = async () => {
     if (!gameData || !id || !user) return;
 
     setActionLoading(true);
     try {
+      // Check profile completeness first
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const { isComplete, missingFields } = checkProfileComplete(profile);
+
+      if (!isComplete) {
+        setProfileMissingFields(missingFields);
+        setShowProfileAlert(true);
+        setActionLoading(false);
+        return;
+      }
+
+      // Check if already joined
+      const { data: existingPlayer } = await supabase
+        .from("session_players")
+        .select("id")
+        .eq("session_id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (existingPlayer) {
+        toast({
+          title: "Already joined",
+          description: "You're already in this session.",
+        });
+        setActionLoading(false);
+        return;
+      }
+
+      // Add player to session
+      const currentSession = gameData.session;
+      const allPlayers = [...gameData.players, ...gameData.waitingList];
+      const isJoiningWaitlist = allPlayers.length >= currentSession.max_players || gameData.players.length >= currentSession.max_players;
+
       const { error } = await supabase
         .from("session_players")
-        .update({ 
-          is_confirmed: true, 
-          confirmed_at: new Date().toISOString() 
-        })
-        .eq("session_id", id)
-        .eq("user_id", user.id);
+        .insert({
+          session_id: id,
+          user_id: user.id,
+          is_confirmed: !isJoiningWaitlist && currentSession.payment_type === "single",
+          confirmed_at: !isJoiningWaitlist && currentSession.payment_type === "single" ? new Date().toISOString() : null,
+        });
 
       if (error) throw error;
 
       toast({
-        title: "Attendance confirmed",
-        description: "You've confirmed you're coming to this game.",
+        title: isJoiningWaitlist ? "Added to waitlist" : "Joined successfully!",
+        description: isJoiningWaitlist
+          ? "You've been added to the waiting list. You'll be promoted when a spot opens."
+          : currentSession.payment_type === "single"
+          ? "You've joined and your presence is confirmed."
+          : "You've joined the session.",
       });
       fetchGameData();
     } catch (error) {
-      console.error("Error confirming attendance:", error);
+      console.error("Error joining session:", error);
       toast({
         title: "Error",
-        description: "Failed to confirm attendance.",
+        description: "Failed to join the session.",
         variant: "destructive",
       });
     } finally {
@@ -571,26 +638,64 @@ export default function GameDetail() {
     }
   };
 
+  const handleConfirmPresence = async () => {
+    if (!gameData || !id || !user) return;
+
+    setActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from("session_players")
+        .update({
+          is_confirmed: true,
+          confirmed_at: new Date().toISOString(),
+        })
+        .eq("session_id", id)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Presence confirmed!",
+        description: "You've confirmed your attendance for this session.",
+      });
+      fetchGameData();
+    } catch (error) {
+      console.error("Error confirming presence:", error);
+      toast({
+        title: "Error",
+        description: "Failed to confirm presence.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Attendance confirmation is handled automatically by the payment webhook.
+  // No manual frontend confirmation is allowed.
+
   const handleCancelSession = async () => {
     if (!gameData || !id) return;
 
     setActionLoading(true);
     try {
-      // Use database function to cancel session and release court availability
-      const { data, error } = await supabase.rpc('cancel_session_and_release_court', {
-        session_id: id
+      const { data, error } = await supabase.functions.invoke("cancel-session", {
+        body: { sessionId: id },
       });
 
       if (error) throw error;
-      
-      if (!data) {
-        throw new Error("You don't have permission to cancel this session");
-      }
+      if (data?.error) throw new Error(data.error);
 
       toast({
         title: "Session cancelled",
-        description: "The session has been cancelled and the court is now available.",
+        description: data?.message || "The session has been cancelled and the court is now available.",
       });
+
+      // Refresh credits if any were converted
+      if (data?.creditsConverted > 0) {
+        queryClient.invalidateQueries({ queryKey: ["user-credits"] });
+      }
+
       navigate(`/groups/${gameData.group.id}`);
     } catch (error) {
       console.error("Error cancelling session:", error);
@@ -647,7 +752,10 @@ const getGoogleMapsUrl = (address: string): string => {
   const sessionDateTime = new Date(`${session.session_date}T${session.start_time}`);
   const isGamePast = isPast(sessionDateTime);
   const paidCount = players.filter(p => p.isPaid).length;
-  const pricePerPlayer = session.court_price / session.min_players;
+  const pricePerPlayer = session.payment_type === "single"
+    ? session.court_price
+    : session.court_price / (session.min_players || 1);
+  const totalPerPlayer = pricePerPlayer;
   const isOrganizer = group.organizer_id === user.id;
   const isPlayerInGame = players.some(p => p.user_id === user.id);
   const isInWaitingList = waitingList.some(p => p.user_id === user.id);
@@ -735,48 +843,6 @@ const getGoogleMapsUrl = (address: string): string => {
             )}
           </Card>
 
-          {/* Organizer Rescue Controls */}
-          {isOrganizer && !isGamePast && (
-            <Card className="border-warning/50 bg-warning/5">
-              <CardContent className="p-4 lg:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                      <LifeBuoy className="h-5 w-5 text-warning" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">Rescue Mode</p>
-                      <p className="text-sm text-muted-foreground">
-                        {isRescueActive 
-                          ? "External players can join this session" 
-                          : "Allow external players to fill empty spots"}
-                      </p>
-                    </div>
-                  </div>
-                  {isRescueActive ? (
-                    <Button 
-                      variant="outline" 
-                      onClick={handleDeactivateRescue}
-                      disabled={actionLoading}
-                    >
-                      {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Deactivate Rescue
-                    </Button>
-                  ) : (
-                    <Button 
-                      className="bg-warning text-warning-foreground hover:bg-warning/90"
-                      onClick={handleActivateRescue}
-                      disabled={actionLoading}
-                    >
-                      {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Activate Rescue
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Join Rescue Session - For external players */}
           {canJoinRescue && (
             <Card className="border-success/50 bg-success/5">
@@ -789,7 +855,7 @@ const getGoogleMapsUrl = (address: string): string => {
                     <div>
                       <p className="font-semibold">Join This Rescue Game!</p>
                       <p className="text-sm text-muted-foreground">
-                        This game needs players. Join now for ${pricePerPlayer.toFixed(2)} per player.
+                        This game needs players. Join now for ${totalPerPlayer.toFixed(2)} per player.
                       </p>
                     </div>
                   </div>
@@ -951,18 +1017,22 @@ const getGoogleMapsUrl = (address: string): string => {
                         currentPlayerPayment?.isPaid ? (
                           <>
                             <p className="font-semibold text-success">Paid & Confirmed</p>
-                            <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Court price: ${session.court_price.toFixed(2)}
+                            </p>
                           </>
                         ) : (
                           <>
                             <p className="font-semibold text-warning">Payment Pending</p>
-                            <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Court price: ${session.court_price.toFixed(2)}
+                            </p>
                           </>
                         )
                       ) : (
                         <>
                           <p className="font-semibold text-success">Covered by Organizer</p>
-                          <p className="text-sm text-muted-foreground">Total: ${session.court_price.toFixed(2)}</p>
+                          <p className="text-sm text-muted-foreground">Court price: ${session.court_price.toFixed(2)}</p>
                         </>
                       )}
                     </div>
@@ -981,7 +1051,7 @@ const getGoogleMapsUrl = (address: string): string => {
                           disabled={actionLoading}
                         >
                           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Pay Now - ${session.court_price.toFixed(2)}
+                          Pay Now – ${session.court_price.toFixed(2)}
                         </Button>
                       )
                     )}
@@ -992,15 +1062,30 @@ const getGoogleMapsUrl = (address: string): string => {
                           <span className="font-semibold">Confirmed</span>
                         </div>
                       ) : (
-                        <Button 
-                          className="bg-success hover:bg-success/90 text-success-foreground"
-                          onClick={handleConfirmAttendance}
+                        <Button
+                          className="btn-athletic"
+                          onClick={handleConfirmPresence}
                           disabled={actionLoading}
                         >
                           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Confirm Attendance
+                          Confirm Presence
                         </Button>
                       )
+                    )}
+                    {!isOrganizer && !isPlayerInGame && !isInWaitingList && !isGamePast && (
+                      <Button
+                        className="btn-athletic"
+                        onClick={handleJoinSession}
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        {players.length >= session.max_players ? "Join Waitlist" : "Join & Confirm"}
+                      </Button>
+                    )}
+                    {!isOrganizer && isInWaitingList && !isGamePast && (
+                      <Badge variant="secondary" className="px-4 py-2">
+                        You're on the waitlist
+                      </Badge>
                     )}
                   </div>
                 </div>
@@ -1013,7 +1098,10 @@ const getGoogleMapsUrl = (address: string): string => {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Price per player</p>
-                      <p className="text-2xl font-bold">${pricePerPlayer.toFixed(2)}</p>
+                      <p className="text-2xl font-bold">${totalPerPlayer.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Court share per player
+                      </p>
                     </div>
                   </div>
                   {!isGamePast && (
@@ -1031,13 +1119,23 @@ const getGoogleMapsUrl = (address: string): string => {
                             disabled={actionLoading}
                           >
                             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                            Make Payment - ${pricePerPlayer.toFixed(2)}
+                            Make Payment – ${totalPerPlayer.toFixed(2)}
                           </Button>
                         )
                       )}
                       {isInWaitingList && (
-                        <Button disabled className="opacity-50">
-                          Waiting List
+                        <Badge variant="secondary" className="px-4 py-2">
+                          You're on the waitlist
+                        </Badge>
+                      )}
+                      {!isPlayerInGame && !isInWaitingList && (
+                        <Button
+                          className="btn-athletic"
+                          onClick={handleJoinSession}
+                          disabled={actionLoading}
+                        >
+                          {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          {players.length >= session.max_players ? "Join Waitlist" : "Join Session"}
                         </Button>
                       )}
                     </>
@@ -1047,29 +1145,199 @@ const getGoogleMapsUrl = (address: string): string => {
             </CardContent>
           </Card>
 
-          {/* Player Count with Organizer Edit */}
+          {/* Payment Deadline Warning - shown to organizer with pending payment */}
+          {isOrganizer && !isGamePast && !currentPlayerPayment?.isPaid && session.payment_deadline && (
+            <PaymentDeadlineWarning paymentDeadline={session.payment_deadline} />
+          )}
+
+          {/* Unified Players Section */}
           <Card>
-            <CardContent className="p-4 lg:p-6">
-              <div className="flex items-center justify-between mb-4">
+            <CardContent className="p-4 lg:p-6 space-y-4">
+              {/* Header: Players count + Rescue Mode toggle */}
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-muted-foreground" />
                   <span className="font-semibold">Players</span>
+                  <span className="text-muted-foreground font-medium">
+                    {players.length} / {session.max_players}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   {session.payment_type === "split" && (
-                    <Badge variant="outline">
+                    <Badge variant="outline" className="text-xs">
                       {paidCount}/{players.length} paid
                     </Badge>
                   )}
+                  {isOrganizer && !isGamePast && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground hidden sm:inline">Rescue Mode</span>
+                            <Switch
+                              checked={isRescueActive}
+                              onCheckedChange={(checked) => {
+                                if (checked) handleActivateRescue();
+                                else handleDeactivateRescue();
+                              }}
+                              disabled={actionLoading}
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Allow external players to fill empty spots</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                 </div>
               </div>
-              <PlayerCount
-                current={players.length}
-                min={session.min_players}
-                max={session.max_players}
-              />
-              
-              {/* Organizer can edit player limits */}
+
+              {/* Progress bar */}
+              {(() => {
+                const percentage = Math.min((players.length / session.min_players) * 100, 100);
+                const isFull = players.length >= session.max_players;
+                const hasMinimum = players.length >= session.min_players;
+                return (
+                  <div className="space-y-1">
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${hasMinimum ? "bg-primary" : "bg-warning"}`}
+                        style={{ width: `${Math.min((players.length / session.max_players) * 100, 100)}%` }}
+                      />
+                    </div>
+                    {!hasMinimum && (
+                      <p className="text-xs text-warning font-medium">
+                        Need {session.min_players - players.length} more to confirm
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Confirmed Players */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-muted-foreground">
+                  Confirmed ({players.length})
+                </h4>
+                {players.length > 0 ? (
+                  <div className="space-y-2">
+                    {players.map((player) => {
+                      const normalizedNationality = normalizeCountryCode(player.profile?.nationality_code);
+                      const flagCode = normalizedNationality?.toLowerCase() ?? null;
+                      const flagUrl = flagCode ? `https://flagcdn.com/w40/${flagCode}.png` : null;
+                      const isConfirmed = session.payment_type === "single" ? player.is_confirmed : player.isPaid;
+
+                      return (
+                        <div key={player.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={player.profile?.avatar_url || undefined} />
+                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                              {player.profile?.full_name?.split(" ").map(n => n[0]).join("") || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="flex items-center gap-1.5 font-medium text-sm">
+                              <span className="truncate">
+                                {player.profile?.full_name || "Player"}
+                              </span>
+                              {player.user_id === user.id && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">You</Badge>
+                              )}
+                              {flagUrl && (
+                                <img
+                                  className="h-4 w-auto rounded-sm shadow-sm shrink-0"
+                                  src={flagUrl}
+                                  alt={`Flag of ${normalizedNationality}`}
+                                  title={normalizedNationality ?? undefined}
+                                  loading="lazy"
+                                />
+                              )}
+                            </p>
+                            {isConfirmed ? (
+                              <span className="text-xs text-success flex items-center gap-1">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-success" /> Confirmed
+                              </span>
+                            ) : (
+                              <span className="text-xs text-warning flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3" /> {session?.payment_type === 'single' ? 'Pending Confirmation' : 'Pending Payment'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-2">No players yet</p>
+                )}
+              </div>
+
+              {/* Empty spots */}
+              {players.length < session.max_players && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-1">
+                  <Users className="h-4 w-4" />
+                  <span>{session.max_players - players.length} Spots Available</span>
+                </div>
+              )}
+
+              {/* Waitlist */}
+              {waitingList.length > 0 && (
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-muted-foreground">
+                      Waitlist ({waitingList.length})
+                    </h4>
+                    <Badge variant="outline" className="text-[10px] tracking-wider">QUEUE</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {waitingList.map((player, index) => {
+                      const normalizedNationality = normalizeCountryCode(player.profile?.nationality_code);
+                      const flagCode = normalizedNationality?.toLowerCase() ?? null;
+                      const flagUrl = flagCode ? `https://flagcdn.com/w40/${flagCode}.png` : null;
+                      const joinedAgo = (() => {
+                        const diffMs = Date.now() - new Date(player.joined_at).getTime();
+                        const diffH = Math.floor(diffMs / 3600000);
+                        if (diffH < 1) return "Joined recently";
+                        return `Joined ${diffH}h ago`;
+                      })();
+
+                      return (
+                        <div key={player.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-dashed">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={player.profile?.avatar_url || undefined} />
+                            <AvatarFallback className="bg-muted text-muted-foreground font-semibold">
+                              {player.profile?.full_name?.split(" ").map(n => n[0]).join("") || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="flex items-center gap-1.5 font-medium text-sm">
+                              <span className="truncate">
+                                {player.profile?.full_name || "Player"}
+                              </span>
+                              {player.user_id === user.id && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">You</Badge>
+                              )}
+                              {flagUrl && (
+                                <img
+                                  className="h-4 w-auto rounded-sm shadow-sm shrink-0"
+                                  src={flagUrl}
+                                  alt={`Flag of ${normalizedNationality}`}
+                                  loading="lazy"
+                                />
+                              )}
+                            </p>
+                            <span className="text-xs text-muted-foreground">{joinedAgo}</span>
+                          </div>
+                          <span className="text-sm font-semibold text-muted-foreground">#{index + 1}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Edit Player Limits - organizer only */}
               {isOrganizer && !isGamePast && (
                 <EditPlayerLimits 
                   sessionId={session.id}
@@ -1077,136 +1345,11 @@ const getGoogleMapsUrl = (address: string): string => {
                   currentMax={session.max_players}
                   courtPrice={session.court_price}
                   onUpdate={fetchGameData}
+                  locked={false}
                 />
               )}
             </CardContent>
           </Card>
-
-          {/* Players List */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                {isGamePast ? "Players who attended" : "Confirmed Players"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 lg:p-6 pt-2">
-              {players.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {players.map((player) => {
-                    const normalizedNationality = normalizeCountryCode(
-                      player.profile?.nationality_code
-                    );
-                    const flagCode = normalizedNationality?.toLowerCase() ?? null;
-                    const flagUrl = flagCode ? `https://flagcdn.com/w40/${flagCode}.png` : null;
-
-                    return (
-                      <div
-                        key={player.id}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
-                      >
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={player.profile?.avatar_url || undefined} />
-                          <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                            {player.profile?.full_name?.split(" ").map(n => n[0]).join("") || "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="flex items-center gap-1 font-medium">
-                            <span className="truncate">
-                              {player.profile?.full_name || "Player"}
-                              {player.user_id === user.id && " (You)"}
-                            </span>
-                            {flagUrl && (
-                              <img
-                                className="h-4 w-4 rounded-full shadow-sm"
-                                src={flagUrl}
-                                alt={`Flag of ${normalizedNationality}`}
-                                title={normalizedNationality ?? undefined}
-                                loading="lazy"
-                              />
-                            )}
-                          </p>
-                          <div className="flex items-center gap-1">
-                            {session.payment_type === "single" ? (
-                              // For organizer-paid sessions, check is_confirmed
-                              player.is_confirmed ? (
-                                <span className="text-xs text-success flex items-center gap-1">
-                                  <CheckCircle2 className="h-3 w-3" /> Confirmed
-                                </span>
-                              ) : (
-                                <span className="text-xs text-warning flex items-center gap-1">
-                                  <XCircle className="h-3 w-3" /> Pending
-                                </span>
-                              )
-                            ) : (
-                              // For split payment sessions, check isPaid
-                              player.isPaid ? (
-                                <span className="text-xs text-success flex items-center gap-1">
-                                  <CheckCircle2 className="h-3 w-3" /> Confirmed
-                                </span>
-                              ) : (
-                                <span className="text-xs text-warning flex items-center gap-1">
-                                  <XCircle className="h-3 w-3" /> Pending
-                                </span>
-                              )
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-center text-muted-foreground py-4">No players yet</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Waiting List */}
-          {waitingList.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ListOrdered className="h-5 w-5" />
-                  Waiting List
-                  <Badge variant="secondary" className="ml-2">{waitingList.length}</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 lg:p-6 pt-2">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {waitingList.map((player, index) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-dashed"
-                    >
-                      <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-semibold">
-                        {index + 1}
-                      </div>
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={player.profile?.avatar_url || undefined} />
-                        <AvatarFallback className="bg-muted text-muted-foreground font-semibold">
-                          {player.profile?.full_name?.split(" ").map(n => n[0]).join("") || "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">
-                          {player.profile?.full_name || "Player"}
-                          {player.user_id === user.id && " (You)"}
-                        </p>
-                        <span className="text-xs text-muted-foreground">
-                          In queue
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-sm text-muted-foreground mt-4 text-center">
-                  Players on the waiting list will be automatically added when a spot opens up.
-                </p>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Notes */}
           {session.notes && (
@@ -1223,17 +1366,6 @@ const getGoogleMapsUrl = (address: string): string => {
             </Card>
           )}
 
-          {/* Session Chat - Only for organizer or court manager */}
-          {(isOrganizer || isCourtManager) && courtManagerId && (
-            <SessionChat
-              sessionId={session.id}
-              sessionDate={session.session_date}
-              sessionStartTime={session.start_time}
-              sessionDurationMinutes={session.duration_minutes}
-              courtManagerId={courtManagerId}
-              isOrganizer={isOrganizer}
-            />
-          )}
 
           {/* Organizer Cancel Session */}
           {isOrganizer && !isGamePast && (
@@ -1304,6 +1436,8 @@ const getGoogleMapsUrl = (address: string): string => {
                     <AlertDialogDescription>
                       {isInWaitingList 
                         ? "You will be removed from the waiting list."
+                        : currentPlayerPayment?.isPaid
+                        ? "Your court payment will be refunded as credits. Service fee is non-refundable."
                         : "Your spot will be given to the next person on the waiting list."}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
@@ -1340,7 +1474,7 @@ const getGoogleMapsUrl = (address: string): string => {
           open={showCreditsModal}
           onOpenChange={setShowCreditsModal}
           userCredits={credits}
-          sessionCost={pricePerPlayer}
+          sessionCost={totalPerPlayer}
           onSelectPaymentMethod={handleSelectPaymentMethod}
           isLoading={actionLoading}
         />

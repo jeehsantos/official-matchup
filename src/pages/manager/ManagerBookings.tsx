@@ -210,11 +210,13 @@ export default function ManagerBookings() {
         });
       }
 
-      // Get profiles for direct bookings
-      const userIds = (bookingsData || [])
-        .filter(b => b.booked_by_user_id && !b.booked_by_session_id)
-        .map(b => b.booked_by_user_id)
-        .filter((id): id is string => id !== null);
+      // Get profiles for all bookings (direct and session-based)
+      const userIds = [...new Set(
+        (bookingsData || [])
+          .filter(b => b.booked_by_user_id)
+          .map(b => b.booked_by_user_id)
+          .filter((id): id is string => id !== null)
+      )];
 
       let profilesMap: Record<string, any> = {};
       if (userIds.length > 0) {
@@ -346,7 +348,7 @@ export default function ManagerBookings() {
   };
 
   const getBookerName = (booking: Booking) => {
-    // For session bookings, show player names
+    // For session bookings, show player names or group name
     if (booking.session) {
       const players = booking.session.players || [];
       if (players.length > 0) {
@@ -371,7 +373,7 @@ export default function ManagerBookings() {
       }
     }
     
-    // For direct bookings
+    // Fallback to booker profile (works for both direct and session bookings)
     if (booking.profile?.full_name) {
       return booking.profile.full_name;
     }

@@ -78,7 +78,7 @@ export function CourtCard({ court, onHover, isHighlighted }: CourtCardProps) {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-muted">
-              <SportIcon sport={court.sport_type} className="h-16 w-16 text-muted-foreground/50" />
+              <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-16 w-16 text-muted-foreground/50" />
             </div>
           )}
 

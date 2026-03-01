@@ -1,4 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { User, Users } from "lucide-react";
 
 interface PaymentTypeSelectorProps {
@@ -21,9 +20,9 @@ export function PaymentTypeSelector({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium">Payment Option</p>
+      <p className="text-sm font-medium">Payment Mode</p>
       <div className={`grid grid-cols-1 ${showSplitOption ? 'sm:grid-cols-2' : ''} gap-3`}>
-        {/* Single Payment Option */}
+        {/* Organizer Pays Full Option */}
         <button
           type="button"
           onClick={() => onPaymentTypeChange("single")}
@@ -43,9 +42,9 @@ export function PaymentTypeSelector({
               <User className="h-5 w-5" />
             </div>
             <div>
-              <p className="font-semibold text-foreground">Pay Full Amount</p>
+              <p className="font-semibold text-foreground">Organizer Pays Full</p>
               <p className="text-sm text-muted-foreground mt-0.5">
-                You pay ${courtPrice.toFixed(2)} for the booking
+                You pay the full court amount for the booking
               </p>
             </div>
           </div>
@@ -58,7 +57,7 @@ export function PaymentTypeSelector({
           )}
         </button>
 
-        {/* Split Payment Option - Only show if payment timing is before_session */}
+        {/* Split Between Players Option */}
         {showSplitOption && (
           <button
             type="button"
@@ -79,9 +78,9 @@ export function PaymentTypeSelector({
                 <Users className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-semibold text-foreground">Split with Players</p>
+                <p className="font-semibold text-foreground">Split Between Players</p>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Each player pays their share to confirm
+                  Each player pays their share to confirm their spot
                 </p>
               </div>
             </div>
@@ -98,7 +97,7 @@ export function PaymentTypeSelector({
       
       {paymentType === "split" && showSplitOption && (
         <p className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
-          💡 Each group member will need to pay their portion to confirm their spot. 
+          💡 Each player will need to pay their share (court cost ÷ max players + service fee) to confirm their spot. 
           The session will only be confirmed once minimum players have paid.
         </p>
       )}

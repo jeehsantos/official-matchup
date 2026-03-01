@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Users, Building2 } from "lucide-react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
+import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email"),
@@ -49,7 +50,14 @@ export default function Auth() {
   const [resetSent, setResetSent] = useState(false);
   const { user, userRole, signIn, signUp, resetPassword, isLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  const getDefaultPathForRole = (role: string | null) => {
+    if (role === "admin") return "/admin";
+    if (role === "court_manager") return "/manager";
+    return "/games";
+  };
 
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
@@ -78,6 +86,28 @@ export default function Auth() {
     defaultValues: { fullName: "", email: "", password: "", confirmPassword: "", role: "player" },
   });
 
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    const roleParam = searchParams.get("role");
+    const refParam = searchParams.get("ref");
+
+    if (tabParam === "signup") {
+      setActiveTab("signup");
+    } else if (tabParam === "login") {
+      setActiveTab("login");
+    }
+
+    if (roleParam === "player" || roleParam === "court_manager") {
+      signUpForm.setValue("role", roleParam, { shouldValidate: true });
+    }
+
+    // Store referral code for use after signup
+    if (refParam) {
+      localStorage.setItem("referralCode", refParam);
+    }
+  }, [searchParams, signUpForm]);
+
   useEffect(() => {
     // Only redirect if we have a user AND role loaded (not during sign out)
     // AND we're not already being redirected from logout
@@ -87,10 +117,8 @@ export default function Auth() {
       if (redirectPath) {
         localStorage.removeItem('redirectAfterAuth');
         navigate(redirectPath, { replace: true });
-      } else if (userRole === "court_manager") {
-        navigate("/manager", { replace: true });
       } else {
-        navigate("/games", { replace: true });
+        navigate(getDefaultPathForRole(userRole), { replace: true });
       }
     }
   }, [user, userRole, isLoading, navigate]);
@@ -114,17 +142,17 @@ export default function Auth() {
       if (redirectPath) {
         localStorage.removeItem('redirectAfterAuth');
         navigate(redirectPath, { replace: true });
-      } else if (role === "court_manager") {
-        navigate("/manager", { replace: true });
       } else {
-        navigate("/games", { replace: true });
+        navigate(getDefaultPathForRole(role), { replace: true });
       }
     }
   };
 
   const handleSignUp = async (data: SignUpFormData) => {
     setIsSubmitting(true);
-    const { error } = await signUp(data.email, data.password, data.fullName, data.role);
+    // Pass referral code to signUp so it's included in user metadata
+    const referralCode = localStorage.getItem("referralCode") || undefined;
+    const { error } = await signUp(data.email, data.password, data.fullName, data.role, referralCode);
     setIsSubmitting(false);
 
     if (error) {
@@ -139,6 +167,11 @@ export default function Auth() {
         description: friendlyMessage,
       });
     } else {
+      // Clear referral code from localStorage after successful signup
+      if (referralCode) {
+        localStorage.removeItem("referralCode");
+      }
+
       toast({
         title: "Account created!",
         description: "Welcome to Sport Arena. Let's get you started.",
@@ -149,10 +182,8 @@ export default function Auth() {
       if (redirectPath) {
         localStorage.removeItem('redirectAfterAuth');
         navigate(redirectPath, { replace: true });
-      } else if (data.role === "court_manager") {
-        navigate("/manager", { replace: true });
       } else {
-        navigate("/games", { replace: true });
+        navigate(getDefaultPathForRole(data.role), { replace: true });
       }
     }
   };
