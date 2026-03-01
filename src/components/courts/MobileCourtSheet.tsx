@@ -21,12 +21,7 @@ interface MobileCourtSheetProps {
 
 const ITEMS_PER_PAGE = 14;
 
-export function MobileCourtSheet({
-  courts,
-  loading,
-  highlightedCourtId,
-  onHighlight,
-}: MobileCourtSheetProps) {
+export function MobileCourtSheet({ courts, loading, highlightedCourtId, onHighlight }: MobileCourtSheetProps) {
   const [snap, setSnap] = useState<number | string | null>(0.15);
   const [currentPage, setCurrentPage] = useState(1);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -50,14 +45,14 @@ export function MobileCourtSheet({
   const handlePrevPage = useCallback(() => {
     if (currentPage > 1) {
       setCurrentPage((prev: number) => prev - 1);
-      scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [currentPage]);
 
   const handleNextPage = useCallback(() => {
     if (currentPage < totalPages) {
       setCurrentPage((prev: number) => prev + 1);
-      scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [currentPage, totalPages]);
 
@@ -66,8 +61,8 @@ export function MobileCourtSheet({
   const showPagination = totalPages > 1;
 
   return (
-    <DrawerPrimitive.Root 
-      open={true} 
+    <DrawerPrimitive.Root
+      open={true}
       modal={false}
       dismissible={false}
       snapPoints={["180px", 0.5, 0.85]}
@@ -76,38 +71,39 @@ export function MobileCourtSheet({
     >
       <DrawerPrimitive.Portal>
         <DrawerPrimitive.Overlay className="fixed inset-0 bg-transparent pointer-events-none" style={{ zIndex: 1 }} />
-        <DrawerPrimitive.Content 
+        <DrawerPrimitive.Content
           className="fixed left-0 right-0 flex flex-col rounded-t-[20px] bg-background border-t border-border shadow-2xl focus:outline-none"
-          style={{ 
+          style={{
             zIndex: 1,
-            bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))',
-            height: 'calc(100dvh - 40px - 4rem - env(safe-area-inset-bottom, 0px))',
-            maxHeight: 'calc(100dvh - 40px - 4rem - env(safe-area-inset-bottom, 0px))',
+            bottom: "calc(4rem + env(safe-area-inset-bottom, 0px))",
+            height: "calc(100dvh - 40px - 4rem - env(safe-area-inset-bottom, 0px))",
+            maxHeight: "calc(100dvh - 40px - 4rem - env(safe-area-inset-bottom, 0px))",
           }}
         >
           {/* Handle area */}
-          <div 
-            className="flex flex-col items-center pt-3 pb-10 cursor-grab active:cursor-grabbing shrink-0" 
-            style={{ touchAction: 'none' }}
+          <div
+            className="flex flex-col items-center pt-3 pb-10 cursor-grab active:cursor-grabbing shrink-0"
+            style={{ touchAction: "none" }}
           >
             <div className="h-1.5 w-12 rounded-full bg-muted-foreground/40 mb-2" />
             <p className="text-sm font-semibold text-foreground">
-              {courts.length >= 100 ? `Over ${Math.floor(courts.length / 100) * 100}` : courts.length} court{courts.length !== 1 ? "s" : ""}
+              {courts.length >= 100 ? `Over ${Math.floor(courts.length / 100) * 100}` : courts.length} court
+              {courts.length !== 1 ? "s" : ""}
             </p>
             <p className="text-xs text-muted-foreground">Drag up to explore</p>
           </div>
 
           {/* Scrollable cards list */}
-          <div 
+          <div
             ref={scrollContainerRef}
             className="flex-1 overflow-y-auto min-h-0"
             style={{
-              WebkitOverflowScrolling: 'touch',
-              overscrollBehaviorY: 'contain',
-              touchAction: 'pan-y',
+              WebkitOverflowScrolling: "touch",
+              overscrollBehaviorY: "contain",
+              touchAction: "pan-y",
             }}
           >
-            <div className="p-4 pb-32 space-y-4">
+            <div className="p-4 pb-36 space-y-4">
               {loading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="animate-pulse">
@@ -137,7 +133,7 @@ export function MobileCourtSheet({
 
           {/* Fixed pagination footer — outside scroll, always visible */}
           {showPagination && (
-            <div 
+            <div
               id="nextPageCourt"
               className="shrink-0 border-t border-border bg-background flex items-center justify-center gap-6 py-3 px-6"
             >
@@ -150,11 +146,11 @@ export function MobileCourtSheet({
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              
+
               <span className="text-sm font-medium text-foreground min-w-[60px] text-center">
                 {currentPage} / {totalPages}
               </span>
-              
+
               <Button
                 variant="outline"
                 size="icon"
