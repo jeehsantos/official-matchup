@@ -320,8 +320,6 @@
   background: transparent;
   border: none;
   overflow: visible !important;
-  width: auto !important;
-  height: auto !important;
 }
 
 .price-marker {
