@@ -1,24 +1,25 @@
 import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronDown, ChevronUp, Building2, Plus, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Box, Plus, X, Users, Bath, Car, Wifi, Coffee,
+  BriefcaseMedical, Droplets, Armchair, Lock,
+} from "lucide-react";
 
-const DEFAULT_FACILITIES = [
-  "Changing Room",
-  "Shower",
-  "Lockers",
-  "Parking Lot",
-  "Restrooms",
-  "Water Fountain",
-  "First Aid Kit",
-  "Wi-Fi",
-  "Seating Area",
-  "Cafeteria",
+const FACILITY_OPTIONS: { label: string; icon: React.ElementType }[] = [
+  { label: "Changing Room", icon: Users },
+  { label: "Lockers", icon: Lock },
+  { label: "Restrooms", icon: Bath },
+  { label: "First Aid Kit", icon: BriefcaseMedical },
+  { label: "Parking Lot", icon: Car },
+  { label: "Wi-Fi", icon: Wifi },
+  { label: "Cafeteria", icon: Coffee },
+  { label: "Shower", icon: Droplets },
+  { label: "Water Fountain", icon: Droplets },
+  { label: "Seating Area", icon: Armchair },
 ];
 
 interface VenueDetailsEditorProps {
@@ -30,7 +31,6 @@ export function VenueDetailsEditor({
   amenities,
   onAmenitiesChange,
 }: VenueDetailsEditorProps) {
-  const [expanded, setExpanded] = useState(true);
   const [customFacility, setCustomFacility] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -51,99 +51,83 @@ export function VenueDetailsEditor({
     }
   };
 
-  const removeFacility = (facility: string) => {
-    onAmenitiesChange(amenities.filter((a) => a !== facility));
-  };
-
-  const allFacilityOptions = [
-    ...DEFAULT_FACILITIES,
-    ...amenities.filter((a) => !DEFAULT_FACILITIES.includes(a)),
-  ];
+  // Merge default options with any custom amenities not in defaults
+  const defaultLabels = FACILITY_OPTIONS.map((f) => f.label);
+  const customAmenities = amenities.filter((a) => !defaultLabels.includes(a));
 
   return (
-    <Card className="bg-card border-border shadow-sm">
-      <Collapsible open={expanded} onOpenChange={setExpanded}>
-        <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Building2 className="h-4 w-4 text-primary" />
-                Venue Facilities
-              </CardTitle>
-              {expanded ? (
-                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              )}
-            </div>
-          </CardHeader>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <CardContent className="space-y-5 pt-0">
-            <div className="space-y-2">
-              <Label>Facilities</Label>
-              <p className="text-xs text-muted-foreground">
-                Select what facilities your venue offers, or add custom ones
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {allFacilityOptions.map((facility) => (
-                  <label
-                    key={facility}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted cursor-pointer text-sm"
-                  >
-                    <Checkbox
-                      checked={amenities.includes(facility)}
-                      onCheckedChange={() => toggleFacility(facility)}
-                    />
-                    {facility}
-                  </label>
-                ))}
-              </div>
+    <Card className="rounded-2xl border border-border shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg font-semibold flex items-center gap-2">
+          <Box className="h-5 w-5 text-primary" />
+          Venue Facilities
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Select what facilities your venue offers, or add custom ones.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4 pt-0">
+        {/* Chip-style facility toggles */}
+        <div className="flex flex-wrap gap-2.5">
+          {FACILITY_OPTIONS.map(({ label, icon: Icon }) => {
+            const selected = amenities.includes(label);
+            return (
+              <button
+                key={label}
+                type="button"
+                onClick={() => toggleFacility(label)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all text-sm font-medium ${
+                  selected
+                    ? "bg-primary/10 border-primary text-primary"
+                    : "bg-card border-border text-muted-foreground hover:border-muted-foreground/50 hover:bg-muted/50"
+                }`}
+              >
+                <Icon size={18} className={selected ? "text-primary" : "text-muted-foreground"} />
+                {label}
+              </button>
+            );
+          })}
 
-              <div className="flex gap-2 mt-2">
-                <Input
-                  ref={inputRef}
-                  value={customFacility}
-                  onChange={(e) => setCustomFacility(e.target.value)}
-                  placeholder="Add custom facility..."
-                  className="flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addCustomFacility();
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={addCustomFacility}
-                  disabled={!customFacility.trim()}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
+          {/* Custom amenities as chips */}
+          {customAmenities.map((label) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => toggleFacility(label)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all text-sm font-medium bg-primary/10 border-primary text-primary"
+            >
+              {label}
+              <X size={14} />
+            </button>
+          ))}
+        </div>
 
-              {amenities.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {amenities.map((a) => (
-                    <Badge
-                      key={a}
-                      variant="outline"
-                      className="gap-1 cursor-pointer hover:bg-destructive/20"
-                      onClick={() => removeFacility(a)}
-                    >
-                      {a}
-                      <X className="h-3 w-3" />
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </CollapsibleContent>
-      </Collapsible>
+        {/* Add custom facility */}
+        <div className="flex gap-2 max-w-md">
+          <Input
+            ref={inputRef}
+            value={customFacility}
+            onChange={(e) => setCustomFacility(e.target.value)}
+            placeholder="Add custom facility..."
+            className="flex-1"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addCustomFacility();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addCustomFacility}
+            disabled={!customFacility.trim()}
+            className="text-sm"
+          >
+            Add
+          </Button>
+        </div>
+      </CardContent>
     </Card>
   );
 }
