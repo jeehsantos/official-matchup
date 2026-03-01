@@ -24,11 +24,11 @@ const createPriceIcon = (price: number, isHighlighted: boolean) => {
     className: "custom-price-marker",
     html: `
       <div class="price-marker ${isHighlighted ? "highlighted" : ""}">
-        $${price} NZD
+        $${price}
       </div>
     `,
-    iconSize: [80, 28],
-    iconAnchor: [40, 14],
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
   });
 };
 
@@ -193,28 +193,21 @@ export function CourtsMap({ courts, highlightedCourtId, onMarkerHover, linkSearc
         icon: createPriceIcon(court.hourly_rate, court.id === highlightedCourtId),
       });
 
-      // Build popup with image - escape quotes properly
       const venueImage = court.photo_urls?.[0] || court.photo_url || court.venues?.photo_url || '/placeholder.svg';
-      const courtName = court.name.replace(/'/g, "\\'");
-      const venueName = court.venues?.name?.replace(/'/g, "\\'") || '';
-      const cityName = court.venues?.city?.replace(/'/g, "\\'") || '';
+      const courtName = court.name.replace(/'/g, "&#39;");
+      const venueName = court.venues?.name?.replace(/'/g, "&#39;") || '';
+      const cityName = court.venues?.city?.replace(/'/g, "&#39;") || '';
       const courtHref = `/courts/${court.id}${linkSearch || ''}`;
       
       const popupContent = `
-        <div style="min-width: 200px;">
-          <a href="${courtHref}" style="display: block; text-decoration: none; color: inherit;">
-            <img 
-              src="${venueImage}" 
-              alt="${courtName}"
-              style="width: 100%; height: 128px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;"
-              onerror="this.src='/placeholder.svg'"
-            />
-            <div style="font-weight: 600; font-size: 16px; margin-bottom: 4px;">${courtName}</div>
-            ${venueName ? `<div style="font-size: 14px; color: #666; margin-bottom: 2px;">${venueName}</div>` : ''}
-            ${cityName ? `<div style="font-size: 12px; color: #999;">${cityName}</div>` : ''}
-            <div style="font-size: 14px; font-weight: 700; color: hsl(174 72% 40%); margin-top: 8px;">$${court.hourly_rate} NZD/hour</div>
-          </a>
-        </div>
+        <a href="${courtHref}" class="court-popup-card" style="display:block;text-decoration:none;color:inherit;">
+          <img src="${venueImage}" alt="${courtName}" onerror="this.src='/placeholder.svg'" />
+          <div class="court-popup-info">
+            <p class="court-popup-name">${venueName || courtName}</p>
+            ${cityName ? `<p class="court-popup-city">${cityName}</p>` : ''}
+            <p class="court-popup-price">$${court.hourly_rate} /hour</p>
+          </div>
+        </a>
       `;
       
       marker.bindPopup(popupContent, {
