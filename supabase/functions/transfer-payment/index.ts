@@ -4,14 +4,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Platform fee: $1.50 fixed
-const PLATFORM_FEE = 1.50;
-
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -36,10 +32,7 @@ serve(async (req) => {
         .select("*")
         .eq("id", paymentId)
         .single();
-      
-      if (error || !data) {
-        throw new Error("Payment not found");
-      }
+      if (error || !data) throw new Error("Payment not found");
       payment = data;
     } else {
       const { data, error } = await supabaseAdmin
@@ -48,16 +41,12 @@ serve(async (req) => {
         .eq("session_id", sessionId)
         .eq("user_id", userId)
         .single();
-      
-      if (error || !data) {
-        throw new Error("Payment not found");
-      }
+      if (error || !data) throw new Error("Payment not found");
       payment = data;
     }
 
     // Check if payment is in correct status
     if (payment.status !== "completed") {
-      // Provide specific error messages for different statuses
       if (payment.status === "refunded" || payment.status === "cancelled") {
         throw new Error(`Cannot transfer payment - it has been ${payment.status}`);
       }
@@ -77,7 +66,57 @@ serve(async (req) => {
       });
     }
 
-    // Claim this payment for transfer processing so only one request can continue.
+    // ─── DESTINATION-CHARGE GUARD ───
+    // If payment was made with destination-charge, Stripe already handled the transfer.
+    // Check if the PaymentIntent has an automatic transfer attached.
+    if (payment.stripe_payment_intent_id) {
+      const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+        apiVersion: "2024-12-18.acacia",
+      });
+
+      try {
+        const pi = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id, {
+          expand: ["latest_charge"],
+        });
+        const charge = pi.latest_charge as Stripe.Charge | null;
+        const autoTransferId = charge?.transfer as string | null;
+
+        if (autoTransferId) {
+          // Destination-charge payment: Stripe already transferred funds.
+          // Just update our records to reflect this.
+          const courtAmount = payment.court_amount != null
+            ? Number(payment.court_amount)
+            : Math.max(0, Number(payment.amount) - Number(payment.platform_fee || 0));
+
+          await supabaseAdmin
+            .from("payments")
+            .update({
+              status: "transferred",
+              transferred_at: new Date().toISOString(),
+              stripe_transfer_id: autoTransferId,
+              transfer_amount: courtAmount,
+            })
+            .eq("id", payment.id);
+
+          console.log(`Destination-charge payment ${payment.id} marked transferred (auto: ${autoTransferId})`);
+
+          return new Response(JSON.stringify({
+            success: true,
+            destinationCharge: true,
+            transferId: autoTransferId,
+            message: "Destination-charge transfer already handled by Stripe.",
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          });
+        }
+      } catch (err) {
+        console.error("Error checking destination-charge status (continuing with manual transfer):", err);
+      }
+    }
+
+    // ─── LEGACY MANUAL TRANSFER ───
+    // Claim this payment for transfer processing
     const claimTime = new Date().toISOString();
     const { data: claimedPayment, error: claimError } = await supabaseAdmin
       .from("payments")
@@ -161,14 +200,13 @@ serve(async (req) => {
 
     if (!connectedAccountId) {
       console.log("No Stripe Connect account for venue:", venue?.id);
-      // Mark as transferred even without Stripe account (platform keeps payment)
       await supabaseAdmin
         .from("payments")
         .update({
           status: "transferred",
           transferred_at: new Date().toISOString(),
           transferring_at: null,
-          transfer_amount: 0, // No transfer made
+          transfer_amount: 0,
         })
         .eq("id", payment.id);
 
@@ -182,14 +220,14 @@ serve(async (req) => {
       });
     }
 
-    // Calculate transfer amount (payment amount minus platform fee and credits used)
-    const paidWithCredits = Number(payment.paid_with_credits || 0);
-    const cashPaid = Number(payment.amount) - paidWithCredits;
-    const transferAmount = Math.max(0, cashPaid - PLATFORM_FEE);
+    // Calculate transfer amount: court_amount only (service fee retained by platform)
+    const courtAmount = payment.court_amount != null
+      ? Number(payment.court_amount)
+      : Math.max(0, Number(payment.amount) - Number(payment.platform_fee || 0));
+    const transferAmountCents = Math.round(courtAmount * 100);
 
-    // Only transfer if there's a positive amount
-    if (transferAmount <= 0) {
-      console.log("No amount to transfer after fees:", transferAmount);
+    if (transferAmountCents <= 0) {
+      console.log("No amount to transfer after fees");
       await supabaseAdmin
         .from("payments")
         .update({
@@ -210,19 +248,17 @@ serve(async (req) => {
       });
     }
 
-    // Initialize Stripe
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2024-12-18.acacia",
     });
 
-    // Create transfer to connected account with deterministic idempotency.
     const transferIdempotencyKey = `transfer:${payment.id}`;
 
     let transfer;
     try {
       transfer = await stripe.transfers.create(
         {
-          amount: Math.round(transferAmount * 100), // Convert to cents
+          amount: transferAmountCents,
           currency: "nzd",
           destination: connectedAccountId,
           description: `Payment for session ${payment.session_id}`,
@@ -232,6 +268,7 @@ serve(async (req) => {
             user_id: payment.user_id,
             venue_id: venue.id,
             venue_name: venue.name,
+            legacy_transfer: "true",
           },
         },
         { idempotencyKey: transferIdempotencyKey }
@@ -241,7 +278,6 @@ serve(async (req) => {
       throw stripeError;
     }
 
-    // Update payment record with transfer details
     const { error: updateError } = await supabaseAdmin
       .from("payments")
       .update({
@@ -249,7 +285,7 @@ serve(async (req) => {
         transferred_at: new Date().toISOString(),
         transferring_at: null,
         stripe_transfer_id: transfer.id,
-        transfer_amount: transferAmount,
+        transfer_amount: courtAmount,
       })
       .eq("id", payment.id);
 
@@ -262,7 +298,7 @@ serve(async (req) => {
     console.log("Payment transferred successfully:", {
       paymentId: payment.id,
       transferId: transfer.id,
-      amount: transferAmount,
+      amount: courtAmount,
       destination: connectedAccountId,
       venueName: venue.name,
     });
@@ -270,8 +306,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({ 
       success: true,
       transferId: transfer.id,
-      transferAmount: transferAmount,
-      message: `Payment of $${transferAmount.toFixed(2)} transferred to venue owner.`,
+      transferAmount: courtAmount,
+      message: `Payment of $${courtAmount.toFixed(2)} transferred to venue owner.`,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,

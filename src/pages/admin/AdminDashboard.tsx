@@ -8,7 +8,8 @@ import {
   Shield,
   Archive,
   Gift,
-  DollarSign
+  DollarSign,
+  BarChart3
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AdminLayout } from "@/components/layout/AdminLayout";
@@ -46,6 +47,12 @@ function AdminDashboardContent() {
       description: "Configure commission fees for players and managers",
       icon: DollarSign,
       href: "/admin/fees",
+    },
+    {
+      title: "Financial Dashboard",
+      description: "View revenue, court payables, and platform position",
+      icon: BarChart3,
+      href: "/admin/finance",
     },
   ];
 

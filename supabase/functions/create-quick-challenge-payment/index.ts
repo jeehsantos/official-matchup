@@ -306,8 +306,19 @@ serve(async (req) => {
         type: "quick_challenge",
         player_record_id: playerRecord.id,
         venue_stripe_account_id: venue?.stripe_account_id || "",
+        destination_charge: venue?.stripe_account_id ? "true" : "false",
       },
     };
+
+    // Destination-charge split for quick challenges
+    if (venue?.stripe_account_id) {
+      sessionParams.payment_intent_data = {
+        application_fee_amount: serviceFeeTotalCents,
+        transfer_data: {
+          destination: venue.stripe_account_id,
+        },
+      };
+    }
 
     console.log(`Quick challenge checkout: court=${courtShareCents}c, serviceFee=${serviceFeeTotalCents}c, total=${totalChargeCents}c`);
 

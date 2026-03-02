@@ -264,8 +264,19 @@ serve(async (req) => {
         payment_type: sessionPaymentType,
         credits_applied: creditsToApply.toString(),
         venue_stripe_account_id: venue.stripe_account_id || "",
+        destination_charge: venue.stripe_account_id ? "true" : "false",
       },
     };
+
+    // Destination-charge split: platform keeps service fee, court receives recipient amount
+    if (venue.stripe_account_id) {
+      sessionParams.payment_intent_data = {
+        application_fee_amount: serviceFeeTotalCents,
+        transfer_data: {
+          destination: venue.stripe_account_id,
+        },
+      };
+    }
 
     const normalizedAttempt = Number.isFinite(Number(body.attempt)) && Number(body.attempt) > 0
       ? Math.trunc(Number(body.attempt))
@@ -508,8 +519,20 @@ async function handleDeferredPayment(body: any, user: any, supabaseAdmin: any) {
       gross_total_cents: grossTotalCents.toString(),
       service_fee_total_cents: serviceFeeTotalCents.toString(),
       stripe_fee_coverage_cents: stripeFeeCoverageCents.toString(),
+      venue_stripe_account_id: venue.stripe_account_id || "",
+      destination_charge: venue.stripe_account_id ? "true" : "false",
     },
   };
+
+  // Destination-charge split for deferred flow
+  if (venue.stripe_account_id) {
+    sessionParams.payment_intent_data = {
+      application_fee_amount: serviceFeeTotalCents,
+      transfer_data: {
+        destination: venue.stripe_account_id,
+      },
+    };
+  }
 
   const normalizedAttempt = Number.isFinite(Number(attempt)) && Number(attempt) > 0
     ? Math.trunc(Number(attempt))
