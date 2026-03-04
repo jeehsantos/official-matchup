@@ -190,14 +190,19 @@ serve(async (req) => {
     const dateOverrides: DateOverride[] = overridesResult.data || [];
 
     // Determine which courts to process
+    // RESILIENCE: Use actual parent_court_id relationships, not just is_multi_court flag
     let courtsToProcess: Court[] = [];
     let courtsForDropdown: Court[] = [];
 
     if (courtId) {
       const requestedCourt = allCourts.find(c => c.id === courtId);
       if (requestedCourt) {
-        if (requestedCourt.is_multi_court) {
-          courtsForDropdown = [requestedCourt, ...allCourts.filter(c => c.parent_court_id === courtId)];
+        // Check if this court has children by relationship (resilient to is_multi_court flag)
+        const children = allCourts.filter(c => c.parent_court_id === courtId);
+        const isEffectiveParent = requestedCourt.is_multi_court || children.length > 0;
+
+        if (isEffectiveParent) {
+          courtsForDropdown = [requestedCourt, ...children];
         } else if (requestedCourt.parent_court_id) {
           const parentCourt = allCourts.find(c => c.id === requestedCourt.parent_court_id);
           courtsForDropdown = parentCourt
