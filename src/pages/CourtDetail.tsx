@@ -897,6 +897,7 @@ export default function CourtDetail() {
           totalPlayers: quickGameConfig.totalPlayers,
           paymentType,
           equipment,
+          genderPreference: quickGameConfig.genderPreference || "mixed",
         },
       });
 
