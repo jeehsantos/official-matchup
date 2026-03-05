@@ -609,12 +609,6 @@ export default function Courts() {
                         onHover={setHighlightedCourtId}
                         isHighlighted={court.id === highlightedCourtId}
                       />
-                      {/* Multi-court badge */}
-                      {(court as any).is_multi_court && (
-                        <Badge className="absolute top-2 left-2 bg-accent text-accent-foreground">
-                          Multi-Court
-                        </Badge>
-                      )}
                     </div>
                   ))}
                 </div>
