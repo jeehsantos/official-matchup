@@ -98,9 +98,9 @@ Deno.serve(async (req) => {
 
     // Convert each payment's court_amount to credits
     for (const payment of payments || []) {
-      // court_amount is stored in cents, convert to dollars
-      const courtAmountCents = payment.court_amount ?? Math.max((payment.amount || 0) - (payment.platform_fee || 0), 0);
-      const creditAmount = courtAmountCents / 100;
+      // court_amount is stored in DOLLARS in the payments table (numeric type)
+      const courtAmountDollars = payment.court_amount ?? Math.max((payment.amount || 0) - (payment.platform_fee || 0), 0);
+      const creditAmount = Number(courtAmountDollars);
 
       if (creditAmount > 0) {
         // Add credits via RPC (service role bypasses auth.uid() check)
@@ -117,12 +117,13 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Record held credit liability
+        // Record held credit liability (amount_cents column expects cents)
+        const liabilityCents = Math.round(creditAmount * 100);
         const { error: liabilityError } = await supabaseAdmin
           .from("held_credit_liabilities")
           .insert({
             user_id: payment.user_id,
-            amount_cents: courtAmountCents,
+            amount_cents: liabilityCents,
             source_session_id: sessionId,
             source_payment_id: payment.id,
             status: "HELD",

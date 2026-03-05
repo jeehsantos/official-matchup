@@ -83,13 +83,13 @@ serve(async (req) => {
       // 1) refund ONLY court amount to credits (platform profit/service fee is non-refundable)
       // 2) never Stripe refund from this path
       // 3) mark payment as explicitly converted to credits
+      // NOTE: payments table stores amounts in DOLLARS (numeric), not cents
       const rawCourtAmount = payment.court_amount != null
         ? Number(payment.court_amount)
         : NaN;
       const fallbackCourtAmount = Number(payment.amount) - Number(payment.service_fee_total || 0);
-      const creditAmount = Number.isFinite(rawCourtAmount) ? rawCourtAmount : fallbackCourtAmount;
-      const creditAmountCents = Math.max(0, Math.round(creditAmount));
-      const creditAmountDollars = creditAmountCents / 100;
+      const creditAmountDollars = Number.isFinite(rawCourtAmount) ? rawCourtAmount : fallbackCourtAmount;
+      const creditAmountCents = Math.max(0, Math.round(creditAmountDollars * 100));
       
       if (creditAmountDollars > 0) {
         const { error: creditError } = await supabaseAdmin.rpc(
