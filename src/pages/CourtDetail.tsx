@@ -907,7 +907,10 @@ export default function CourtDetail() {
       const challengeId = challengeData?.challenge_id as string | undefined;
       if (!challengeId) throw new Error("Challenge created without id");
 
-      if (court.payment_timing === "at_booking") {
+      const requiresAtBookingPayment =
+        challengeData?.requires_payment_at_booking === true || effectivePaymentTiming === "at_booking";
+
+      if (requiresAtBookingPayment) {
         try {
           const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-quick-challenge-payment", {
             body: {
