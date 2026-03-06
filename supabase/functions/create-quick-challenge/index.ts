@@ -152,7 +152,7 @@ serve(async (req) => {
         available_date: scheduledDate,
         start_time: scheduledTime,
         end_time: endTime,
-        is_booked: courtResult.data.payment_timing !== "at_booking",
+        is_booked: effectivePaymentTiming !== "at_booking",
         booked_by_user_id: user.id,
         payment_status: "pending",
       })
