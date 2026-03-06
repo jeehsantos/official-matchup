@@ -172,8 +172,21 @@ serve(async (req) => {
     const serviceFee = Number(platformResult.data?.player_fee ?? 0);
     const totalAmount = courtAmountWithEquipment + serviceFee;
 
+    // Determine effective payment timing: if court is 'before_session' but the session
+    // falls within the payment_hours_before window, force 'at_booking' to prevent
+    // creating unpaid sessions that would be immediately eligible for auto-cancellation.
+    let effectivePaymentTiming = court.payment_timing ?? "at_booking";
+    if (effectivePaymentTiming === "before_session") {
+      const sessionStart = new Date(`${sessionDate}T${startTime}`);
+      const hoursBeforeSession = court.payment_hours_before ?? 24;
+      const deadline = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
+      if (new Date() >= deadline) {
+        effectivePaymentTiming = "at_booking";
+      }
+    }
+
     // For at_booking courts: defer session creation to webhook (no DB records until payment confirmed)
-    if (court.payment_timing === "at_booking") {
+    if (effectivePaymentTiming === "at_booking") {
       const splitPricePerPlayer = paymentType === "split" && splitPlayers
         ? Math.ceil((courtAmountWithEquipment / splitPlayers) * 100) / 100
         : courtAmountWithEquipment;
