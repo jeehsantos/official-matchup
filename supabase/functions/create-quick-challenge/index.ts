@@ -193,6 +193,8 @@ serve(async (req) => {
         funding_required: courtAmountWithEquipment,
         funding_current: 0,
         price_per_player: pricePerPlayer,
+        effective_payment_timing: effectivePaymentTiming,
+        requires_payment_at_booking: effectivePaymentTiming === "at_booking",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
