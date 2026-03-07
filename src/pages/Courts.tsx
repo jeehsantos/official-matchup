@@ -101,7 +101,7 @@ export default function Courts() {
     return ["all", ...surfaceTypes.map(s => s.name)];
   }, [surfaceTypes]);
 
-  // Build sport filter options from user's preferred sports only
+  // Build sport filter options — guests see all categories, logged-in users see preferred sports only
   const sportFilterOptions = useMemo(() => {
     // In quick game mode, only show the selected sport
     if (isQuickGameMode && quickGameSport) {
@@ -112,6 +112,20 @@ export default function Courts() {
       return [{ value: quickGameSport, label: quickGameSport, emoji: "🎯" }];
     }
 
+    // Guest user: show all sport categories
+    if (!user) {
+      const allOptions = sportCategories.map((cat) => ({
+        value: cat.name,
+        label: cat.display_name,
+        emoji: cat.icon || "🎯",
+      }));
+      return [
+        { value: "all", label: "All Sports", emoji: "🎯" },
+        ...allOptions,
+      ];
+    }
+
+    // Logged-in user: filter by preferred sports
     const preferredSportSet = new Set(preferredSports);
     const preferredOptions = sportCategories
       .filter((cat) => preferredSportSet.has(cat.name))
@@ -134,7 +148,7 @@ export default function Courts() {
 
     // Fallback: no preferred sports (shouldn't happen with profile gate)
     return [{ value: "all", label: "All Sports", emoji: "🎯" }];
-  }, [sportCategories, preferredSports, isQuickGameMode, quickGameSport]);
+  }, [sportCategories, preferredSports, isQuickGameMode, quickGameSport, user]);
 
   // Auto-select default sport filter (quick game mode overrides)
   useEffect(() => {
