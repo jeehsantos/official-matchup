@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { startOfWeek, endOfWeek } from "date-fns";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -38,7 +39,23 @@ export default function Games() {
       }
     });
 
-    upcoming.sort((a, b) => a.date.getTime() - b.date.getTime());
+    // Featured (rescue) sessions within the current booking week come first
+    const now = new Date();
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+
+    upcoming.sort((a, b) => {
+      const aFeaturedThisWeek = a.state === "rescue" && a.date >= weekStart && a.date <= weekEnd;
+      const bFeaturedThisWeek = b.state === "rescue" && b.date >= weekStart && b.date <= weekEnd;
+
+      if (aFeaturedThisWeek && !bFeaturedThisWeek) return -1;
+      if (!aFeaturedThisWeek && bFeaturedThisWeek) return 1;
+
+      // Within same priority group, sort by date then time
+      const dateDiff = a.date.getTime() - b.date.getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return a.time.localeCompare(b.time);
+    });
     past.sort((a, b) => b.date.getTime() - a.date.getTime());
 
     return { upcomingGames: upcoming, pastGames: past };
