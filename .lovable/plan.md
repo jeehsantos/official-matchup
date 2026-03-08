@@ -1,31 +1,61 @@
 
+Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-## Problem
+What I found (already verified):
+1) Data inconsistency exists now:
+   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
+   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
+2) `ManagerCourtFormNew` root causes:
+   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
+   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
+   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
+3) Backend side effect confirmed:
+   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
 
-`useTheme` is a standalone hook using local `useState`. Every component that calls it (Profile, ManagerSettings, QuickGameLobby, ThemeToggle, sonner) gets its **own independent copy** of the theme state. When navigating between pages:
+Implementation plan (execute in this order):
+1. Database integrity hardening + backfill (migration)
+   - Backfill: set `is_multi_court=true` for any court that already has children.
+   - Add DB validation trigger(s) on `courts` to enforce:
+     - child cannot reference itself
+     - child parent must be in same venue
+     - parent cannot be set `is_multi_court=false` while children exist
+     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
+   - This guarantees the bug cannot recur from any client path.
 
-1. Component A sets theme to "light" and writes to localStorage
-2. Component A unmounts
-3. Component B mounts with `useTheme()` — initializes from localStorage (correct so far)
-4. But during this mount/unmount cycle, there can be race conditions where the `useEffect` in the old instance writes back a stale value, or the DOM class flickers
+2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
+   - Remove direct `window.history.replaceState` usage.
+   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
+   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
+   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
 
-The core issue: **multiple independent `useState` instances** means theme state is not synchronized across the component tree. Each page mount re-initializes the hook, and the `useEffect` cleanup/init sequence can cause the `dark` class to toggle unexpectedly.
+3. Multi-court UI behavior safeguards
+   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
+   - Disable/harden turning off multi-court when children exist (with clear message).
+   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
 
-## Solution
+4. Availability resilience (backend function)
+   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
+   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
 
-Convert `useTheme` from a standalone hook into a **React Context provider** so there is exactly one source of truth for the theme across the entire app.
+5. Verification I will perform (not asking you to test manually)
+   - DB checks:
+     - verify parent `57e11168...` becomes `is_multi_court=true`
+     - verify child links remain unchanged
+     - verify no rows exist with `children > 0 AND is_multi_court=false`
+   - Functional checks:
+     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
+   - UI checks:
+     - exercise add-sub-court flow and confirm:
+       - main court remains main
+       - child appears as child tab
+       - subsequent saves update correct court record
+       - no panel collapse/desync
 
-### Changes
-
-1. **Create `ThemeProvider` context** (modify `src/hooks/useTheme.ts`):
-   - Create a `ThemeContext` with `createContext`
-   - Export a `ThemeProvider` component that holds the single `useState` and `useEffect` for applying/persisting the theme
-   - Export `useTheme` as a context consumer hook
-
-2. **Wrap the app** (modify `src/App.tsx`):
-   - Add `<ThemeProvider>` near the top of the component tree (inside `QueryClientProvider`, outside `BrowserRouter`)
-
-3. **No changes needed** in consumers (`Profile.tsx`, `ManagerSettings.tsx`, `QuickGameLobby.tsx`, `ThemeToggle`, etc.) — they already import `useTheme` from the same path and use the same API (`{ theme, setTheme, toggleTheme }`)
-
-4. **Fix `sonner.tsx`**: It imports `useTheme` from `next-themes` (a different package). This should be updated to use the app's theme context or pass the theme prop, ensuring consistent theming for toast notifications.
-
+Technical details:
+- Files to update:
+  - `supabase/migrations/<new>.sql`
+  - `src/pages/manager/ManagerCourtFormNew.tsx`
+  - `supabase/functions/get-availability/index.ts`
+- No money/payment logic touched.
+- No auth model changes.
+- Existing routing and form schema preserved; this is a consistency + state synchronization fix.

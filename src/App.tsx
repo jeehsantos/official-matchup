@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/lib/auth-context";
+import { ThemeProvider } from "@/hooks/useTheme";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -47,61 +48,63 @@ const queryClient = new QueryClient({});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/landing" element={<Landing />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/groups" element={<Groups />} />
-            <Route path="/groups/:id" element={<GroupDetail />} />
-            <Route path="/join/:code" element={<JoinGroup />} />
-            <Route path="/discover" element={<ProtectedRoute requireCompleteProfile><Discover /></ProtectedRoute>} />
-            <Route path="/quick-games/:id" element={<ProtectedRoute requireCompleteProfile><QuickGameLobby /></ProtectedRoute>} />
-            <Route path="/games" element={<ProtectedRoute requireCompleteProfile><Games /></ProtectedRoute>} />
-            <Route path="/games/:id" element={<GameDetail />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/profile/edit" element={<ProfileEdit />} />
-            <Route path="/courts" element={<Courts />} />
-            <Route path="/courts/:id" element={<CourtDetail />} />
-            <Route path="/payment-success" element={<PaymentSuccess />} />
-            {/* Manager Routes */}
-            <Route path="/manager" element={<ManagerDashboard />} />
-            <Route path="/manager/venues" element={<ManagerVenues />} />
-            <Route path="/manager/venues/new" element={<ManagerVenueForm />} />
-            <Route path="/manager/venues/:venueId/edit" element={<ManagerVenueForm />} />
-            <Route path="/manager/venues/:venueId/courts" element={<ManagerCourts />} />
-            <Route path="/manager/venues/:venueId/courts/new" element={<ManagerCourtForm />} />
-            <Route path="/manager/venues/:venueId/courts/:courtId/edit" element={<ManagerCourtForm />} />
-            <Route path="/manager/courts" element={<ManagerCourtsNew />} />
-            <Route path="/manager/courts/new" element={<ManagerCourtFormNew />} />
-            <Route path="/manager/courts/:id/edit" element={<ManagerCourtFormNew />} />
-            <Route path="/manager/availability" element={<ManagerAvailability />} />
-            <Route path="/manager/equipment" element={<ManagerEquipment />} />
-            <Route path="/manager/bookings" element={<ManagerBookings />} />
-            <Route path="/manager/settings" element={<ManagerSettings />} />
-            {/* Admin Routes */}
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/sports" element={<AdminSportCategories />} />
-            <Route path="/admin/surfaces" element={<AdminSurfaceTypes />} />
-            <Route path="/admin/archiving" element={<AdminArchiving />} />
-            <Route path="/admin/referrals" element={<AdminReferralSettings />} />
-            <Route path="/admin/fees" element={<AdminPlatformFees />} />
-            <Route path="/admin/finance" element={<AdminFinance />} />
-            <Route path="/admin/*" element={<AdminDashboard />} />
-            {/* User Routes */}
-            <Route path="/archived-sessions" element={<ArchivedSessions />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/landing" element={<Landing />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/groups" element={<Groups />} />
+              <Route path="/groups/:id" element={<GroupDetail />} />
+              <Route path="/join/:code" element={<JoinGroup />} />
+              <Route path="/discover" element={<ProtectedRoute requireCompleteProfile><Discover /></ProtectedRoute>} />
+              <Route path="/quick-games/:id" element={<ProtectedRoute requireCompleteProfile><QuickGameLobby /></ProtectedRoute>} />
+              <Route path="/games" element={<ProtectedRoute requireCompleteProfile><Games /></ProtectedRoute>} />
+              <Route path="/games/:id" element={<GameDetail />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/profile/edit" element={<ProfileEdit />} />
+              <Route path="/courts" element={<Courts />} />
+              <Route path="/courts/:id" element={<CourtDetail />} />
+              <Route path="/payment-success" element={<PaymentSuccess />} />
+              {/* Manager Routes */}
+              <Route path="/manager" element={<ManagerDashboard />} />
+              <Route path="/manager/venues" element={<ManagerVenues />} />
+              <Route path="/manager/venues/new" element={<ManagerVenueForm />} />
+              <Route path="/manager/venues/:venueId/edit" element={<ManagerVenueForm />} />
+              <Route path="/manager/venues/:venueId/courts" element={<ManagerCourts />} />
+              <Route path="/manager/venues/:venueId/courts/new" element={<ManagerCourtForm />} />
+              <Route path="/manager/venues/:venueId/courts/:courtId/edit" element={<ManagerCourtForm />} />
+              <Route path="/manager/courts" element={<ManagerCourtsNew />} />
+              <Route path="/manager/courts/new" element={<ManagerCourtFormNew />} />
+              <Route path="/manager/courts/:id/edit" element={<ManagerCourtFormNew />} />
+              <Route path="/manager/availability" element={<ManagerAvailability />} />
+              <Route path="/manager/equipment" element={<ManagerEquipment />} />
+              <Route path="/manager/bookings" element={<ManagerBookings />} />
+              <Route path="/manager/settings" element={<ManagerSettings />} />
+              {/* Admin Routes */}
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/sports" element={<AdminSportCategories />} />
+              <Route path="/admin/surfaces" element={<AdminSurfaceTypes />} />
+              <Route path="/admin/archiving" element={<AdminArchiving />} />
+              <Route path="/admin/referrals" element={<AdminReferralSettings />} />
+              <Route path="/admin/fees" element={<AdminPlatformFees />} />
+              <Route path="/admin/finance" element={<AdminFinance />} />
+              <Route path="/admin/*" element={<AdminDashboard />} />
+              {/* User Routes */}
+              <Route path="/archived-sessions" element={<ArchivedSessions />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
