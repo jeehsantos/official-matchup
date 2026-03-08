@@ -104,17 +104,8 @@ Deno.serve(async (req) => {
 
       const userId = newUser.user.id;
 
-      // Insert profile
-      await supabaseAdmin.from("profiles").insert({
-        user_id: userId,
-        full_name,
-      });
-
-      // Insert venue_staff role
-      await supabaseAdmin.from("user_roles").insert({
-        user_id: userId,
-        role: "venue_staff",
-      });
+      // Note: handle_new_user trigger automatically creates profile and user_roles
+      // based on user_metadata, so we don't need to insert those manually.
 
       // Insert venue_staff link
       const { error: staffError } = await supabaseAdmin.from("venue_staff").insert({
