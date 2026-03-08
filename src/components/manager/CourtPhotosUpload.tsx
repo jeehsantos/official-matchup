@@ -96,7 +96,7 @@ export function CourtPhotosUpload({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <input
         ref={fileInputRef}
         type="file"
@@ -106,14 +106,13 @@ export function CourtPhotosUpload({
         className="hidden"
       />
 
-      {/* Photo Grid - compact */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-4 gap-1.5">
         {photoUrls.map((url, index) => (
           <div 
             key={url} 
-            className={`relative group rounded-lg overflow-hidden border border-border bg-muted ${
-              index === 0 ? 'col-span-2 row-span-2 aspect-square' : 'aspect-square'
-            }`}
+            className={`relative group rounded-md overflow-hidden border border-border bg-muted ${
+              index === 0 ? 'col-span-2 row-span-2' : ''
+            } aspect-square`}
           >
             <img
               src={url}
@@ -126,52 +125,45 @@ export function CourtPhotosUpload({
                   type="button"
                   variant="secondary"
                   size="icon"
-                  className="h-6 w-6"
+                  className="h-5 w-5"
                   onClick={() => movePhoto(index, 0)}
                   title="Set as main photo"
                 >
-                  <span className="text-[10px] font-bold">1st</span>
+                  <span className="text-[8px] font-bold">1st</span>
                 </Button>
               )}
               <Button
                 type="button"
                 variant="destructive"
                 size="icon"
-                className="h-6 w-6"
+                className="h-5 w-5"
                 onClick={() => handleRemove(index)}
               >
-                <X className="h-3 w-3" />
+                <X className="h-2.5 w-2.5" />
               </Button>
             </div>
             {index === 0 && (
-              <div className="absolute top-1.5 left-1.5 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full font-medium">
+              <div className="absolute top-1 left-1 bg-primary text-primary-foreground text-[8px] px-1 py-0.5 rounded-full font-medium">
                 Main
               </div>
             )}
           </div>
         ))}
 
-        {/* Add Photo Button */}
         {photoUrls.length < maxPhotos && (
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className={`rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
-              photoUrls.length === 0 ? 'col-span-2 aspect-[3/2]' : 'aspect-square'
-            }`}
+            className={`rounded-md border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 aspect-square`}
           >
             {uploading ? (
-              <>
-                <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
-                <span className="text-xs text-muted-foreground">Uploading...</span>
-              </>
+              <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
             ) : (
               <>
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <ImagePlus className="h-4 w-4 text-primary" />
+                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+                  <ImagePlus className="h-3 w-3 text-primary" />
                 </div>
-                <p className="font-medium text-foreground text-xs">Add</p>
                 <p className="text-[10px] text-muted-foreground">
                   {photoUrls.length}/{maxPhotos}
                 </p>
@@ -180,10 +172,6 @@ export function CourtPhotosUpload({
           </button>
         )}
       </div>
-
-      <p className="text-[10px] text-muted-foreground text-center">
-        Up to {maxPhotos} photos · JPG, PNG, WebP · 5MB max each
-      </p>
     </div>
   );
 }

@@ -603,33 +603,7 @@ export default function ManagerCourtFormNew() {
         <div className="flex gap-8 items-start max-w-[1600px] mx-auto w-full">
           {/* Left Column - Form Cards */}
           <form onSubmit={handleSubmit(onSubmit)} className="flex-1 space-y-6 min-w-0">
-            {/* 1. Photos Card */}
-            <Card className="rounded-2xl border border-border shadow-sm">
-              <CardHeader className="pb-3 border-b border-border">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <Camera className="h-5 w-5 text-primary" />
-                    Court Photos
-                  </CardTitle>
-                  <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">Max 4 photos (JPG, PNG)</span>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <CourtPhotosUpload
-                  key={isAddingNewSubCourt ? 'new-sub-court' : activeCourtId || id}
-                  currentPhotoUrls={isAddingNewSubCourt ? newSubCourtPhotos : (watch("photo_urls") || [])}
-                  onPhotosChanged={(urls) => {
-                    if (isAddingNewSubCourt) {
-                      setNewSubCourtPhotos(urls);
-                    }
-                    setValue("photo_urls", urls);
-                  }}
-                  maxPhotos={4}
-                />
-              </CardContent>
-            </Card>
-
-            {/* 2. Basic Details Card */}
+            {/* 1. Basic Details Card */}
             <Card className="rounded-2xl border border-border shadow-sm">
               <CardHeader className="pb-3 border-b border-border">
                 <CardTitle className="text-lg font-semibold flex items-center gap-2">
@@ -925,7 +899,32 @@ export default function ManagerCourtFormNew() {
               </CardContent>
             </Card>
 
-            {/* Delete button for editing (mobile only since header has save) */}
+            {/* 6. Court Photos Card */}
+            <Card className="rounded-2xl border border-border shadow-sm">
+              <CardHeader className="pb-2 border-b border-border">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Camera className="h-4 w-4 text-primary" />
+                    Court Photos
+                  </CardTitle>
+                  <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Max 4</span>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-3 pb-3">
+                <CourtPhotosUpload
+                  key={isAddingNewSubCourt ? 'new-sub-court' : activeCourtId || id}
+                  currentPhotoUrls={isAddingNewSubCourt ? newSubCourtPhotos : (watch("photo_urls") || [])}
+                  onPhotosChanged={(urls) => {
+                    if (isAddingNewSubCourt) {
+                      setNewSubCourtPhotos(urls);
+                    }
+                    setValue("photo_urls", urls);
+                  }}
+                  maxPhotos={4}
+                />
+              </CardContent>
+            </Card>
+
             {(isEditing || isAddingNewSubCourt) && (
               <div className="lg:hidden">
                 <Button
