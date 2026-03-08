@@ -9,6 +9,7 @@ interface AuthContextType {
   session: Session | null;
   userRole: AppRole | null;
   isLoading: boolean;
+  isSigningOut: boolean;
   signUp: (email: string, password: string, fullName: string, role?: AppRole, referralCode?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; role?: AppRole }>;
   signOut: () => Promise<void>;
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [roleLoaded, setRoleLoaded] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const fetchUserRole = useCallback(async (userId: string): Promise<AppRole | null> => {
     try {
@@ -179,7 +181,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    // Reset state immediately before signing out
+    setIsSigningOut(true);
+    
+    // Brief delay for fade-out animation to play
+    await new Promise(resolve => setTimeout(resolve, 400));
+    
+    // Reset state
     setUser(null);
     setSession(null);
     setUserRole(null);
@@ -187,7 +194,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     await supabase.auth.signOut();
     
-    // Navigate to home page after sign out
     window.location.href = '/';
   };
 
@@ -205,6 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         userRole,
         isLoading: isLoading || !roleLoaded,
+        isSigningOut,
         signUp,
         signIn,
         signOut,
@@ -212,6 +219,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resetPassword,
       }}
     >
+      {isSigningOut && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            <p className="text-sm font-medium text-muted-foreground">Signing out…</p>
+          </div>
+        </div>
+      )}
       {children}
     </AuthContext.Provider>
   );
