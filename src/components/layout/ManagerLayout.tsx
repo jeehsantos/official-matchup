@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useState, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { useUserProfile } from "@/hooks/useUserProfile";
@@ -53,6 +53,19 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
+  const isStaff = userRole === "venue_staff";
+
+  // Filter nav items for staff
+  const staffAllowedPaths = ["/manager/availability", "/manager/equipment", "/manager/bookings", "/manager/settings"];
+  const filteredNavItems = useMemo(() =>
+    isStaff ? navItems.filter(item => staffAllowedPaths.includes(item.path)) : navItems,
+    [isStaff]
+  );
+  const filteredMobileNavItems = useMemo(() =>
+    isStaff ? mobileNavItems.filter(item => staffAllowedPaths.includes(item.path)) : mobileNavItems,
+    [isStaff]
+  );
+
   useEffect(() => {
     // Only redirect after loading is complete
     if (!isLoading) {
@@ -60,11 +73,18 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
 
       if (!user) {
         navigate("/auth", { replace: true });
-      } else if (userRole && userRole !== "court_manager") {
+      } else if (userRole && userRole !== "court_manager" && userRole !== "venue_staff") {
         navigate("/", { replace: true });
+      } else if (isStaff) {
+        // Redirect staff away from forbidden pages
+        const currentPath = location.pathname;
+        const isAllowed = staffAllowedPaths.some(p => currentPath === p || currentPath.startsWith(p + "/"));
+        if (!isAllowed) {
+          navigate("/manager/availability", { replace: true });
+        }
       }
     }
-  }, [user, userRole, isLoading, navigate]);
+  }, [user, userRole, isLoading, navigate, location.pathname]);
 
   // Show loading while checking auth
   if (isLoading || !hasCheckedAuth) {
@@ -75,8 +95,8 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
 
   }
 
-  // Don't render if not authenticated or not a court manager
-  if (!user || userRole && userRole !== "court_manager") {
+  // Don't render if not authenticated or not a court manager/staff
+  if (!user || userRole && userRole !== "court_manager" && userRole !== "venue_staff") {
     return null;
   }
 
@@ -140,7 +160,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
 
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1">
-            {navItems.map(({ icon: Icon, label, path }) => {
+            {filteredNavItems.map(({ icon: Icon, label, path }) => {
               const isActive = location.pathname === path ||
               path !== "/manager" && location.pathname.startsWith(path);
               return (
@@ -186,7 +206,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
       {/* Mobile Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-background border-t lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
-          {mobileNavItems.map(({ icon: Icon, label, path }) => {
+          {filteredMobileNavItems.map(({ icon: Icon, label, path }) => {
             const isActive = location.pathname === path ||
             path !== "/manager" && location.pathname.startsWith(path);
 
