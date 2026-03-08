@@ -72,8 +72,13 @@ serve(async (req) => {
 
     let creditsAdded = 0;
 
-    // If the player has paid, convert to credits using durable payment snapshot.
-    if (playerRecord.payment_status === "paid") {
+    // Only convert payment to credits if the player actually paid (split mode).
+    // In single (organizer-pays) mode, the player never paid, so skip credit conversion.
+    if (
+      playerRecord.payment_status === "paid" &&
+      challenge.price_per_player > 0
+    ) {
+      // Check if there is a real payment snapshot for this player
       const { data: paymentSnapshot, error: paymentSnapshotError } = await supabaseAdmin
         .from("quick_challenge_payments")
         .select("id, payment_method_type, court_amount, status, converted_to_credits_at")
@@ -89,44 +94,43 @@ serve(async (req) => {
         throw new Error("Failed to load payment snapshot");
       }
 
-      if (!paymentSnapshot) {
-        throw new Error("Payment snapshot not found for this player");
-      }
+      // Only convert if a real payment exists (not organizer-covered)
+      if (paymentSnapshot) {
+        const amountToCredit = Number(paymentSnapshot.court_amount || 0) / 100;
 
-      const amountToCredit = Number(paymentSnapshot.court_amount || 0) / 100;
+        if (amountToCredit > 0) {
+          const { error: creditError } = await supabaseAdmin.rpc(
+            "add_user_credits",
+            {
+              p_user_id: userId,
+              p_amount: amountToCredit,
+              p_reason: "Quick challenge cancellation",
+              p_session_id: null,
+              p_payment_id: null,
+            }
+          );
 
-      if (amountToCredit > 0) {
-        const { error: creditError } = await supabaseAdmin.rpc(
-          "add_user_credits",
-          {
-            p_user_id: userId,
-            p_amount: amountToCredit,
-            p_reason: "Quick challenge cancellation",
-            p_session_id: null,
-            p_payment_id: null,
+          if (creditError) {
+            console.error("Error adding credits:", creditError);
+            throw new Error("Failed to convert payment to credits");
           }
-        );
 
-        if (creditError) {
-          console.error("Error adding credits:", creditError);
-          throw new Error("Failed to convert payment to credits");
+          creditsAdded = amountToCredit;
         }
 
-        creditsAdded = amountToCredit;
-      }
+        const { error: markConvertedError } = await supabaseAdmin
+          .from("quick_challenge_payments")
+          .update({
+            status: "converted_to_credits",
+            converted_to_credits_at: new Date().toISOString(),
+          })
+          .eq("id", paymentSnapshot.id)
+          .is("converted_to_credits_at", null);
 
-      const { error: markConvertedError } = await supabaseAdmin
-        .from("quick_challenge_payments")
-        .update({
-          status: "converted_to_credits",
-          converted_to_credits_at: new Date().toISOString(),
-        })
-        .eq("id", paymentSnapshot.id)
-        .is("converted_to_credits_at", null);
-
-      if (markConvertedError) {
-        console.error("Error marking payment as converted_to_credits:", markConvertedError);
-        throw new Error("Failed to convert payment snapshot");
+        if (markConvertedError) {
+          console.error("Error marking payment as converted_to_credits:", markConvertedError);
+          throw new Error("Failed to convert payment snapshot");
+        }
       }
     }
 
