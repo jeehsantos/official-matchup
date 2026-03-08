@@ -27,7 +27,8 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
-  CalendarDays
+  CalendarDays,
+  Phone
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -72,6 +73,7 @@ interface Booking {
   } | null;
   profile?: {
     full_name: string;
+    phone: string | null;
   } | null;
 }
 
@@ -225,11 +227,11 @@ export default function ManagerBookings() {
       if (userIds.length > 0) {
         const { data: profilesData } = await supabase
           .from("profiles")
-          .select("id, user_id, full_name")
+          .select("id, user_id, full_name, phone")
           .in("user_id", userIds);
 
         profilesData?.forEach(p => {
-          profilesMap[p.user_id] = { full_name: p.full_name };
+          profilesMap[p.user_id] = { full_name: p.full_name, phone: p.phone };
         });
       }
 
@@ -400,7 +402,19 @@ export default function ManagerBookings() {
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="flex-1 min-w-0 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-semibold truncate">{getBookerName(booking)}</h3>
+                <div className="flex items-center gap-2 min-w-0">
+                  <h3 className="font-semibold truncate">{getBookerName(booking)}</h3>
+                  {booking.profile?.phone && (
+                    <a
+                      href={`tel:${booking.profile.phone}`}
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors shrink-0 border border-border/50 rounded-full px-2 py-0.5"
+                      title={`Call ${booking.profile.phone}`}
+                    >
+                      <Phone className="h-3 w-3" />
+                      {booking.profile.phone}
+                    </a>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {getStatusBadge(booking)}
                   {canReschedule && (
