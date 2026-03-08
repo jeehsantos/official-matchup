@@ -4,6 +4,7 @@ import { ManagerLayout } from "@/components/layout/ManagerLayout";
 import { Button } from "@/components/ui/button";
 import { Plus, Calendar as CalendarIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { format } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useManagerDashboard, type DashboardPeriod } from "@/hooks/useManagerDashboard";
@@ -20,6 +21,8 @@ const periodLabels: Record<DashboardPeriod, string> = {
 
 export default function ManagerDashboard() {
   const { user } = useAuth();
+  const { profile } = useUserProfile();
+  const firstName = profile?.full_name?.split(" ")[0] || "";
   const [period, setPeriod] = useState<DashboardPeriod>("monthly");
   const { stats, liveCourts, weeklyPerformance, upcomingBookings, loading, refreshAll } = useManagerDashboard(period);
 
@@ -32,7 +35,7 @@ export default function ManagerDashboard() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-xl sm:text-2xl font-bold">
-              Welcome back! 👋
+              Welcome back{firstName ? `, ${firstName}` : ""}! 👋
             </h1>
             <p className="text-sm text-muted-foreground">
               Here's an overview of your venue's performance.
