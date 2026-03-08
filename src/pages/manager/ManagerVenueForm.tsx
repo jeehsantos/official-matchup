@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
@@ -137,6 +137,20 @@ export default function ManagerVenueForm() {
               </div>
             </CardContent>
           </Card>
+          {isEditing && venueSlug && (
+            <Card>
+              <CardHeader><CardTitle>Public Page</CardTitle></CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <code className="text-sm bg-muted px-2 py-1 rounded flex-1 truncate">{window.location.origin}/venue/{venueSlug}</code>
+                  <a href={`/venue/${venueSlug}`} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                    <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                  </a>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">This URL is managed by the platform admin.</p>
+              </CardContent>
+            </Card>
+          )}
           <div className="flex gap-4">
             <Button type="submit" disabled={submitting} className="flex-1">
               {submitting ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t("venueForm.saving")}</>) : (isEditing ? t("venueForm.updateVenue") : t("venueForm.createVenue"))}
