@@ -35,6 +35,7 @@ import { useAuth } from "@/lib/auth-context";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
+import { useManagerVenues } from "@/hooks/useManagerVenues";
 
 interface Booking {
   id: string;
@@ -73,7 +74,7 @@ const ITEMS_PER_PAGE = 15;
 
 export default function ManagerBookings() {
   const { user } = useAuth();
-  const [venues, setVenues] = useState<Venue[]>([]);
+  const { data: managerVenues = [], isLoading: venuesLoading } = useManagerVenues();
   const [courts, setCourts] = useState<Court[]>([]);
   const [courtIds, setCourtIds] = useState<string[]>([]);
   const [initLoading, setInitLoading] = useState(true);
@@ -89,25 +90,22 @@ export default function ManagerBookings() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
 
-  // Step 1: Fetch venues and courts once
+  // Derive venues list for filters
+  const venues: Venue[] = managerVenues.map(v => ({ id: v.id, name: v.name }));
+
+  // Step 1: Fetch courts once venues are loaded
   useEffect(() => {
-    if (!user) return;
+    if (venuesLoading) return;
+
+    if (managerVenues.length === 0) {
+      setCourts([]);
+      setCourtIds([]);
+      setInitLoading(false);
+      return;
+    }
+
     (async () => {
-      const { data: venuesData } = await supabase
-        .from("venues")
-        .select("id, name")
-        .eq("owner_id", user.id);
-
-      if (!venuesData || venuesData.length === 0) {
-        setVenues([]);
-        setCourts([]);
-        setCourtIds([]);
-        setInitLoading(false);
-        return;
-      }
-
-      setVenues(venuesData);
-      const venueIds = venuesData.map((v) => v.id);
+      const venueIds = managerVenues.map((v) => v.id);
 
       const { data: courtsData } = await supabase
         .from("courts")
@@ -119,7 +117,7 @@ export default function ManagerBookings() {
       setCourtIds(allCourts.map((c) => c.id));
       setInitLoading(false);
     })();
-  }, [user]);
+  }, [managerVenues, venuesLoading]);
 
   // Filter courts based on selected venue
   const filteredCourts = useMemo(() => {

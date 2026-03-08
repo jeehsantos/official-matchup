@@ -21,6 +21,7 @@ import { AvailabilityPreview } from "@/components/manager/AvailabilityPreview";
 import { VenueConfigEditor } from "@/components/manager/VenueConfigEditor";
 import { useManagerStripeReady } from "@/hooks/useStripeConnectStatus";
 import { StripeSetupAlert } from "@/components/manager/StripeSetupAlert";
+import { useManagerVenues } from "@/hooks/useManagerVenues";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
 type Venue = Database["public"]["Tables"]["venues"]["Row"];
@@ -38,44 +39,40 @@ interface GroupedCourts {
 }
 
 export default function ManagerAvailability() {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const [courts, setCourts] = useState<CourtWithVenue[]>([]);
   const [selectedCourt, setSelectedCourt] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+  const [courtsLoading, setCourtsLoading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const { data: stripeStatus, isLoading: stripeLoading } = useManagerStripeReady();
+  const { data: venues = [], isLoading: venuesLoading } = useManagerVenues();
+  const isStaff = userRole === "venue_staff";
 
   useEffect(() => {
-    if (user) {
-      fetchCourts();
+    if (venues.length > 0) {
+      fetchCourts(venues.map(v => v.id));
+    } else if (!venuesLoading) {
+      setCourts([]);
     }
-  }, [user]);
+  }, [venues, venuesLoading]);
 
-  const fetchCourts = async () => {
+  const fetchCourts = async (venueIds: string[]) => {
+    setCourtsLoading(true);
     try {
-      const { data: venues } = await supabase
-        .from("venues")
-        .select("id")
-        .eq("owner_id", user?.id);
+      const { data: courtsData } = await supabase
+        .from("courts")
+        .select(`*, venues (*)`)
+        .in("venue_id", venueIds)
+        .eq("is_active", true);
 
-      if (venues && venues.length > 0) {
-        const venueIds = venues.map(v => v.id);
-        
-        const { data: courtsData } = await supabase
-          .from("courts")
-          .select(`*, venues (*)`)
-          .in("venue_id", venueIds)
-          .eq("is_active", true);
-
-        setCourts(courtsData as CourtWithVenue[] || []);
-        if (courtsData && courtsData.length > 0) {
-          setSelectedCourt(courtsData[0].id);
-        }
+      setCourts(courtsData as CourtWithVenue[] || []);
+      if (courtsData && courtsData.length > 0) {
+        setSelectedCourt(courtsData[0].id);
       }
     } catch (error) {
       console.error("Error fetching courts:", error);
     } finally {
-      setLoading(false);
+      setCourtsLoading(false);
     }
   };
 
@@ -104,7 +101,7 @@ export default function ManagerAvailability() {
 
   const handleRefresh = () => setRefreshTrigger(prev => prev + 1);
 
-  if (loading) {
+  if (venuesLoading || courtsLoading) {
     return (
       <ManagerLayout>
         <div className="flex items-center justify-center py-12">
@@ -122,7 +119,7 @@ export default function ManagerAvailability() {
           <p className="text-muted-foreground">Configure your venue's opening hours and exceptions</p>
         </div>
 
-        {!stripeLoading && !stripeStatus?.isReady && (
+        {!isStaff && !stripeLoading && !stripeStatus?.isReady && (
           <StripeSetupAlert hasVenues={stripeStatus?.hasVenues ?? false} />
         )}
 

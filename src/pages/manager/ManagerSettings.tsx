@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { StaffAccessSection } from "@/components/manager/StaffAccessSection";
+import { useManagerVenues } from "@/hooks/useManagerVenues";
 import { 
   Loader2, 
   CreditCard, 
@@ -39,6 +40,18 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/hooks/useTheme";
 
+interface ProfileData {
+  full_name: string;
+  phone: string;
+  city: string;
+}
+
+interface PasswordData {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 interface Venue {
   id: string;
   name: string;
@@ -53,23 +66,12 @@ interface ConnectStatus {
   account_id?: string;
 }
 
-interface ProfileData {
-  full_name: string;
-  phone: string;
-  city: string;
-}
-
-interface PasswordData {
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
-}
-
 export default function ManagerSettings() {
   const { user, userRole, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { data: managerVenues = [], isLoading: venuesLoading } = useManagerVenues();
   
   const [venues, setVenues] = useState<Venue[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState<string>("");
@@ -105,10 +107,25 @@ export default function ManagerSettings() {
 
   useEffect(() => {
     if (user) {
-      fetchVenues();
       fetchProfile();
     }
   }, [user]);
+
+  // Sync shared hook venues into local state
+  useEffect(() => {
+    if (!venuesLoading) {
+      const mapped = managerVenues.map(v => ({
+        id: v.id,
+        name: v.name,
+        stripe_account_id: v.stripe_account_id,
+      }));
+      setVenues(mapped);
+      if (mapped.length > 0 && !selectedVenueId) {
+        setSelectedVenueId(mapped[0].id);
+      }
+      setLoading(false);
+    }
+  }, [managerVenues, venuesLoading]);
 
   useEffect(() => {
     // Check Stripe status: use venue if available, otherwise user-level check
@@ -155,28 +172,7 @@ export default function ManagerSettings() {
     }
   };
 
-  const fetchVenues = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("venues")
-        .select("id, name, stripe_account_id")
-        .eq("owner_id", user!.id);
-
-      if (error) throw error;
-
-      // Type assertion since we know the structure
-      const venueData = data as unknown as Venue[];
-      setVenues(venueData || []);
-      
-      if (venueData && venueData.length > 0) {
-        setSelectedVenueId(venueData[0].id);
-      }
-    } catch (error) {
-      console.error("Error fetching venues:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // fetchVenues removed — now using useManagerVenues hook
 
   const checkConnectStatus = async () => {
     try {

@@ -75,18 +75,25 @@ export function useStripeConnectStatus(venueId?: string) {
 
 /**
  * Check if ANY venue owned by the manager has completed Stripe onboarding.
+ * For venue_staff users, always returns isReady: true (staff don't manage Stripe).
  */
 export function useManagerStripeReady() {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
+  const isStaff = userRole === "venue_staff";
 
   return useQuery({
-    queryKey: ["manager-stripe-ready", user?.id],
+    queryKey: ["manager-stripe-ready", user?.id, userRole],
     queryFn: async (): Promise<{
       isReady: boolean;
       hasVenues: boolean;
       venues: Array<{ id: string; name: string; stripe_account_id: string | null }>;
     }> => {
       if (!user) return { isReady: false, hasVenues: false, venues: [] };
+
+      // Staff don't manage Stripe — always ready
+      if (isStaff) {
+        return { isReady: true, hasVenues: true, venues: [] };
+      }
 
       const { data: venues, error } = await supabase
         .from("venues")

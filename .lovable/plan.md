@@ -1,43 +1,61 @@
 
+Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-## Fix: Staff Users See Empty Pages + Stripe Warnings
+What I found (already verified):
+1) Data inconsistency exists now:
+   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
+   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
+2) `ManagerCourtFormNew` root causes:
+   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
+   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
+   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
+3) Backend side effect confirmed:
+   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
 
-### Problem
-Two issues with the current staff implementation:
+Implementation plan (execute in this order):
+1. Database integrity hardening + backfill (migration)
+   - Backfill: set `is_multi_court=true` for any court that already has children.
+   - Add DB validation trigger(s) on `courts` to enforce:
+     - child cannot reference itself
+     - child parent must be in same venue
+     - parent cannot be set `is_multi_court=false` while children exist
+     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
+   - This guarantees the bug cannot recur from any client path.
 
-1. **Empty pages**: All manager pages (Availability, Equipment, Bookings, Settings) fetch venues using `.eq("owner_id", user.id)`. Staff users are not venue owners, so they see empty states with no data.
+2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
+   - Remove direct `window.history.replaceState` usage.
+   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
+   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
+   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
 
-2. **Stripe warning**: The `useManagerStripeReady` hook queries venues by `owner_id`, returning nothing for staff, which triggers the "Stripe Account Setup Required" alert on pages like Availability.
+3. Multi-court UI behavior safeguards
+   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
+   - Disable/harden turning off multi-court when children exist (with clear message).
+   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
 
-### Root Cause
-Staff users access venues through the `venue_staff` table, not via `venues.owner_id`. Every page that fetches venues needs a dual-path: owner query for managers, staff-venue query for staff.
+4. Availability resilience (backend function)
+   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
+   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
 
-### Solution
+5. Verification I will perform (not asking you to test manually)
+   - DB checks:
+     - verify parent `57e11168...` becomes `is_multi_court=true`
+     - verify child links remain unchanged
+     - verify no rows exist with `children > 0 AND is_multi_court=false`
+   - Functional checks:
+     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
+   - UI checks:
+     - exercise add-sub-court flow and confirm:
+       - main court remains main
+       - child appears as child tab
+       - subsequent saves update correct court record
+       - no panel collapse/desync
 
-**1. Create a shared hook `useManagerVenues`** (`src/hooks/useManagerVenues.ts`)
-- If `userRole === "court_manager"`: fetch venues via `.eq("owner_id", user.id)`
-- If `userRole === "venue_staff"`: fetch `venue_staff` rows for the user, then fetch venues by those IDs
-- Returns the same venue list shape regardless of role
-- All manager pages will use this hook instead of inline venue fetches
-
-**2. Update pages to use the shared hook:**
-- `ManagerAvailability.tsx` — replace inline `fetchVenues` + `fetchCourts` with `useManagerVenues`
-- `ManagerEquipment.tsx` — replace inline `fetchVenues` with `useManagerVenues`
-- `ManagerBookings.tsx` — replace inline venue fetch with `useManagerVenues`
-- `ManagerSettings.tsx` — replace inline `fetchVenues` with `useManagerVenues`
-
-**3. Hide Stripe warnings for staff:**
-- `ManagerAvailability.tsx` — skip rendering `StripeSetupAlert` when `userRole === "venue_staff"`
-- `useManagerStripeReady` — return `{ isReady: true }` immediately for `venue_staff` role (staff don't manage Stripe)
-- Any other page showing Stripe alerts: conditionally hide for staff
-
-**4. RLS already handled**: The existing RLS policies use `get_staff_venue_ids()` and `is_venue_staff()` so data access at the DB level is already correct. The fix is purely in the frontend query logic.
-
-### Files to create/modify
-- `src/hooks/useManagerVenues.ts` (new) — shared venue fetching hook
-- `src/pages/manager/ManagerAvailability.tsx` — use shared hook, hide Stripe alert for staff
-- `src/pages/manager/ManagerEquipment.tsx` — use shared hook
-- `src/pages/manager/ManagerBookings.tsx` — use shared hook
-- `src/pages/manager/ManagerSettings.tsx` — use shared hook
-- `src/hooks/useStripeConnectStatus.ts` — short-circuit for `venue_staff`
-
+Technical details:
+- Files to update:
+  - `supabase/migrations/<new>.sql`
+  - `src/pages/manager/ManagerCourtFormNew.tsx`
+  - `supabase/functions/get-availability/index.ts`
+- No money/payment logic touched.
+- No auth model changes.
+- Existing routing and form schema preserved; this is a consistency + state synchronization fix.
