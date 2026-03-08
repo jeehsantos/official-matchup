@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -12,56 +12,75 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
-export function usePushSubscription(userId: string | undefined) {
-  const subscribedRef = useRef(false);
+// Module-level flag to prevent duplicate subscriptions across remounts
+let pushSubscribed = false;
 
+export function usePushSubscription(userId: string | undefined) {
   useEffect(() => {
-    if (!userId || subscribedRef.current) return;
+    if (!userId || pushSubscribed) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
-    const subscribe = async () => {
-      try {
-        // Get VAPID public key from edge function
-        const { data: vapidData, error: vapidError } = await supabase.functions.invoke(
-          "get-vapid-public-key"
-        );
-        if (vapidError || !vapidData?.publicKey) return;
+    // Defer push subscription to avoid blocking initial render
+    const timeoutId = setTimeout(() => {
+      subscribe(userId);
+    }, 5000); // 5s delay — let the app load first
 
-        const registration = await navigator.serviceWorker.ready;
-
-        // Check if already subscribed
-        let subscription = await registration.pushManager.getSubscription();
-
-        if (!subscription) {
-          const permission = await Notification.requestPermission();
-          if (permission !== "granted") return;
-
-          subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey) as BufferSource,
-          });
-        }
-
-        const subJson = subscription.toJSON();
-        if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) return;
-
-        // Upsert to database
-        await supabase.from("push_subscriptions").upsert(
-          {
-            user_id: userId,
-            endpoint: subJson.endpoint,
-            p256dh: subJson.keys.p256dh,
-            auth: subJson.keys.auth,
-          },
-          { onConflict: "user_id,endpoint" }
-        );
-
-        subscribedRef.current = true;
-      } catch (err) {
-        console.warn("Push subscription failed, falling back to in-app notifications:", err);
-      }
-    };
-
-    subscribe();
+    return () => clearTimeout(timeoutId);
   }, [userId]);
+}
+
+async function subscribe(userId: string) {
+  if (pushSubscribed) return;
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+
+    // Check if already subscribed — skip VAPID fetch if so
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (subscription) {
+      // Already subscribed, just ensure DB record exists
+      await upsertSubscription(userId, subscription);
+      pushSubscribed = true;
+      return;
+    }
+
+    // Only fetch VAPID key + request permission if not yet subscribed
+    const { data: vapidData, error: vapidError } = await supabase.functions.invoke(
+      "get-vapid-public-key"
+    );
+    if (vapidError || !vapidData?.publicKey) return;
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      pushSubscribed = true; // Don't retry if denied
+      return;
+    }
+
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey) as BufferSource,
+    });
+
+    await upsertSubscription(userId, subscription);
+    pushSubscribed = true;
+  } catch (err) {
+    console.warn("Push subscription failed, falling back to in-app notifications:", err);
+    pushSubscribed = true; // Don't retry on error
+  }
+}
+
+async function upsertSubscription(userId: string, subscription: PushSubscription) {
+  const subJson = subscription.toJSON();
+  if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) return;
+
+  await supabase.from("push_subscriptions").upsert(
+    {
+      user_id: userId,
+      endpoint: subJson.endpoint,
+      p256dh: subJson.keys.p256dh,
+      auth: subJson.keys.auth,
+    },
+    { onConflict: "user_id,endpoint" }
+  );
 }

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -17,17 +17,18 @@ async function fetchNotifications(userId: string): Promise<Notification[]> {
   return data || [];
 }
 
-export function useNotifications(userId: string | undefined) {
+export function useNotifications(userId: string | undefined, enabled = true) {
   const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: ["notifications", userId],
     queryFn: () => fetchNotifications(userId!),
-    enabled: !!userId,
-    staleTime: 1000 * 60,
+    enabled: !!userId && enabled,
+    staleTime: 1000 * 60 * 2, // 2 min cache
+    refetchOnWindowFocus: false,
   });
 
-  // Realtime subscription for new notifications
+  // Realtime subscription — only when enabled (dropdown open or unread badge needed)
   useEffect(() => {
     if (!userId) return;
 
@@ -45,18 +46,6 @@ export function useNotifications(userId: string | undefined) {
           queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
         }
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
-        }
-      )
       .subscribe();
 
     return () => {
@@ -66,15 +55,15 @@ export function useNotifications(userId: string | undefined) {
 
   const unreadCount = (query.data || []).filter((n) => !n.is_read).length;
 
-  const markAsRead = async (notificationId: string) => {
+  const markAsRead = useCallback(async (notificationId: string) => {
     await supabase
       .from("notifications")
       .update({ is_read: true })
       .eq("id", notificationId);
     queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
-  };
+  }, [userId, queryClient]);
 
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async () => {
     if (!userId) return;
     await supabase
       .from("notifications")
@@ -82,7 +71,7 @@ export function useNotifications(userId: string | undefined) {
       .eq("user_id", userId)
       .eq("is_read", false);
     queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
-  };
+  }, [userId, queryClient]);
 
   return {
     ...query,
