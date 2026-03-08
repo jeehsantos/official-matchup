@@ -230,10 +230,6 @@ export default function VenueLanding() {
                             <DollarSign className="h-3.5 w-3.5" />
                             ${court.hourly_rate}/hr
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3.5 w-3.5" />
-                            Up to {court.capacity}
-                          </span>
                           {court.is_indoor && (
                             <Badge variant="outline" className="text-xs">
                               Indoor
