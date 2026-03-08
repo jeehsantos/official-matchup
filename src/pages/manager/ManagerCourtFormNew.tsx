@@ -532,43 +532,44 @@ export default function ManagerCourtFormNew() {
 
   return (
     <ManagerLayout>
-      <div className="p-4 md:p-6 space-y-6">
-        {/* Header */}
-        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm -mx-4 md:-mx-6 px-4 md:px-6 py-3 border-b border-border shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <div>
-                <h1 className="font-display text-xl sm:text-2xl font-bold">
-                  {isAddingNewSubCourt ? "Add Sub-Court" : isEditing ? "Edit Court" : "Add Court"}
-                </h1>
-                <p className="text-muted-foreground text-xs sm:text-sm">
-                  {isAddingNewSubCourt ? "Create a new sub-court" : isEditing ? "Update court details, photos, and policies." : "Register a new sports court."}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 ml-auto sm:ml-0">
-              <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSubmit(onSubmit)}
-                disabled={submitting || (!isEditing && !stripeStatus?.isReady)}
-                className="gap-2"
-              >
-                {submitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4" />
-                )}
-                {isAddingNewSubCourt ? "Create Sub-Court" : isEditing ? "Update Court" : "Create Court"}
-              </Button>
+      {/* Sticky Header - outside padded container */}
+      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b border-border shadow-sm px-4 md:px-6 py-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="font-display text-xl sm:text-2xl font-bold">
+                {isAddingNewSubCourt ? "Add Sub-Court" : isEditing ? "Edit Court" : "Add Court"}
+              </h1>
+              <p className="text-muted-foreground text-xs sm:text-sm">
+                {isAddingNewSubCourt ? "Create a new sub-court" : isEditing ? "Update court details, photos, and policies." : "Register a new sports court."}
+              </p>
             </div>
           </div>
+          <div className="flex items-center gap-3 ml-auto sm:ml-0">
+            <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSubmit(onSubmit)}
+              disabled={submitting || (!isEditing && !stripeStatus?.isReady)}
+              className="gap-2"
+            >
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+              {isAddingNewSubCourt ? "Create Sub-Court" : isEditing ? "Update Court" : "Create Court"}
+            </Button>
+          </div>
         </div>
+      </div>
+
+      <div className="p-4 md:p-6 space-y-6">
 
         {/* Stripe Setup Warning for new courts */}
         {!isEditing && !stripeLoading && !stripeStatus?.isReady && (
