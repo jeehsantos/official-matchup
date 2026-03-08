@@ -1,261 +1,82 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ManagerLayout } from "@/components/layout/ManagerLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Building2,
-  Calendar,
-  DollarSign,
-  TrendingUp,
-  Plus,
-  ArrowRight,
-  MessageCircle,
-  CreditCard,
-} from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Plus, Calendar as CalendarIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { format } from "date-fns";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useManagerDashboard, type DashboardPeriod } from "@/hooks/useManagerDashboard";
+import { StatsCards } from "@/components/manager/dashboard/StatsCards";
+import { LiveCourtStatus } from "@/components/manager/dashboard/LiveCourtStatus";
+import { WeeklyPerformance } from "@/components/manager/dashboard/WeeklyPerformance";
+import { UpcomingBookings } from "@/components/manager/dashboard/UpcomingBookings";
+
+const periodLabels: Record<DashboardPeriod, string> = {
+  daily: "Today",
+  weekly: "This Week",
+  monthly: "This Month",
+};
 
 export default function ManagerDashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState({
-    venues: 0,
-    upcomingBookings: 0,
-    revenue: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<DashboardPeriod>("monthly");
+  const { stats, liveCourts, weeklyPerformance, upcomingBookings, loading } = useManagerDashboard(period);
 
-  useEffect(() => {
-    if (user) {
-      fetchStats();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  const fetchStats = async () => {
-    try {
-      // Fetch venues owned by user
-      const { data: venues, error: venuesError } = await supabase
-        .from("venues")
-        .select("id")
-        .eq("owner_id", user?.id);
-
-      if (venuesError) throw venuesError;
-
-      const venueIds = (venues || []).map((v) => v.id);
-
-      // Fetch parent courts (venues) only
-      const { data: courtsData, error: courtsError } = await supabase
-        .from("courts")
-        .select("id")
-        .in("venue_id", venueIds)
-        .eq("is_active", true)
-        .is("parent_court_id", null);
-
-      if (courtsError) throw courtsError;
-
-      // Get all courts including sub-courts for booking counting
-      const { data: allCourts } = await supabase
-        .from("courts")
-        .select("id")
-        .in("venue_id", venueIds)
-        .eq("is_active", true);
-
-      const courtIds = (allCourts || []).map((c) => c.id);
-      const venuesCount = courtsData?.length || 0;
-
-      let upcomingBookings = 0;
-      let monthlyRevenue = 0;
-
-      if (courtIds.length > 0) {
-        const today = format(new Date(), "yyyy-MM-dd");
-
-        // Count upcoming active bookings
-        const { count: bookingCount } = await supabase
-          .from("court_availability")
-          .select("id", { count: "exact", head: true })
-          .in("court_id", courtIds)
-          .eq("is_booked", true)
-          .gte("available_date", today);
-
-        upcomingBookings = bookingCount || 0;
-
-        // Calculate monthly revenue from completed payments
-        const { data: allBookings } = await supabase
-          .from("court_availability")
-          .select("booked_by_session_id, payment_status")
-          .in("court_id", courtIds)
-          .eq("is_booked", true)
-          .eq("payment_status", "completed");
-
-        const sessionIds = allBookings
-          ?.filter(b => b.booked_by_session_id)
-          .map(b => b.booked_by_session_id) || [];
-
-        if (sessionIds.length > 0) {
-          const { data: payments } = await supabase
-            .from("payments")
-            .select("amount, platform_fee, paid_at")
-            .in("session_id", sessionIds)
-            .eq("status", "completed")
-            .gte("paid_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
-
-          if (payments) {
-            monthlyRevenue = payments.reduce((sum, p) => {
-              const netAmount = Number(p.amount) - Number(p.platform_fee || 0);
-              return sum + netAmount;
-            }, 0);
-          }
-        }
-      }
-
-      setStats({
-        venues: venuesCount,
-        upcomingBookings,
-        revenue: monthlyRevenue,
-      });
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const statCards = [
-    { label: "My Venues", value: stats.venues, icon: Building2, color: "text-blue-500" },
-    {
-      label: "Upcoming Bookings",
-      value: stats.upcomingBookings,
-      icon: TrendingUp,
-      color: "text-orange-500",
-    },
-    { label: "This Month", value: `$${stats.revenue.toFixed(2)}`, icon: DollarSign, color: "text-primary" },
-  ];
+  const today = format(new Date(), "EEEE, MMMM d");
 
   return (
     <ManagerLayout>
-      <div className="p-4 md:p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="font-display text-2xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground">Manage your venues and bookings</p>
+            <h1 className="font-display text-xl sm:text-2xl font-bold">
+              Welcome back! 👋
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Here's an overview of your venue's performance.
+            </p>
           </div>
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg">
+              <CalendarIcon className="h-3.5 w-3.5" />
+              {today}
+            </div>
+            <Select value={period} onValueChange={(v) => setPeriod(v as DashboardPeriod)}>
+              <SelectTrigger className="w-[130px] h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="daily">Today</SelectItem>
+                <SelectItem value="weekly">This Week</SelectItem>
+                <SelectItem value="monthly">This Month</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <StatsCards stats={stats} loading={loading} periodLabel={periodLabels[period]} />
+
+        {/* Live Court Status */}
+        <LiveCourtStatus courts={liveCourts} loading={loading} />
+
+        {/* Charts + Upcoming */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <WeeklyPerformance data={weeklyPerformance} loading={loading} />
+          <UpcomingBookings bookings={upcomingBookings} loading={loading} />
+        </div>
+
+        {/* Quick action FAB for mobile */}
+        <div className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50">
           <Link to="/manager/courts/new">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Venue
+            <Button size="lg" className="rounded-full shadow-lg h-12 w-12 lg:h-auto lg:w-auto lg:px-4 lg:rounded-lg">
+              <Plus className="h-5 w-5 lg:mr-2" />
+              <span className="hidden lg:inline">New Venue</span>
             </Button>
           </Link>
         </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {statCards.map((stat) => (
-            <Card key={stat.label}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <stat.icon className={`h-5 w-5 ${stat.color}`} />
-                </div>
-                <div className="text-2xl font-bold">{loading ? "—" : stat.value}</div>
-                <div className="text-sm text-muted-foreground">{stat.label}</div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Your Venues</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {stats.venues === 0 ? (
-                <div className="text-center py-8">
-                  <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground mb-4">No venues yet</p>
-                  <Link to="/manager/courts/new">
-                    <Button>Add Your First Venue</Button>
-                  </Link>
-                </div>
-              ) : (
-                <Link to="/manager/courts">
-                  <Button variant="outline" className="w-full justify-between">
-                    Manage Venues
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Availability</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {stats.venues === 0 ? (
-                <div className="text-center py-8">
-                  <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground mb-4">Add venues first</p>
-                  <Link to="/manager/courts/new">
-                    <Button variant="outline">Add Venue</Button>
-                  </Link>
-                </div>
-              ) : (
-                <Link to="/manager/availability">
-                  <Button variant="outline" className="w-full justify-between">
-                    Manage Availability
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Bookings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {stats.upcomingBookings === 0 ? (
-                <div className="text-center py-8">
-                  <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground mb-4">No bookings yet</p>
-                  <Link to="/manager/bookings">
-                    <Button variant="outline">View Bookings</Button>
-                  </Link>
-                </div>
-              ) : (
-                <Link to="/manager/bookings">
-                  <Button variant="outline" className="w-full justify-between">
-                    View All Bookings
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Messages Info */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <MessageCircle className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex-1">
-                <p className="font-medium">Chat with Organizers</p>
-                <p className="text-sm text-muted-foreground">
-                  Use the chat widget in the bottom right to communicate with organizers who have booked your venues.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </ManagerLayout>
   );
