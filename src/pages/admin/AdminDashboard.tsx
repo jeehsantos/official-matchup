@@ -9,7 +9,8 @@ import {
   Archive,
   Gift,
   DollarSign,
-  BarChart3
+  BarChart3,
+  Globe
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AdminLayout } from "@/components/layout/AdminLayout";
@@ -53,6 +54,12 @@ function AdminDashboardContent() {
       description: "View revenue, court payables, and platform position",
       icon: BarChart3,
       href: "/admin/finance",
+    },
+    {
+      title: "Venue Pages",
+      description: "Manage public venue page slugs and shareable URLs",
+      icon: Globe,
+      href: "/admin/venues",
     },
   ];
 

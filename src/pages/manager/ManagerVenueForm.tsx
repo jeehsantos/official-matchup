@@ -33,8 +33,8 @@ const venueSchema = z.object({
 type VenueFormData = z.infer<typeof venueSchema>;
 
 export default function ManagerVenueForm() {
-  const { id } = useParams<{ id: string }>();
-  const isEditing = id !== "new";
+  const { venueId } = useParams<{ venueId: string }>();
+  const isEditing = !!venueId;
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -43,6 +43,7 @@ export default function ManagerVenueForm() {
   const [loading, setLoading] = useState(isEditing);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [venueSlug, setVenueSlug] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<VenueFormData>({
     resolver: zodResolver(venueSchema),
