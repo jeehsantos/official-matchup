@@ -2,3 +2,6 @@ project_id = "vrfkvcalqyzolqdshasj"
 
 [functions.stripe-webhook]
 verify_jwt = false
+
+[functions.reschedule-booking]
+verify_jwt = false
