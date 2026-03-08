@@ -1421,10 +1421,6 @@ export default function CourtDetail() {
             {/* Court Header */}
             <div className="px-4 lg:px-0">
               <div className="flex items-start gap-3 mb-3">
-                <Badge className="capitalize shrink-0">
-                  <SportIcon sport={(getSelectedCourt()?.allowed_sports?.[0] || court.allowed_sports?.[0] || "other")} className="h-3 w-3 mr-1" />
-                  {(getSelectedCourt()?.allowed_sports || court.allowed_sports)?.join(", ") || "Other"}
-                </Badge>
                 <Badge variant="outline" className="shrink-0">
                   {court.is_indoor ? "Indoor" : "Outdoor"}
                 </Badge>
