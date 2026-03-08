@@ -1097,14 +1097,27 @@ export default function QuickGameLobby() {
             </div>
             {challenge.payment_type === "single" ? (
               <div className="flex flex-col items-center gap-1">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/20">
-                  <span className="text-xs font-bold text-green-500">
-                    ✓ Covered by Organizer
-                  </span>
-                </div>
-                <span className="text-[10px] text-muted-foreground">
-                  Free to join — just confirm your presence
-                </span>
+                {isOrganizer ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      You paid:
+                    </span>
+                    <span className="text-sm font-black uppercase tracking-widest text-primary">
+                      ${(challenge.price_per_player * challenge.total_slots).toFixed(2)}
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/20">
+                      <span className="text-xs font-bold text-green-500">
+                        ✓ Covered by Organizer
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">
+                      Free to join — just confirm your presence
+                    </span>
+                  </>
+                )}
               </div>
             ) : (
               <div className="flex flex-col items-center gap-1">
