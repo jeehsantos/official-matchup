@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Copy,
   Check,
+  ArrowLeft,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
