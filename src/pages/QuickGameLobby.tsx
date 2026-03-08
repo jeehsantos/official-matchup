@@ -586,6 +586,54 @@ export default function QuickGameLobby() {
     updateFormat.mutate({ challengeId: id, gameMode: newFormat });
   };
 
+  const confirmKickPlayer = async () => {
+    if (!id || !kickTarget) return;
+    setIsKicking(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("kick-challenge-player", {
+        body: {
+          challengeId: id,
+          targetUserId: kickTarget.id ? undefined : undefined,
+          // We need the user_id, not the player record id
+          // Find user_id from challenge players
+        },
+      });
+
+      // Get user_id from the challenge players data
+      const targetPlayer = challenge?.quick_challenge_players?.find(
+        (p: any) => p.id === kickTarget.id
+      );
+
+      if (!targetPlayer) {
+        throw new Error("Player not found");
+      }
+
+      const { data: kickData, error: kickError } = await supabase.functions.invoke("kick-challenge-player", {
+        body: {
+          challengeId: id,
+          targetUserId: targetPlayer.user_id,
+        },
+      });
+
+      if (kickError) throw kickError;
+      if (kickData?.error) throw new Error(kickData.error);
+
+      toast({
+        title: "Player kicked",
+        description: kickData?.message || `${kickTarget.name} has been removed from the lobby.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Failed to kick player",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsKicking(false);
+      setKickTarget(null);
+    }
+  };
+
   // Auth redirect — store lobby path so user returns here after login/signup
   useEffect(() => {
     if (!isLoading && !user) {
