@@ -74,7 +74,6 @@ export default function VenueLanding() {
         .select("*")
         .eq("venue_id", venue!.id)
         .eq("is_active", true)
-        .is("parent_court_id", null)
         .order("name");
       if (error) throw error;
       return data;
