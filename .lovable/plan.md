@@ -1,61 +1,67 @@
 
-Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-What I found (already verified):
-1) Data inconsistency exists now:
-   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
-   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
-2) `ManagerCourtFormNew` root causes:
-   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
-   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
-   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
-3) Backend side effect confirmed:
-   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
+# Venue Landing Pages — `/venue/:slug`
 
-Implementation plan (execute in this order):
-1. Database integrity hardening + backfill (migration)
-   - Backfill: set `is_multi_court=true` for any court that already has children.
-   - Add DB validation trigger(s) on `courts` to enforce:
-     - child cannot reference itself
-     - child parent must be in same venue
-     - parent cannot be set `is_multi_court=false` while children exist
-     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
-   - This guarantees the bug cannot recur from any client path.
+## Summary
+Add public venue landing pages accessible at `/venue/:slug` (e.g., `/venue/arena-sports-auckland`). Each venue gets a branded page showing all its courts, location map, amenities, and direct booking links. Admins manage slugs via a new admin page.
 
-2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
-   - Remove direct `window.history.replaceState` usage.
-   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
-   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
-   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
+## Database Changes
 
-3. Multi-court UI behavior safeguards
-   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
-   - Disable/harden turning off multi-court when children exist (with clear message).
-   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
+### Add `slug` column to `venues` table
+```sql
+ALTER TABLE public.venues ADD COLUMN slug text UNIQUE;
+CREATE INDEX idx_venues_slug ON public.venues(slug);
+```
 
-4. Availability resilience (backend function)
-   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
-   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
+No new tables needed. The slug lives on the existing `venues` table. RLS already allows public SELECT on active venues.
 
-5. Verification I will perform (not asking you to test manually)
-   - DB checks:
-     - verify parent `57e11168...` becomes `is_multi_court=true`
-     - verify child links remain unchanged
-     - verify no rows exist with `children > 0 AND is_multi_court=false`
-   - Functional checks:
-     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
-   - UI checks:
-     - exercise add-sub-court flow and confirm:
-       - main court remains main
-       - child appears as child tab
-       - subsequent saves update correct court record
-       - no panel collapse/desync
+### Admin slug management
+Admins update slugs via a new admin page. Since admins use `has_role(auth.uid(), 'admin')`, we need an RLS policy allowing admins to update venues (currently only owners can). Add:
+```sql
+CREATE POLICY "Admins can update venues" ON public.venues
+FOR UPDATE TO authenticated
+USING (has_role(auth.uid(), 'admin'::app_role))
+WITH CHECK (has_role(auth.uid(), 'admin'::app_role));
+```
 
-Technical details:
-- Files to update:
-  - `supabase/migrations/<new>.sql`
-  - `src/pages/manager/ManagerCourtFormNew.tsx`
-  - `supabase/functions/get-availability/index.ts`
-- No money/payment logic touched.
-- No auth model changes.
-- Existing routing and form schema preserved; this is a consistency + state synchronization fix.
+## New Pages
+
+### 1. `src/pages/VenueLanding.tsx` — Public venue page
+- Fetches venue by `slug` from `venues` table
+- Fetches all active courts for that venue (excluding sub-courts via `parent_court_id IS NULL`)
+- Layout sections:
+  - **Hero**: Venue photo, name, city, description
+  - **Courts grid**: Cards for each court with photo, sport icons, hourly rate, "Book Now" link to `/courts/:id`
+  - **Info sidebar/section**: Address, phone, email, amenities list
+  - **Location map**: Leaflet map centered on venue lat/lng (reuse existing map component pattern)
+  - **Share button**: Copy URL to clipboard
+- Uses `PublicLayout` wrapper (no auth required)
+- Shows 404-style message if slug not found or venue inactive
+
+### 2. `src/pages/admin/AdminVenueSlugs.tsx` — Admin slug management
+- Lists all active venues with their current slug (or "No slug")
+- Inline edit field to set/update slug per venue
+- Auto-generate slug suggestion from venue name (kebab-case)
+- Validation: lowercase, alphanumeric + hyphens only, unique check
+- Uses `AdminLayout` wrapper
+
+## Routing Changes (`src/App.tsx`)
+```tsx
+<Route path="/venue/:slug" element={<VenueLanding />} />
+<Route path="/admin/venues" element={<AdminVenueSlugs />} />
+```
+
+## Admin Dashboard Update (`src/pages/admin/AdminDashboard.tsx`)
+Add "Venue Pages" menu item linking to `/admin/venues`.
+
+## Manager Venue Form Enhancement
+Show the venue's public URL (`/venue/:slug`) in the venue edit form as a read-only shareable link if a slug is set. Managers can see but not edit the slug (admin-only).
+
+## Files to Create/Edit
+1. **Migration SQL** — add `slug` column, index, admin UPDATE policy
+2. **`src/pages/VenueLanding.tsx`** — new public venue page
+3. **`src/pages/admin/AdminVenueSlugs.tsx`** — new admin page
+4. **`src/pages/admin/AdminDashboard.tsx`** — add menu item
+5. **`src/App.tsx`** — add routes
+6. **`src/pages/manager/ManagerVenueForm.tsx`** — show shareable link
+
