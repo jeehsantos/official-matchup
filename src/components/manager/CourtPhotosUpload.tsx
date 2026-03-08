@@ -96,7 +96,7 @@ export function CourtPhotosUpload({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <input
         ref={fileInputRef}
         type="file"
@@ -106,13 +106,13 @@ export function CourtPhotosUpload({
         className="hidden"
       />
 
-      {/* Photo Grid */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Photo Grid - compact */}
+      <div className="grid grid-cols-4 gap-2">
         {photoUrls.map((url, index) => (
           <div 
             key={url} 
-            className={`relative group rounded-xl overflow-hidden border border-border bg-muted ${
-              index === 0 ? 'col-span-2 aspect-video' : 'aspect-square'
+            className={`relative group rounded-lg overflow-hidden border border-border bg-muted ${
+              index === 0 ? 'col-span-2 row-span-2 aspect-square' : 'aspect-square'
             }`}
           >
             <img
@@ -120,34 +120,32 @@ export function CourtPhotosUpload({
               alt={`Court photo ${index + 1}`}
               className="w-full h-full object-cover"
             />
-            {/* Overlay with actions */}
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
               {index > 0 && (
                 <Button
                   type="button"
                   variant="secondary"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-6 w-6"
                   onClick={() => movePhoto(index, 0)}
                   title="Set as main photo"
                 >
-                  <span className="text-xs font-bold">1st</span>
+                  <span className="text-[10px] font-bold">1st</span>
                 </Button>
               )}
               <Button
                 type="button"
                 variant="destructive"
                 size="icon"
-                className="h-8 w-8"
+                className="h-6 w-6"
                 onClick={() => handleRemove(index)}
               >
-                <X className="h-4 w-4" />
+                <X className="h-3 w-3" />
               </Button>
             </div>
-            {/* Badge for main photo */}
             {index === 0 && (
-              <div className="absolute top-2 left-2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full font-medium">
-                Main Photo
+              <div className="absolute top-1.5 left-1.5 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full font-medium">
+                Main
               </div>
             )}
           </div>
@@ -159,35 +157,32 @@ export function CourtPhotosUpload({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className={`rounded-xl border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
-              photoUrls.length === 0 ? 'col-span-2 aspect-video' : 'aspect-square'
+            className={`rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+              photoUrls.length === 0 ? 'col-span-2 aspect-[3/2]' : 'aspect-square'
             }`}
           >
             {uploading ? (
               <>
-                <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
-                <span className="text-sm text-muted-foreground">Uploading...</span>
+                <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+                <span className="text-xs text-muted-foreground">Uploading...</span>
               </>
             ) : (
               <>
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <ImagePlus className="h-6 w-6 text-primary" />
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <ImagePlus className="h-4 w-4 text-primary" />
                 </div>
-                <div className="text-center px-2">
-                  <p className="font-medium text-foreground text-sm">Add Photo</p>
-                  <p className="text-xs text-muted-foreground">
-                    {photoUrls.length}/{maxPhotos} photos
-                  </p>
-                </div>
+                <p className="font-medium text-foreground text-xs">Add</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {photoUrls.length}/{maxPhotos}
+                </p>
               </>
             )}
           </button>
         )}
       </div>
 
-      {/* Help text */}
-      <p className="text-xs text-muted-foreground text-center">
-        Upload up to {maxPhotos} photos. First photo will be the main image. JPG, PNG, WebP up to 5MB each.
+      <p className="text-[10px] text-muted-foreground text-center">
+        Up to {maxPhotos} photos · JPG, PNG, WebP · 5MB max each
       </p>
     </div>
   );
