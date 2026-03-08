@@ -854,7 +854,38 @@ export default function QuickGameLobby() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <SettingsModal
+      {/* Kick Player Confirmation Dialog */}
+      <AlertDialog open={!!kickTarget} onOpenChange={(open) => !open && setKickTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Kick {kickTarget?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This player will be removed from the lobby and banned from rejoining.
+              {kickTarget?.paymentStatus === "paid" && challenge?.payment_type === "split" && (
+                " Their payment will be converted to platform credits."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isKicking}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmKickPlayer}
+              disabled={isKicking}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isKicking ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Kicking...</>
+              ) : (
+                "Kick Player"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         teamSize={teamSize}
