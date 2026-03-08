@@ -1088,28 +1088,36 @@ export default function QuickGameLobby() {
                 Invite Friend
               </Button>
             </div>
-            <div className="flex flex-col items-center gap-1">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  Total:
-                </span>
-                <span className="text-sm font-black uppercase tracking-widest text-primary">
-                  ${challenge.price_per_player != null ?
-                  challenge.price_per_player.toFixed(2) :
-                  "0.00"}
+            {challenge.payment_type === "single" ? (
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/20">
+                  <span className="text-xs font-bold text-green-500">
+                    ✓ Covered by Organizer
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  Free to join — just confirm your presence
                 </span>
               </div>
-              {challenge.price_per_player > 0 &&
-              <span className="text-[10px] text-muted-foreground">
-                  Per player
-                </span>
-              }
-            </div>
-            {challengePricePerPlayer > 0
-
-
-
-            }
+            ) : (
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    Total:
+                  </span>
+                  <span className="text-sm font-black uppercase tracking-widest text-primary">
+                    ${challenge.price_per_player != null ?
+                    challenge.price_per_player.toFixed(2) :
+                    "0.00"}
+                  </span>
+                </div>
+                {challenge.price_per_player > 0 &&
+                <span className="text-[10px] text-muted-foreground">
+                    Per player
+                  </span>
+                }
+              </div>
+            )}
           </div>
         </div>
 
