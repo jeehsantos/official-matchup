@@ -1030,8 +1030,8 @@ export default function QuickGameLobby() {
 
             {/* Game Mode Badge */}
             <div className="absolute top-3 right-3 bg-primary/90 text-primary-foreground px-3 py-1.5 rounded-full">
-              <span className="text-xs font-black uppercase tracking-wide">
-                {challenge.game_mode}
+              <span className="text-xs font-black tracking-wide">
+                {challenge.game_mode.replace(/vs/gi, ' vs ')}
               </span>
             </div>
           </button>
