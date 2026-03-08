@@ -1,61 +1,85 @@
 
-Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-What I found (already verified):
-1) Data inconsistency exists now:
-   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
-   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
-2) `ManagerCourtFormNew` root causes:
-   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
-   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
-   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
-3) Backend side effect confirmed:
-   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
+# Internationalization (i18n) Plan — Portuguese (Informal) + Browser Language Detection
 
-Implementation plan (execute in this order):
-1. Database integrity hardening + backfill (migration)
-   - Backfill: set `is_multi_court=true` for any court that already has children.
-   - Add DB validation trigger(s) on `courts` to enforce:
-     - child cannot reference itself
-     - child parent must be in same venue
-     - parent cannot be set `is_multi_court=false` while children exist
-     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
-   - This guarantees the bug cannot recur from any client path.
+## Recommended Approach: `react-i18next`
 
-2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
-   - Remove direct `window.history.replaceState` usage.
-   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
-   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
-   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
+The industry standard for React i18n is **react-i18next** (+ **i18next** + **i18next-browser-languagedetector**). It provides:
+- Automatic browser/OS language detection
+- JSON-based translation files (easy to maintain and extend to new languages)
+- A `useTranslation()` hook for components — minimal refactoring per file
+- Namespace support to split translations by feature area
 
-3. Multi-court UI behavior safeguards
-   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
-   - Disable/harden turning off multi-court when children exist (with clear message).
-   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
+## Architecture
 
-4. Availability resilience (backend function)
-   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
-   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
+```text
+src/
+├── i18n/
+│   ├── index.ts              ← i18next init + language detector config
+│   └── locales/
+│       ├── en/
+│       │   ├── common.json   ← shared (nav, buttons, labels)
+│       │   ├── landing.json
+│       │   ├── auth.json
+│       │   ├── booking.json
+│       │   ├── manager.json
+│       │   ├── admin.json
+│       │   └── profile.json
+│       └── pt/
+│           ├── common.json   ← Portuguese (informal — "você", casual tone)
+│           ├── landing.json
+│           ├── auth.json
+│           ├── booking.json
+│           ├── manager.json
+│           ├── admin.json
+│           └── profile.json
+```
 
-5. Verification I will perform (not asking you to test manually)
-   - DB checks:
-     - verify parent `57e11168...` becomes `is_multi_court=true`
-     - verify child links remain unchanged
-     - verify no rows exist with `children > 0 AND is_multi_court=false`
-   - Functional checks:
-     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
-   - UI checks:
-     - exercise add-sub-court flow and confirm:
-       - main court remains main
-       - child appears as child tab
-       - subsequent saves update correct court record
-       - no panel collapse/desync
+## Implementation Steps
 
-Technical details:
-- Files to update:
-  - `supabase/migrations/<new>.sql`
-  - `src/pages/manager/ManagerCourtFormNew.tsx`
-  - `supabase/functions/get-availability/index.ts`
-- No money/payment logic touched.
-- No auth model changes.
-- Existing routing and form schema preserved; this is a consistency + state synchronization fix.
+### 1. Install dependencies
+Add `i18next`, `react-i18next`, and `i18next-browser-languagedetector`.
+
+### 2. Create i18n configuration (`src/i18n/index.ts`)
+- Initialize i18next with browser language detector
+- Fallback language: `en`
+- Detection order: `navigator` (browser/OS setting), then `localStorage` for user override
+- Load all namespaces (common, landing, auth, booking, manager, admin, profile)
+
+### 3. Create English translation files
+Extract all hardcoded strings from every page and component into namespaced JSON files under `src/i18n/locales/en/`.
+
+### 4. Create Portuguese translation files
+Translate all strings into informal Brazilian/Portuguese under `src/i18n/locales/pt/`. Use "você" form, casual tone — no "Senhor/Senhora", no subjunctive formality.
+
+### 5. Wire i18n into the app
+- Import `src/i18n/index.ts` in `src/main.tsx`
+- Wrap `<App />` with the i18n provider (react-i18next auto-provides via `I18nextProvider` or just the import is enough)
+
+### 6. Refactor all pages and components
+Replace every hardcoded string with `t('namespace:key')` calls using the `useTranslation` hook. This affects:
+
+**Public pages:** Landing, About, Contact, Auth, NotFound, Courts, CourtDetail, PaymentSuccess
+**Player pages:** Index, Discover, Games, GameDetail, Groups, GroupDetail, JoinGroup, QuickGameLobby, Profile, ProfileEdit, ArchivedSessions
+**Manager pages:** All 11 manager pages + manager components (StaffAccessSection, StripeSetupAlert, dashboard components, etc.)
+**Admin pages:** All 7 admin pages
+**Layout components:** Header, Footer, BottomNav, GuestNavbar, GuestBottomNav, ManagerLayout, AdminLayout, NotificationDropdown
+**Shared components:** BookingWizard, PaymentMethodDialog, CreditsDisplay, all card components, modals, etc.
+
+### 7. Add language switcher (optional but recommended)
+A small dropdown in the navbar/footer to let users manually override their detected language.
+
+### 8. Format dates/numbers with locale
+Update all `toLocaleDateString("en-US", ...)` and `format()` calls to use the current i18n locale instead of hardcoded `"en-US"`.
+
+## Scope Note
+
+This is a **large refactoring effort** spanning 60+ files. I recommend implementing it in phases:
+
+1. **Phase 1**: Setup i18n infrastructure + translate layout/nav components + Landing + Auth + About + Contact pages
+2. **Phase 2**: Player-facing pages (Courts, Games, Groups, Discover, Profile, Booking flows)
+3. **Phase 3**: Manager pages and components
+4. **Phase 4**: Admin pages
+
+Each phase can be done in 1-2 messages. Shall I start with Phase 1?
+
