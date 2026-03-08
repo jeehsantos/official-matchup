@@ -14,6 +14,16 @@ import { Label } from "@/components/ui/label";
 import { EditGroupSchedule } from "@/components/group/EditGroupSchedule";
 import { EditGroupLocation } from "@/components/group/EditGroupLocation";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   Loader2, 
   ArrowLeft, 
@@ -27,7 +37,9 @@ import {
   CalendarDays,
   Copy,
   Link as LinkIcon,
-  Settings
+  Settings,
+  UserMinus,
+  Ban,
 } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";

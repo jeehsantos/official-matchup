@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.manage-venue-staff]
 verify_jwt = false
+
+[functions.ban-group-member]
+verify_jwt = false
+
+[functions.kick-challenge-player]
+verify_jwt = false
