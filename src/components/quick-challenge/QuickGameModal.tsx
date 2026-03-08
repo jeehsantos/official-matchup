@@ -105,7 +105,7 @@ export function QuickGameModal({ open, onOpenChange }: QuickGameModalProps) {
             <div className="p-2 rounded-lg bg-primary/10">
               <Zap className="h-5 w-5 text-primary" />
             </div>
-            Quick Game
+            Create pick-up game
           </DialogTitle>
         </DialogHeader>
 
