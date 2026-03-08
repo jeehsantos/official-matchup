@@ -309,7 +309,7 @@ export default function ManagerCourtsNew() {
                       </div>
                     </div>
                     <Link to={`/manager/courts/new?venue_id=${venue.id}`}>
-                      <Button variant="outline" size="sm" className="gap-1.5">
+                      <Button variant="outline" size="sm" className="gap-1.5" disabled={!stripeStatus?.isReady}>
                         <Plus className="h-3.5 w-3.5" />
                         Add Court
                       </Button>
