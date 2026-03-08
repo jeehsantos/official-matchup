@@ -332,7 +332,45 @@ export default function GroupDetail() {
     }
   };
 
-  if (authLoading || loading) {
+  const handleMemberAction = async () => {
+    if (!memberAction || !group) return;
+
+    setIsProcessingAction(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ban-group-member", {
+        body: {
+          groupId: group.id,
+          targetUserId: memberAction.userId,
+          action: memberAction.action,
+          reason: null,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Remove from local state
+      setMembers((prev) => prev.filter((m) => m.user_id !== memberAction.userId));
+
+      toast({
+        title: memberAction.action === "ban" ? "Member banned" : "Member removed",
+        description:
+          memberAction.action === "ban"
+            ? `${memberAction.name} has been banned from the group`
+            : `${memberAction.name} has been removed from the group`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Action failed",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingAction(false);
+      setMemberAction(null);
+    }
+  };
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
