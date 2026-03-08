@@ -90,11 +90,11 @@ export function UpcomingBookings({ bookings, loading }: UpcomingBookingsProps) {
                       </div>
                     </div>
 
-                    {booking.date !== format(new Date(), "yyyy-MM-dd") && (
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        {format(parseISO(booking.date), "EEE, MMM d")}
-                      </p>
-                    )}
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {booking.date === format(new Date(), "yyyy-MM-dd")
+                        ? <span className="font-semibold text-primary">Today</span>
+                        : format(parseISO(booking.date), "EEE, MMM d")}
+                    </p>
                   </div>
                 </div>
               );
