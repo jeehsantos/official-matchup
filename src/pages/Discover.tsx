@@ -501,7 +501,7 @@ export default function Discover() {
           <div>
             <h1 className="font-display text-2xl lg:text-3xl font-bold">Find Games</h1>
             <p className="text-muted-foreground text-sm">
-              Join rescue games or quick challenges
+              Join public games or quick challenges
             </p>
           </div>
           <Button
@@ -521,7 +521,7 @@ export default function Discover() {
             <div>
               <p className="font-medium text-sm">Quick Challenges</p>
               <p className="text-sm text-muted-foreground">
-                Find players for instant matches or join rescue games that need extra players!
+                Find players for instant matches or join public games that need extra players!
               </p>
             </div>
           </CardContent>
@@ -589,7 +589,7 @@ export default function Discover() {
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="rescue" className="relative gap-2">
               <AlertTriangle className="h-4 w-4" />
-              Rescue Games
+              Public Games
               {filteredRescueGames.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 bg-warning text-warning-foreground rounded-full text-xs font-bold">
                   {filteredRescueGames.length}
@@ -598,7 +598,7 @@ export default function Discover() {
             </TabsTrigger>
             <TabsTrigger value="quickgames" className="gap-2">
               <Zap className="h-4 w-4" />
-              Quick Games
+              Quick Challenges
               {filteredChallenges.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 bg-primary text-primary-foreground rounded-full text-xs font-bold">
                   {filteredChallenges.length}
@@ -623,7 +623,7 @@ export default function Discover() {
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                   <AlertTriangle className="h-8 w-8 opacity-50" />
                 </div>
-                <p className="font-medium">No rescue games found</p>
+                <p className="font-medium">No public games found</p>
                 <p className="text-sm mt-1">
                   {selectedSport !== "all" 
                     ? `Try selecting a different sport or clear filters`
@@ -679,7 +679,7 @@ export default function Discover() {
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                   <Zap className="h-8 w-8 opacity-50" />
                 </div>
-                <p className="font-medium">No quick games yet</p>
+                <p className="font-medium">No quick challenges yet</p>
                 <p className="text-sm mt-1">
                   Be the first to create a quick challenge!
                 </p>
