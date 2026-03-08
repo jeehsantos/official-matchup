@@ -49,7 +49,7 @@ export function GuestNavbar({ className }: GuestNavbarProps) {
           })}
         </nav>
 
-        <div className="flex items-center gap-2 sm:gap-3 lg:flex-1 lg:justify-end">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3 lg:flex-1 lg:justify-end">
           <Link to="/auth" className="hidden sm:block">
             <Button variant="ghost" className="font-semibold text-slate-700">
               Sign In
