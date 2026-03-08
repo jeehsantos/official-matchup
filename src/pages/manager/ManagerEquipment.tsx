@@ -42,17 +42,12 @@ import {
   useDeleteEquipment,
   type Equipment,
 } from "@/hooks/useVenueEquipment";
-
-interface Venue {
-  id: string;
-  name: string;
-}
+import { useManagerVenues } from "@/hooks/useManagerVenues";
 
 export default function ManagerEquipment() {
   const { user } = useAuth();
-  const [venues, setVenues] = useState<Venue[]>([]);
+  const { data: venues = [], isLoading: loadingVenues } = useManagerVenues();
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
-  const [loadingVenues, setLoadingVenues] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -67,36 +62,17 @@ export default function ManagerEquipment() {
     photo_url: "",
   });
 
+  // Auto-select first venue
+  useEffect(() => {
+    if (venues.length > 0 && !selectedVenueId) {
+      setSelectedVenueId(venues[0].id);
+    }
+  }, [venues, selectedVenueId]);
+
   const { data: equipment = [], isLoading: loadingEquipment } = useVenueEquipment(selectedVenueId);
   const createMutation = useCreateEquipment();
   const updateMutation = useUpdateEquipment();
   const deleteMutation = useDeleteEquipment();
-
-  useEffect(() => {
-    if (user) {
-      fetchVenues();
-    }
-  }, [user]);
-
-  const fetchVenues = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("venues")
-        .select("id, name")
-        .eq("owner_id", user?.id)
-        .eq("is_active", true);
-
-      if (error) throw error;
-      setVenues(data || []);
-      if (data && data.length > 0) {
-        setSelectedVenueId(data[0].id);
-      }
-    } catch (error) {
-      console.error("Error fetching venues:", error);
-    } finally {
-      setLoadingVenues(false);
-    }
-  };
 
   const resetForm = () => {
     setFormData({

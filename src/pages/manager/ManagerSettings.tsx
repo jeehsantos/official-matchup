@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { StaffAccessSection } from "@/components/manager/StaffAccessSection";
+import { useManagerVenues } from "@/hooks/useManagerVenues";
 import { 
   Loader2, 
   CreditCard, 
@@ -38,20 +39,6 @@ import {
 } from "@/components/ui/collapsible";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/hooks/useTheme";
-
-interface Venue {
-  id: string;
-  name: string;
-  stripe_account_id: string | null;
-}
-
-interface ConnectStatus {
-  connected: boolean;
-  details_submitted: boolean;
-  payouts_enabled: boolean;
-  charges_enabled: boolean;
-  account_id?: string;
-}
 
 interface ProfileData {
   full_name: string;
