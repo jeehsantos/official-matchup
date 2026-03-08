@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -9,7 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Copy, ExternalLink, Loader2, Wand2, X } from "lucide-react";
+import {
+  Check, Copy, ExternalLink, Loader2, Wand2, X,
+  Upload, ImageIcon, Trash2,
+} from "lucide-react";
 
 function toSlug(name: string) {
   return name
@@ -28,13 +31,16 @@ function AdminVenueSlugsContent() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileTargetId, setFileTargetId] = useState<string | null>(null);
 
   const { data: venues, isLoading } = useQuery({
     queryKey: ["admin-venues-slugs"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("venues")
-        .select("id, name, slug, city, is_active")
+        .select("id, name, slug, city, is_active, photo_url")
         .order("name");
       if (error) throw error;
       return data;
@@ -90,18 +96,95 @@ function AdminVenueSlugsContent() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const triggerFileInput = (venueId: string) => {
+    setFileTargetId(venueId);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !fileTargetId) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Please select an image file", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Image must be under 5MB", variant: "destructive" });
+      return;
+    }
+
+    setUploadingId(fileTargetId);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `venues/${fileTargetId}/photo.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("court-photos")
+        .upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("court-photos")
+        .getPublicUrl(path);
+
+      const photoUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      const { error: updateError } = await supabase
+        .from("venues")
+        .update({ photo_url: photoUrl })
+        .eq("id", fileTargetId);
+      if (updateError) throw updateError;
+
+      queryClient.invalidateQueries({ queryKey: ["admin-venues-slugs"] });
+      queryClient.invalidateQueries({ queryKey: ["venue-directory"] });
+      toast({ title: "Venue photo updated" });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setUploadingId(null);
+      setFileTargetId(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemovePhoto = async (venueId: string) => {
+    setUploadingId(venueId);
+    try {
+      const { error } = await supabase
+        .from("venues")
+        .update({ photo_url: null })
+        .eq("id", venueId);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["admin-venues-slugs"] });
+      queryClient.invalidateQueries({ queryKey: ["venue-directory"] });
+      toast({ title: "Photo removed" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
   return (
     <AdminLayout title="Venue Pages">
-      <div className="space-y-4 max-w-3xl">
-        <p className="text-muted-foreground">
-          Manage public venue page slugs. Each venue with a slug gets a shareable landing page at{" "}
+      <div className="space-y-4 max-w-4xl">
+        <p className="text-muted-foreground text-sm">
+          Manage public venue page slugs and photos. Each venue with a slug gets a shareable landing page at{" "}
           <code className="text-xs bg-muted px-1.5 py-0.5 rounded">/venue/slug</code>.
         </p>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
 
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-20 rounded-lg" />
+              <Skeleton key={i} className="h-28 rounded-lg" />
             ))}
           </div>
         ) : (
@@ -109,20 +192,72 @@ function AdminVenueSlugsContent() {
             {venues?.map((venue) => (
               <Card key={venue.id}>
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold truncate">{venue.name}</h3>
-                        <span className="text-xs text-muted-foreground">{venue.city}</span>
-                        {!venue.is_active && (
-                          <Badge variant="outline" className="text-xs">
-                            Inactive
-                          </Badge>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    {/* Photo section */}
+                    <div className="shrink-0">
+                      <div className="relative w-full sm:w-28 h-28 rounded-lg overflow-hidden bg-muted border border-border">
+                        {uploadingId === venue.id ? (
+                          <div className="flex items-center justify-center h-full">
+                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : venue.photo_url ? (
+                          <img
+                            src={venue.photo_url}
+                            alt={venue.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full">
+                            <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-1 mt-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs flex-1"
+                          onClick={() => triggerFileInput(venue.id)}
+                          disabled={uploadingId === venue.id}
+                        >
+                          <Upload className="h-3 w-3 mr-1" />
+                          {venue.photo_url ? "Replace" : "Upload"}
+                        </Button>
+                        {venue.photo_url && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => handleRemovePhoto(venue.id)}
+                            disabled={uploadingId === venue.id}
+                          >
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Info section */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <h3 className="font-semibold truncate">{venue.name}</h3>
+                          <span className="text-xs text-muted-foreground shrink-0">{venue.city}</span>
+                          {!venue.is_active && (
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              Inactive
+                            </Badge>
+                          )}
+                        </div>
+                        {editingId !== venue.id && (
+                          <Button variant="outline" size="sm" className="shrink-0" onClick={() => startEdit(venue)}>
+                            {venue.slug ? "Edit" : "Set Slug"}
+                          </Button>
                         )}
                       </div>
 
                       {editingId === venue.id ? (
-                        <div className="flex items-center gap-2 mt-2">
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
                           <span className="text-xs text-muted-foreground shrink-0">/venue/</span>
                           <Input
                             value={editValue}
@@ -200,12 +335,6 @@ function AdminVenueSlugsContent() {
                         </div>
                       )}
                     </div>
-
-                    {editingId !== venue.id && (
-                      <Button variant="outline" size="sm" onClick={() => startEdit(venue)}>
-                        {venue.slug ? "Edit" : "Set Slug"}
-                      </Button>
-                    )}
                   </div>
                 </CardContent>
               </Card>
