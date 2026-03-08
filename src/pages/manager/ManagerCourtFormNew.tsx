@@ -970,10 +970,10 @@ export default function ManagerCourtFormNew() {
             )}
 
             {/* Preview Header */}
-            <div className="bg-foreground rounded-t-xl px-4 py-3 border-b-4 border-foreground/80">
-              <span className="text-xs text-muted uppercase tracking-wider font-semibold">Preview</span>
-              <div className="bg-background/10 mt-2 rounded-lg py-3 px-4 flex items-center justify-between border border-muted/20">
-                <span className="text-background/80 text-sm font-medium">{previewName}</span>
+            <div className="bg-muted rounded-t-xl px-4 py-3 border-b border-border">
+              <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Preview</span>
+              <div className="bg-background mt-2 rounded-lg py-3 px-4 flex items-center justify-between border border-border">
+                <span className="text-foreground text-sm font-medium">{previewName}</span>
               </div>
             </div>
 
