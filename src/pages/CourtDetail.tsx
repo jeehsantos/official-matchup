@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, getDay } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import { BookingWizard } from "@/components/booking/BookingWizard";
+import { BookingProcessingOverlay } from "@/components/booking/BookingProcessingOverlay";
 import { QuickChallengeWizard } from "@/components/booking/QuickChallengeWizard";
 import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
 import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/EquipmentSelector";
@@ -130,6 +131,7 @@ export default function CourtDetail() {
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
   const [booking, setBooking] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState("");
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showQuickChallengeWizard, setShowQuickChallengeWizard] = useState(false);
   const [showProfileAlert, setShowProfileAlert] = useState(false);
@@ -797,6 +799,7 @@ export default function CourtDetail() {
 
     setShowGroupModal(false);
     setBooking(true);
+    setProcessingMessage("Creating your booking...");
 
     const totalDuration = getTotalDuration();
     const startTime = getStartTime();
@@ -827,6 +830,7 @@ export default function CourtDetail() {
         const totalPrice = Number(bookingData?.total_charge ?? 0);
         const bookingDetails = bookingData.booking_details;
 
+        setProcessingMessage("Redirecting to payment...");
         toast({
           title: isNewGroup ? "Group created!" : "Booking reserved!",
           description: "Redirecting to payment...",
@@ -864,6 +868,7 @@ export default function CourtDetail() {
       });
     } finally {
       setBooking(false);
+      setProcessingMessage("");
     }
   };
 
@@ -879,6 +884,7 @@ export default function CourtDetail() {
 
     setShowQuickChallengeWizard(false);
     setBooking(true);
+    setProcessingMessage("Creating your challenge...");
 
     const totalDuration = getTotalDuration();
     const startTime = getStartTime();
@@ -912,6 +918,7 @@ export default function CourtDetail() {
 
       if (requiresAtBookingPayment) {
         try {
+          setProcessingMessage("Setting up payment...");
           const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-quick-challenge-payment", {
             body: {
               challengeId,
@@ -935,6 +942,7 @@ export default function CourtDetail() {
           }
 
           if (paymentData?.url) {
+            setProcessingMessage("Redirecting to checkout...");
             const isInIframe = window.self !== window.top;
             if (isInIframe) {
               const opened = window.open(paymentData.url, "_blank", "noopener,noreferrer");
@@ -993,6 +1001,7 @@ export default function CourtDetail() {
       });
     } finally {
       setBooking(false);
+      setProcessingMessage("");
     }
   };
 
@@ -2137,6 +2146,7 @@ export default function CourtDetail() {
           />
         )}
 
+        <BookingProcessingOverlay visible={booking && !!processingMessage} message={processingMessage} />
       </div>
     </Layout>
   );
