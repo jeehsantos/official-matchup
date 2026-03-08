@@ -131,7 +131,7 @@ export default function VenueLanding() {
     <PublicLayout>
       {/* Back button */}
       <div className="max-w-6xl mx-auto px-4 pt-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1.5 text-muted-foreground hover:text-foreground">
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1.5 text-muted-foreground bg-transparent hover:bg-transparent hover:font-semibold hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
