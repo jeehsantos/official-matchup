@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { ManagerLayout } from "@/components/layout/ManagerLayout";
 import { RescheduleBookingDialog } from "@/components/manager/RescheduleBookingDialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,11 +14,11 @@ import {
 } from "@/components/ui/select";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { 
-  Calendar, 
-  MapPin, 
-  Clock, 
-  Users, 
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Calendar,
+  MapPin,
+  Clock,
   DollarSign,
   Loader2,
   Filter,
@@ -28,11 +28,11 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
-  Phone
+  Phone,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { format, isWithinInterval } from "date-fns";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
 
@@ -46,35 +46,14 @@ interface Booking {
   booked_by_user_id: string | null;
   booked_by_session_id: string | null;
   court_id: string;
-  court?: {
-    id: string;
-    name: string;
-    hourly_rate: number;
-    venue_id: string;
-    venue?: {
-      id: string;
-      name: string;
-      city: string;
-    };
-  };
-  session?: {
-    id: string;
-    is_cancelled: boolean;
-    group?: {
-      name: string;
-      organizer_id: string;
-    };
-    players?: Array<{
-      user_id: string;
-      profile?: {
-        full_name: string;
-      };
-    }>;
-  } | null;
-  profile?: {
-    full_name: string;
-    phone: string | null;
-  } | null;
+  courtName: string;
+  courtHourlyRate: number;
+  venueId: string;
+  venueName: string;
+  venueCity: string;
+  isSessionCancelled: boolean;
+  bookerName: string;
+  bookerPhone: string | null;
 }
 
 interface Venue {
@@ -88,248 +67,255 @@ interface Court {
   venue_id: string;
 }
 
-type BookingStatus = "active" | "cancelled" | "completed";
+type BookingTab = "active" | "cancelled" | "completed";
+
+const ITEMS_PER_PAGE = 20;
 
 export default function ManagerBookings() {
   const { user } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [courts, setCourts] = useState<Court[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [courtIds, setCourtIds] = useState<string[]>([]);
+  const [initLoading, setInitLoading] = useState(true);
+
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+
   const [selectedVenue, setSelectedVenue] = useState<string>("all");
   const [selectedCourt, setSelectedCourt] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [activeTab, setActiveTab] = useState<BookingStatus>("active");
+  const [activeTab, setActiveTab] = useState<BookingTab>("active");
   const [currentPage, setCurrentPage] = useState(1);
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
-  const itemsPerPage = 20;
 
+  // Step 1: Fetch venues and courts once
   useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user]);
-
-  const fetchData = async () => {
-    try {
-      // Get venues owned by user
+    if (!user) return;
+    (async () => {
       const { data: venuesData } = await supabase
         .from("venues")
         .select("id, name")
-        .eq("owner_id", user?.id);
+        .eq("owner_id", user.id);
 
       if (!venuesData || venuesData.length === 0) {
         setVenues([]);
         setCourts([]);
-        setBookings([]);
-        setLoading(false);
+        setCourtIds([]);
+        setInitLoading(false);
         return;
       }
 
       setVenues(venuesData);
-      const venueIds = venuesData.map(v => v.id);
+      const venueIds = venuesData.map((v) => v.id);
 
-      // Get courts for those venues
       const { data: courtsData } = await supabase
         .from("courts")
         .select("id, name, venue_id")
         .in("venue_id", venueIds);
 
-      setCourts(courtsData || []);
-      const courtIds = (courtsData || []).map(c => c.id);
-
-      if (courtIds.length === 0) {
-        setBookings([]);
-        setLoading(false);
-        return;
-      }
-
-      // Get all bookings for those courts
-      const { data: bookingsData, error } = await supabase
-        .from("court_availability")
-        .select(`
-          id,
-          available_date,
-          start_time,
-          end_time,
-          is_booked,
-          payment_status,
-          booked_by_user_id,
-          booked_by_session_id,
-          court_id,
-          court:courts(
-            id,
-            name,
-            hourly_rate,
-            venue_id,
-            venue:venues(id, name, city)
-          )
-        `)
-        .in("court_id", courtIds)
-        .eq("is_booked", true)
-        .order("available_date", { ascending: false })
-        .order("start_time", { ascending: true });
-
-      if (error) throw error;
-
-      // Get session details for bookings with sessions
-      const sessionIds = (bookingsData || [])
-        .filter(b => b.booked_by_session_id)
-        .map(b => b.booked_by_session_id)
-        .filter((id): id is string => id !== null);
-
-      let sessionsMap: Record<string, any> = {};
-      if (sessionIds.length > 0) {
-        const { data: sessionsData } = await supabase
-          .from("sessions")
-          .select(`
-            id,
-            is_cancelled,
-            group:groups(name, organizer_id)
-          `)
-          .in("id", sessionIds);
-
-        sessionsData?.forEach(s => {
-          sessionsMap[s.id] = s;
-        });
-
-        // Get session players with their profiles
-        const { data: sessionPlayersData } = await supabase
-          .from("session_players")
-          .select(`
-            session_id,
-            user_id,
-            profile:profiles!session_players_user_id_fkey(full_name)
-          `)
-          .in("session_id", sessionIds);
-
-        // Group players by session
-        sessionPlayersData?.forEach(sp => {
-          if (!sessionsMap[sp.session_id].players) {
-            sessionsMap[sp.session_id].players = [];
-          }
-          sessionsMap[sp.session_id].players.push({
-            user_id: sp.user_id,
-            profile: sp.profile
-          });
-        });
-      }
-
-      // Get profiles for all bookings (direct and session-based)
-      const userIds = [...new Set(
-        (bookingsData || [])
-          .filter(b => b.booked_by_user_id)
-          .map(b => b.booked_by_user_id)
-          .filter((id): id is string => id !== null)
-      )];
-
-      let profilesMap: Record<string, any> = {};
-      if (userIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from("profiles")
-          .select("id, user_id, full_name, phone")
-          .in("user_id", userIds);
-
-        profilesData?.forEach(p => {
-          profilesMap[p.user_id] = { full_name: p.full_name, phone: p.phone };
-        });
-      }
-
-      // Combine data
-      const enrichedBookings = (bookingsData || []).map(b => ({
-        ...b,
-        session: b.booked_by_session_id ? sessionsMap[b.booked_by_session_id] : null,
-        profile: b.booked_by_user_id ? profilesMap[b.booked_by_user_id] : null,
-      }));
-
-      setBookings(enrichedBookings);
-    } catch (error) {
-      console.error("Error fetching bookings:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const allCourts = courtsData || [];
+      setCourts(allCourts);
+      setCourtIds(allCourts.map((c) => c.id));
+      setInitLoading(false);
+    })();
+  }, [user]);
 
   // Filter courts based on selected venue
   const filteredCourts = useMemo(() => {
     if (selectedVenue === "all") return courts;
-    return courts.filter(c => c.venue_id === selectedVenue);
+    return courts.filter((c) => c.venue_id === selectedVenue);
   }, [courts, selectedVenue]);
 
-  // Reset court selection and page when venue changes
+  // Compute active court IDs for query
+  const activeCourtIds = useMemo(() => {
+    if (selectedCourt !== "all") return [selectedCourt];
+    if (selectedVenue !== "all") return filteredCourts.map((c) => c.id);
+    return courtIds;
+  }, [selectedCourt, selectedVenue, filteredCourts, courtIds]);
+
+  // Reset filters
   useEffect(() => {
     setSelectedCourt("all");
     setCurrentPage(1);
   }, [selectedVenue]);
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedCourt, dateRange, activeTab]);
 
-  // Filter bookings based on status, venue, court, and date range
-  const filteredBookings = useMemo(() => {
-    const filtered = bookings.filter(booking => {
-      // Status filter
-      const isSessionCancelled = booking.session?.is_cancelled;
-      const isPast = new Date(`${booking.available_date}T${booking.end_time}`) < new Date();
+  // Step 2: Fetch bookings with server-side pagination + filtering
+  const fetchBookings = useCallback(async () => {
+    if (activeCourtIds.length === 0) {
+      setBookings([]);
+      setTotalCount(0);
+      return;
+    }
 
-      let matchesStatus = false;
-      switch (activeTab) {
-        case "active":
-          matchesStatus = !isSessionCancelled && !isPast;
-          break;
-        case "cancelled":
-          matchesStatus = !!isSessionCancelled;
-          break;
-        case "completed":
-          matchesStatus = !isSessionCancelled && isPast;
-          break;
+    setLoading(true);
+
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const rangeStart = (currentPage - 1) * ITEMS_PER_PAGE;
+      const rangeEnd = rangeStart + ITEMS_PER_PAGE - 1;
+
+      // Build the base query for counting
+      let countQuery = supabase
+        .from("court_availability")
+        .select("id", { count: "exact", head: true })
+        .in("court_id", activeCourtIds)
+        .eq("is_booked", true);
+
+      // Build the data query
+      let dataQuery = supabase
+        .from("court_availability")
+        .select(
+          `id, available_date, start_time, end_time, is_booked, payment_status,
+           booked_by_user_id, booked_by_session_id, court_id`
+        )
+        .in("court_id", activeCourtIds)
+        .eq("is_booked", true);
+
+      // Apply tab-specific date filters to push filtering to DB
+      if (activeTab === "active") {
+        countQuery = countQuery.gte("available_date", today);
+        dataQuery = dataQuery.gte("available_date", today);
+      } else if (activeTab === "completed") {
+        countQuery = countQuery.lte("available_date", today);
+        dataQuery = dataQuery.lte("available_date", today);
       }
+      // "cancelled" tab needs session join — we fetch all and filter after
 
-      // Venue filter
-      const courtData = booking.court;
-      const matchesVenue = selectedVenue === "all" || courtData?.venue_id === selectedVenue;
-
-      // Court filter
-      const matchesCourt = selectedCourt === "all" || booking.court_id === selectedCourt;
-
-      // Date range filter
-      let matchesDateRange = true;
+      // Apply date range filter
       if (dateRange?.from) {
-        const bookingDate = new Date(booking.available_date);
-        bookingDate.setHours(0, 0, 0, 0);
-        
-        if (dateRange.to) {
-          const startDate = new Date(dateRange.from);
-          startDate.setHours(0, 0, 0, 0);
-          const endDate = new Date(dateRange.to);
-          endDate.setHours(23, 59, 59, 999);
-          matchesDateRange = isWithinInterval(bookingDate, { start: startDate, end: endDate });
-        } else {
-          matchesDateRange = format(bookingDate, "yyyy-MM-dd") === format(dateRange.from, "yyyy-MM-dd");
-        }
+        const fromStr = format(dateRange.from, "yyyy-MM-dd");
+        countQuery = countQuery.gte("available_date", fromStr);
+        dataQuery = dataQuery.gte("available_date", fromStr);
+      }
+      if (dateRange?.to) {
+        const toStr = format(dateRange.to, "yyyy-MM-dd");
+        countQuery = countQuery.lte("available_date", toStr);
+        dataQuery = dataQuery.lte("available_date", toStr);
       }
 
-      return matchesStatus && matchesVenue && matchesCourt && matchesDateRange;
-    });
+      // Sort: active = ascending (closest first), completed = descending (most recent first)
+      const ascending = activeTab === "active";
+      dataQuery = dataQuery
+        .order("available_date", { ascending })
+        .order("start_time", { ascending: true })
+        .range(rangeStart, rangeEnd);
 
-    // Sort by closest date first (ascending), then by start_time
-    return filtered.sort((a, b) => {
-      const dateCompare = a.available_date.localeCompare(b.available_date);
-      if (dateCompare !== 0) return dateCompare;
-      return a.start_time.localeCompare(b.start_time);
-    });
-  }, [bookings, activeTab, selectedVenue, selectedCourt, dateRange]);
+      // Execute count and data in parallel
+      const [countResult, dataResult] = await Promise.all([countQuery, dataQuery]);
 
-  // Paginate filtered bookings
-  const paginatedBookings = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredBookings.slice(startIndex, endIndex);
-  }, [filteredBookings, currentPage]);
+      const count = countResult.count || 0;
+      const rows = dataResult.data || [];
 
-  const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
+      if (rows.length === 0) {
+        setBookings([]);
+        setTotalCount(count);
+        setLoading(false);
+        return;
+      }
+
+      // Batch-fetch related data in parallel
+      const sessionIds = [
+        ...new Set(rows.filter((r) => r.booked_by_session_id).map((r) => r.booked_by_session_id as string)),
+      ];
+      const userIds = [
+        ...new Set(rows.filter((r) => r.booked_by_user_id).map((r) => r.booked_by_user_id as string)),
+      ];
+
+      const [sessionsResult, profilesResult] = await Promise.all([
+        sessionIds.length > 0
+          ? supabase
+              .from("sessions")
+              .select("id, is_cancelled, group:groups(name)")
+              .in("id", sessionIds)
+          : Promise.resolve({ data: [] }),
+        userIds.length > 0
+          ? supabase
+              .from("profiles")
+              .select("user_id, full_name, phone")
+              .in("user_id", userIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const sessionsMap: Record<string, { is_cancelled: boolean; groupName: string }> = {};
+      (sessionsResult.data || []).forEach((s: any) => {
+        sessionsMap[s.id] = {
+          is_cancelled: s.is_cancelled,
+          groupName: s.group?.name || "",
+        };
+      });
+
+      const profilesMap: Record<string, { full_name: string; phone: string | null }> = {};
+      (profilesResult.data || []).forEach((p: any) => {
+        profilesMap[p.user_id] = { full_name: p.full_name || "Unknown", phone: p.phone };
+      });
+
+      // Build court lookup from local state
+      const courtMap: Record<string, Court> = {};
+      courts.forEach((c) => (courtMap[c.id] = c));
+      const venueMap: Record<string, Venue> = {};
+      venues.forEach((v) => (venueMap[v.id] = v));
+
+      // Map to enriched bookings
+      const enriched: Booking[] = rows.map((r) => {
+        const court = courtMap[r.court_id];
+        const venue = court ? venueMap[court.venue_id] : undefined;
+        const session = r.booked_by_session_id ? sessionsMap[r.booked_by_session_id] : null;
+        const profile = r.booked_by_user_id ? profilesMap[r.booked_by_user_id] : null;
+
+        return {
+          id: r.id,
+          available_date: r.available_date,
+          start_time: r.start_time,
+          end_time: r.end_time,
+          is_booked: r.is_booked ?? true,
+          payment_status: r.payment_status,
+          booked_by_user_id: r.booked_by_user_id,
+          booked_by_session_id: r.booked_by_session_id,
+          court_id: r.court_id,
+          courtName: court?.name || "Unknown Court",
+          courtHourlyRate: 0,
+          venueId: court?.venue_id || "",
+          venueName: venue?.name || "Unknown Venue",
+          venueCity: "",
+          isSessionCancelled: session?.is_cancelled || false,
+          bookerName: profile?.full_name || session?.groupName || "Unknown",
+          bookerPhone: profile?.phone || null,
+        };
+      });
+
+      // For cancelled tab, filter client-side (session cancellation isn't a DB column on court_availability)
+      let finalBookings = enriched;
+      let finalCount = count;
+      if (activeTab === "cancelled") {
+        finalBookings = enriched.filter((b) => b.isSessionCancelled);
+        finalCount = finalBookings.length;
+      } else if (activeTab === "active") {
+        // Exclude cancelled sessions from active
+        finalBookings = enriched.filter((b) => !b.isSessionCancelled);
+      }
+
+      setBookings(finalBookings);
+      setTotalCount(activeTab === "cancelled" ? finalCount : count);
+    } catch (error) {
+      console.error("Error fetching bookings:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeCourtIds, activeTab, dateRange, currentPage, courts, venues]);
+
+  // Trigger fetch when dependencies change
+  useEffect(() => {
+    if (!initLoading) {
+      fetchBookings();
+    }
+  }, [fetchBookings, initLoading]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
 
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(":");
@@ -341,60 +327,38 @@ export default function ManagerBookings() {
 
   const getStatusBadge = (booking: Booking) => {
     const isPast = new Date(`${booking.available_date}T${booking.end_time}`) < new Date();
-    
-    if (booking.session?.is_cancelled) {
-      return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> Cancelled</Badge>;
+
+    if (booking.isSessionCancelled) {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <XCircle className="h-3 w-3" /> Cancelled
+        </Badge>
+      );
     }
     if (isPast) {
-      return <Badge variant="default" className="gap-1 bg-blue-600"><CheckCircle className="h-3 w-3" /> Completed</Badge>;
+      return (
+        <Badge variant="default" className="gap-1 bg-blue-600">
+          <CheckCircle className="h-3 w-3" /> Completed
+        </Badge>
+      );
     }
     if (booking.payment_status === "completed") {
-      return <Badge variant="default" className="gap-1 bg-green-600"><CheckCircle className="h-3 w-3" /> Paid</Badge>;
+      return (
+        <Badge variant="default" className="gap-1 bg-green-600">
+          <CheckCircle className="h-3 w-3" /> Paid
+        </Badge>
+      );
     }
-    return <Badge variant="secondary" className="gap-1"><AlertCircle className="h-3 w-3" /> Pending</Badge>;
+    return (
+      <Badge variant="secondary" className="gap-1">
+        <AlertCircle className="h-3 w-3" /> Pending
+      </Badge>
+    );
   };
-
-  const getBookerName = (booking: Booking) => {
-    // For session bookings, show player names or group name
-    if (booking.session) {
-      const players = booking.session.players || [];
-      if (players.length > 0) {
-        const playerNames = players
-          .map(p => p.profile?.full_name)
-          .filter(Boolean);
-        
-        if (playerNames.length > 0) {
-          if (playerNames.length === 1) {
-            return playerNames[0];
-          } else if (playerNames.length === 2) {
-            return playerNames.join(" & ");
-          } else {
-            return `${playerNames[0]} +${playerNames.length - 1} others`;
-          }
-        }
-      }
-      
-      // Fallback to group name if no players found
-      if (booking.session.group?.name) {
-        return booking.session.group.name;
-      }
-    }
-    
-    // Fallback to booker profile (works for both direct and session bookings)
-    if (booking.profile?.full_name) {
-      return booking.profile.full_name;
-    }
-    
-    return "Unknown";
-  };
-
 
   const BookingCard = ({ booking }: { booking: Booking }) => {
-    const courtData = booking.court;
-    const venueData = courtData?.venue;
     const isPast = new Date(`${booking.available_date}T${booking.end_time}`) < new Date();
-    const isCancelled = booking.session?.is_cancelled;
-    const canReschedule = !isPast && !isCancelled;
+    const canReschedule = !isPast && !booking.isSessionCancelled;
 
     return (
       <Card className="overflow-hidden">
@@ -403,15 +367,15 @@ export default function ManagerBookings() {
             <div className="flex-1 min-w-0 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <h3 className="font-semibold truncate">{getBookerName(booking)}</h3>
-                  {booking.profile?.phone && (
+                  <h3 className="font-semibold truncate">{booking.bookerName}</h3>
+                  {booking.bookerPhone && (
                     <a
-                      href={`tel:${booking.profile.phone}`}
+                      href={`tel:${booking.bookerPhone}`}
                       className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors shrink-0 border border-border/50 rounded-full px-2 py-0.5"
-                      title={`Call ${booking.profile.phone}`}
+                      title={`Call ${booking.bookerPhone}`}
                     >
                       <Phone className="h-3 w-3" />
-                      {booking.profile.phone}
+                      {booking.bookerPhone}
                     </a>
                   )}
                 </div>
@@ -430,7 +394,7 @@ export default function ManagerBookings() {
                   )}
                 </div>
               </div>
-              
+
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Calendar className="h-3.5 w-3.5" />
@@ -441,18 +405,12 @@ export default function ManagerBookings() {
                   {formatTime(booking.start_time)} - {formatTime(booking.end_time)}
                 </div>
               </div>
-              
+
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <MapPin className="h-3.5 w-3.5" />
-                  {venueData?.name || "Unknown Venue"} - {courtData?.name || "Unknown Court"}
+                  {booking.venueName} - {booking.courtName}
                 </div>
-                {courtData?.hourly_rate && (
-                  <div className="flex items-center gap-1 text-primary font-medium">
-                    <DollarSign className="h-3.5 w-3.5" />
-                    {courtData.hourly_rate}/hr
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -461,10 +419,99 @@ export default function ManagerBookings() {
     );
   };
 
+  const BookingsSkeleton = () => (
+    <div className="space-y-3">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Card key={i}>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex justify-between">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-5 w-20" />
+            </div>
+            <div className="flex gap-4">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+            <Skeleton className="h-4 w-48" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+
+  const Pagination = () => {
+    if (totalPages <= 1) return null;
+    const start = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+    const end = Math.min(currentPage * ITEMS_PER_PAGE, totalCount);
+
+    return (
+      <div className="flex items-center justify-between pt-4">
+        <p className="text-sm text-muted-foreground">
+          Showing {start} to {end} of {totalCount} bookings
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </Button>
+          <span className="text-sm">
+            Page {currentPage} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const EmptyState = ({ icon: Icon, title, description }: { icon: any; title: string; description: string }) => (
+    <Card>
+      <CardContent className="py-12 text-center">
+        <Icon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+        <h3 className="font-semibold text-lg mb-2">{title}</h3>
+        <p className="text-muted-foreground">{description}</p>
+      </CardContent>
+    </Card>
+  );
+
+  const TabContent = ({ emptyIcon, emptyTitle, emptyDescription }: { emptyIcon: any; emptyTitle: string; emptyDescription: string }) => {
+    if (loading) return <BookingsSkeleton />;
+    if (bookings.length === 0) return <EmptyState icon={emptyIcon} title={emptyTitle} description={emptyDescription} />;
+    return (
+      <>
+        {bookings.map((booking) => (
+          <BookingCard key={booking.id} booking={booking} />
+        ))}
+        <Pagination />
+      </>
+    );
+  };
+
+  if (initLoading) {
+    return (
+      <ManagerLayout>
+        <div className="p-4 md:p-6 flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </ManagerLayout>
+    );
+  }
+
   return (
     <ManagerLayout>
       <div className="p-4 md:p-6 space-y-6">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="font-display text-2xl font-bold">Bookings</h1>
@@ -480,7 +527,7 @@ export default function ManagerBookings() {
                 <Filter className="h-4 w-4" />
                 <span className="text-sm font-medium">Filters:</span>
               </div>
-              
+
               <div className="flex flex-col sm:flex-row gap-3 flex-1">
                 <Select value={selectedVenue} onValueChange={setSelectedVenue}>
                   <SelectTrigger className="w-full sm:w-[200px]">
@@ -488,7 +535,7 @@ export default function ManagerBookings() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Venues</SelectItem>
-                    {venues.map(venue => (
+                    {venues.map((venue) => (
                       <SelectItem key={venue.id} value={venue.id}>
                         {venue.name}
                       </SelectItem>
@@ -502,7 +549,7 @@ export default function ManagerBookings() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Courts</SelectItem>
-                    {filteredCourts.map(court => (
+                    {filteredCourts.map((court) => (
                       <SelectItem key={court.id} value={court.id}>
                         {court.name}
                       </SelectItem>
@@ -543,11 +590,7 @@ export default function ManagerBookings() {
                     />
                     {dateRange && (
                       <div className="p-3 border-t">
-                        <Button
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => setDateRange(undefined)}
-                        >
+                        <Button variant="outline" className="w-full" onClick={() => setDateRange(undefined)}>
                           Clear Date Range
                         </Button>
                       </div>
@@ -560,7 +603,7 @@ export default function ManagerBookings() {
         </Card>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as BookingStatus)}>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as BookingTab)}>
           <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
             <TabsTrigger value="active" className="gap-2">
               <AlertCircle className="h-4 w-4 hidden sm:inline" />
@@ -576,177 +619,45 @@ export default function ManagerBookings() {
             </TabsTrigger>
           </TabsList>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <>
-              <TabsContent value="active" className="mt-4 space-y-3">
-                {filteredBookings.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-12 text-center">
-                      <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="font-semibold text-lg mb-2">No active bookings</h3>
-                      <p className="text-muted-foreground">
-                        Active bookings will appear here when customers book your venues.
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <>
-                    {paginatedBookings.map(booking => (
-                      <BookingCard key={booking.id} booking={booking} />
-                    ))}
-                    {totalPages > 1 && (
-                      <div className="flex items-center justify-between pt-4">
-                        <p className="text-sm text-muted-foreground">
-                          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredBookings.length)} of {filteredBookings.length} bookings
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                            Previous
-                          </Button>
-                          <span className="text-sm">
-                            Page {currentPage} of {totalPages}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                          >
-                            Next
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </TabsContent>
+          <TabsContent value="active" className="mt-4 space-y-3">
+            <TabContent
+              emptyIcon={AlertCircle}
+              emptyTitle="No active bookings"
+              emptyDescription="Active bookings will appear here when customers book your venues."
+            />
+          </TabsContent>
 
-              <TabsContent value="cancelled" className="mt-4 space-y-3">
-                {filteredBookings.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-12 text-center">
-                      <XCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="font-semibold text-lg mb-2">No cancelled bookings</h3>
-                      <p className="text-muted-foreground">
-                        Cancelled bookings will appear here.
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <>
-                    {paginatedBookings.map(booking => (
-                      <BookingCard key={booking.id} booking={booking} />
-                    ))}
-                    {totalPages > 1 && (
-                      <div className="flex items-center justify-between pt-4">
-                        <p className="text-sm text-muted-foreground">
-                          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredBookings.length)} of {filteredBookings.length} bookings
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                            Previous
-                          </Button>
-                          <span className="text-sm">
-                            Page {currentPage} of {totalPages}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                          >
-                            Next
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </TabsContent>
+          <TabsContent value="cancelled" className="mt-4 space-y-3">
+            <TabContent
+              emptyIcon={XCircle}
+              emptyTitle="No cancelled bookings"
+              emptyDescription="Cancelled bookings will appear here."
+            />
+          </TabsContent>
 
-              <TabsContent value="completed" className="mt-4 space-y-3">
-                {filteredBookings.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-12 text-center">
-                      <CheckCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="font-semibold text-lg mb-2">No completed bookings</h3>
-                      <p className="text-muted-foreground">
-                        Completed bookings will appear here.
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <>
-                    {paginatedBookings.map(booking => (
-                      <BookingCard key={booking.id} booking={booking} />
-                    ))}
-                    {totalPages > 1 && (
-                      <div className="flex items-center justify-between pt-4">
-                        <p className="text-sm text-muted-foreground">
-                          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredBookings.length)} of {filteredBookings.length} bookings
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                            Previous
-                          </Button>
-                          <span className="text-sm">
-                            Page {currentPage} of {totalPages}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                          >
-                            Next
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </TabsContent>
-            </>
-          )}
+          <TabsContent value="completed" className="mt-4 space-y-3">
+            <TabContent
+              emptyIcon={CheckCircle}
+              emptyTitle="No completed bookings"
+              emptyDescription="Completed bookings will appear here."
+            />
+          </TabsContent>
         </Tabs>
       </div>
 
       {rescheduleBooking && (
         <RescheduleBookingDialog
           open={!!rescheduleBooking}
-          onOpenChange={(open) => { if (!open) setRescheduleBooking(null); }}
+          onOpenChange={(open) => {
+            if (!open) setRescheduleBooking(null);
+          }}
           bookingId={rescheduleBooking.id}
           courtId={rescheduleBooking.court_id}
-          venueId={rescheduleBooking.court?.venue_id || ""}
+          venueId={rescheduleBooking.venueId}
           currentDate={rescheduleBooking.available_date}
           currentStartTime={rescheduleBooking.start_time}
           currentEndTime={rescheduleBooking.end_time}
-          onSuccess={fetchData}
+          onSuccess={fetchBookings}
         />
       )}
     </ManagerLayout>
