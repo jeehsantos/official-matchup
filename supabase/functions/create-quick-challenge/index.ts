@@ -86,19 +86,48 @@ serve(async (req) => {
     const bookingStartMin = timeToMinutes(scheduledTime);
     const endTime = minutesToTime(bookingStartMin + durationMinutes);
 
-    // Check for ANY overlapping rows (booked or not) to avoid unique constraint violations
+    // Check for overlapping BOOKED rows to prevent double-booking.
+    // Rows with is_booked=false from the SAME user (orphaned pending_payment) are excluded —
+    // they will be replaced by the new booking attempt.
     const { data: overlaps, error: overlapError } = await supabaseAdmin
       .from("court_availability")
-      .select("id, start_time, end_time, is_booked")
+      .select("id, start_time, end_time, is_booked, booked_by_user_id")
       .eq("court_id", courtId)
       .eq("available_date", scheduledDate);
     if (overlapError) throw overlapError;
 
-    const hasOverlap = (overlaps || []).some((booking) => {
-      const existingStart = timeToMinutes(booking.start_time);
-      const existingEnd = timeToMinutes(booking.end_time);
-      return bookingStartMin < existingEnd && bookingStartMin + durationMinutes > existingStart;
+    const hasOverlap = (overlaps || []).some((row) => {
+      const existingStart = timeToMinutes(row.start_time);
+      const existingEnd = timeToMinutes(row.end_time);
+      const timesOverlap = bookingStartMin < existingEnd && bookingStartMin + durationMinutes > existingStart;
+      if (!timesOverlap) return false;
+      // If the slot is booked, it's a real conflict
+      if (row.is_booked) return true;
+      // If unbooked but belongs to a DIFFERENT user, it's their pending checkout — conflict
+      if (row.booked_by_user_id && row.booked_by_user_id !== user.id) return true;
+      // Unbooked row from same user = orphaned pending_payment, not a conflict
+      return false;
     });
+
+    // Clean up same-user orphaned rows for this slot before inserting
+    if (!hasOverlap) {
+      const orphanedIds = (overlaps || [])
+        .filter((row) => {
+          const existingStart = timeToMinutes(row.start_time);
+          const existingEnd = timeToMinutes(row.end_time);
+          const timesOverlap = bookingStartMin < existingEnd && bookingStartMin + durationMinutes > existingStart;
+          return timesOverlap && !row.is_booked && row.booked_by_user_id === user.id;
+        })
+        .map((row) => row.id);
+
+      if (orphanedIds.length > 0) {
+        await supabaseAdmin
+          .from("court_availability")
+          .delete()
+          .in("id", orphanedIds);
+      }
+    }
+
     if (hasOverlap) throw new Error("SLOT_UNAVAILABLE");
 
     const selectedEquipment = equipment as EquipmentSelection[];
