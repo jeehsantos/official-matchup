@@ -296,42 +296,38 @@ export default function Courts() {
 
   const Layout = user ? MobileLayout : PublicLayout;
 
-  // Quick Game Mode Banner
-  const QuickGameBanner = () => {
-    if (!isQuickGameMode || !quickGameConfig) return null;
-    
-    return (
-      <div className="bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30 rounded-lg p-3 sm:p-4 mb-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-              <Zap className="h-5 w-5 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-semibold text-sm sm:text-base truncate">Quick Challenge Mode</h3>
-              <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                {quickGameConfig.sportName} • {quickGameConfig.gameMode} ({quickGameConfig.totalPlayers} players)
-              </p>
-            </div>
+  // Quick Game Mode Banner - inline JSX helper (not a component to avoid unstable refs)
+  const quickGameBannerJsx = isQuickGameMode && quickGameConfig ? (
+    <div className="bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30 rounded-lg p-3 sm:p-4 mb-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+            <Zap className="h-5 w-5 text-primary" />
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleExitQuickGame}
-            className="shrink-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-sm sm:text-base truncate">Quick Challenge Mode</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
+              {quickGameConfig.sportName} • {quickGameConfig.gameMode} ({quickGameConfig.totalPlayers} players)
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Select a court and time slot to create your quick challenge session
-        </p>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleExitQuickGame}
+          className="shrink-0"
+        >
+          <X className="h-4 w-4" />
+        </Button>
       </div>
-    );
-  };
+      <p className="text-xs text-muted-foreground mt-2">
+        Select a court and time slot to create your quick challenge session
+      </p>
+    </div>
+  ) : null;
 
-  // Desktop Filter bar component with dialog filters
-  const FilterBar = () => (
+  // Desktop Filter bar - inline JSX (not a component)
+  const filterBarJsx = (
     <div className="space-y-4">
       {/* Search Bar */}
       <div className="relative">
@@ -463,8 +459,8 @@ export default function Courts() {
     </div>
   );
 
-  // Loading skeleton
-  const LoadingSkeleton = () => (
+  // Loading skeleton - inline JSX
+  const loadingSkeletonJsx = (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
       {[1, 2, 3, 4, 5, 6].map((i) => (
         <div key={i} className="animate-pulse">
@@ -477,8 +473,8 @@ export default function Courts() {
     </div>
   );
 
-  // Empty state
-  const EmptyState = () => (
+  // Empty state - inline JSX
+  const emptyStateJsx = (
     <div className="text-center py-12">
       <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
       <h3 className="font-semibold text-lg mb-2">No Courts Found</h3>
@@ -508,7 +504,7 @@ export default function Courts() {
           {/* Quick Game Banner for mobile */}
           {isQuickGameMode && quickGameConfig && (
             <div className="absolute top-20 left-4 right-4 z-[500] pointer-events-auto">
-              <QuickGameBanner />
+              {quickGameBannerJsx}
             </div>
           )}
 
@@ -592,7 +588,7 @@ export default function Courts() {
         >
           <div className="p-4 lg:p-6 space-y-4">
             {/* Quick Game Banner */}
-            <QuickGameBanner />
+            {quickGameBannerJsx}
             
             {/* Header */}
             <div id="browse-courts" className="scroll-mt-24 flex items-center justify-between">
@@ -606,13 +602,13 @@ export default function Courts() {
               </div>
             </div>
 
-            <FilterBar />
+            {filterBarJsx}
 
             {/* Courts Grid */}
             {loading ? (
-              <LoadingSkeleton />
+              loadingSkeletonJsx
             ) : filteredCourts.length === 0 ? (
-              <EmptyState />
+              emptyStateJsx
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
