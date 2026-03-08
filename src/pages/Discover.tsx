@@ -499,6 +499,7 @@ export default function Discover() {
   const challengeTotalPages = Math.max(1, Math.ceil(filteredChallenges.length / ITEMS_PER_PAGE));
   const paginatedChallenges = filteredChallenges.slice((challengePage - 1) * ITEMS_PER_PAGE, challengePage * ITEMS_PER_PAGE);
 
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
