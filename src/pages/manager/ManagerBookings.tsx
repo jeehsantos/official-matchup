@@ -721,6 +721,20 @@ export default function ManagerBookings() {
           )}
         </Tabs>
       </div>
+
+      {rescheduleBooking && (
+        <RescheduleBookingDialog
+          open={!!rescheduleBooking}
+          onOpenChange={(open) => { if (!open) setRescheduleBooking(null); }}
+          bookingId={rescheduleBooking.id}
+          courtId={rescheduleBooking.court_id}
+          venueId={rescheduleBooking.court?.venue_id || ""}
+          currentDate={rescheduleBooking.available_date}
+          currentStartTime={rescheduleBooking.start_time}
+          currentEndTime={rescheduleBooking.end_time}
+          onSuccess={fetchData}
+        />
+      )}
     </ManagerLayout>
   );
 }
