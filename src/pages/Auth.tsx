@@ -231,13 +231,15 @@ export default function Auth() {
     <PublicLayout showBack={false} showFooter={false}>
       <div className="relative min-h-screen flex flex-col items-center justify-center p-4 -mt-12">
 
-      <div className="flex flex-col items-center gap-3 mb-8">
+      <div className="flex flex-col items-center gap-2 mb-8">
         <img
           src="/sportarena-logo.png"
           alt="Sport Arena logo"
           className="h-16 w-auto mix-blend-screen"
         />
-        
+        <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+          ← Back to home
+        </Link>
       </div>
 
       {showForgotPassword ? (
@@ -305,9 +307,6 @@ export default function Auth() {
       ) : (
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <Link to="/" className="self-start text-sm text-muted-foreground hover:text-foreground transition-colors mb-2">
-              ← Back to home
-            </Link>
             <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-16 w-auto mx-auto mb-2" />
             <CardTitle className="font-display">Welcome</CardTitle>
             <CardDescription>
