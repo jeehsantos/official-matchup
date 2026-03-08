@@ -1,0 +1,1 @@
+ALTER TABLE public.venues ADD COLUMN banner_url text DEFAULT NULL;

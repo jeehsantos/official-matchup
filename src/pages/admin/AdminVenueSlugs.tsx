@@ -32,6 +32,7 @@ function AdminVenueSlugsContent() {
   const [editValue, setEditValue] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadType, setUploadType] = useState<"photo" | "banner">("photo");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileTargetId, setFileTargetId] = useState<string | null>(null);
 
@@ -40,7 +41,7 @@ function AdminVenueSlugsContent() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("venues")
-        .select("id, name, slug, city, is_active, photo_url")
+        .select("id, name, slug, city, is_active, photo_url, banner_url")
         .order("name");
       if (error) throw error;
       return data;
@@ -96,8 +97,9 @@ function AdminVenueSlugsContent() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const triggerFileInput = (venueId: string) => {
+  const triggerFileInput = (venueId: string, type: "photo" | "banner") => {
     setFileTargetId(venueId);
+    setUploadType(type);
     fileInputRef.current?.click();
   };
 
@@ -117,7 +119,8 @@ function AdminVenueSlugsContent() {
     setUploadingId(fileTargetId);
     try {
       const ext = file.name.split(".").pop();
-      const path = `venues/${fileTargetId}/photo.${ext}`;
+      const folder = uploadType === "banner" ? "banner" : "photo";
+      const path = `venues/${fileTargetId}/${folder}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("court-photos")
@@ -129,15 +132,16 @@ function AdminVenueSlugsContent() {
         .getPublicUrl(path);
 
       const photoUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      const column = uploadType === "banner" ? "banner_url" : "photo_url";
       const { error: updateError } = await supabase
         .from("venues")
-        .update({ photo_url: photoUrl })
+        .update({ [column]: photoUrl })
         .eq("id", fileTargetId);
       if (updateError) throw updateError;
 
       queryClient.invalidateQueries({ queryKey: ["admin-venues-slugs"] });
       queryClient.invalidateQueries({ queryKey: ["venue-directory"] });
-      toast({ title: "Venue photo updated" });
+      toast({ title: uploadType === "banner" ? "Banner image updated" : "Venue photo updated" });
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     } finally {
@@ -147,17 +151,17 @@ function AdminVenueSlugsContent() {
     }
   };
 
-  const handleRemovePhoto = async (venueId: string) => {
+  const handleRemovePhoto = async (venueId: string, column: "photo_url" | "banner_url") => {
     setUploadingId(venueId);
     try {
       const { error } = await supabase
         .from("venues")
-        .update({ photo_url: null })
+        .update({ [column]: null })
         .eq("id", venueId);
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["admin-venues-slugs"] });
       queryClient.invalidateQueries({ queryKey: ["venue-directory"] });
-      toast({ title: "Photo removed" });
+      toast({ title: column === "banner_url" ? "Banner removed" : "Photo removed" });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -193,47 +197,55 @@ function AdminVenueSlugsContent() {
               <Card key={venue.id}>
                 <CardContent className="p-4">
                   <div className="flex flex-col sm:flex-row gap-4">
-                    {/* Photo section */}
-                    <div className="shrink-0">
-                      <div className="relative w-full sm:w-28 h-28 rounded-lg overflow-hidden bg-muted border border-border">
-                        {uploadingId === venue.id ? (
-                          <div className="flex items-center justify-center h-full">
-                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                          </div>
-                        ) : venue.photo_url ? (
-                          <img
-                            src={venue.photo_url}
-                            alt={venue.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full">
-                            <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex gap-1 mt-1.5">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs flex-1"
-                          onClick={() => triggerFileInput(venue.id)}
-                          disabled={uploadingId === venue.id}
-                        >
-                          <Upload className="h-3 w-3 mr-1" />
-                          {venue.photo_url ? "Replace" : "Upload"}
-                        </Button>
-                        {venue.photo_url && (
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7 shrink-0"
-                            onClick={() => handleRemovePhoto(venue.id)}
-                            disabled={uploadingId === venue.id}
-                          >
-                            <Trash2 className="h-3 w-3 text-destructive" />
+                    {/* Images section */}
+                    <div className="shrink-0 flex flex-row sm:flex-col gap-3">
+                      {/* Card Photo */}
+                      <div>
+                        <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Card Photo</p>
+                        <div className="relative w-24 sm:w-28 h-20 rounded-lg overflow-hidden bg-muted border border-border">
+                          {venue.photo_url ? (
+                            <img src={venue.photo_url} alt={venue.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="flex items-center justify-center h-full">
+                              <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-1 mt-1">
+                          <Button variant="outline" size="sm" className="h-6 text-[10px] flex-1 px-1.5" onClick={() => triggerFileInput(venue.id, "photo")} disabled={uploadingId === venue.id}>
+                            <Upload className="h-2.5 w-2.5 mr-0.5" />
+                            {venue.photo_url ? "Replace" : "Upload"}
                           </Button>
-                        )}
+                          {venue.photo_url && (
+                            <Button variant="outline" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemovePhoto(venue.id, "photo_url")} disabled={uploadingId === venue.id}>
+                              <Trash2 className="h-2.5 w-2.5 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      {/* Banner */}
+                      <div>
+                        <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Banner</p>
+                        <div className="relative w-24 sm:w-28 h-20 rounded-lg overflow-hidden bg-muted border border-border">
+                          {venue.banner_url ? (
+                            <img src={venue.banner_url} alt={`${venue.name} banner`} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="flex items-center justify-center h-full">
+                              <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-1 mt-1">
+                          <Button variant="outline" size="sm" className="h-6 text-[10px] flex-1 px-1.5" onClick={() => triggerFileInput(venue.id, "banner")} disabled={uploadingId === venue.id}>
+                            <Upload className="h-2.5 w-2.5 mr-0.5" />
+                            {venue.banner_url ? "Replace" : "Upload"}
+                          </Button>
+                          {venue.banner_url && (
+                            <Button variant="outline" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemovePhoto(venue.id, "banner_url")} disabled={uploadingId === venue.id}>
+                              <Trash2 className="h-2.5 w-2.5 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
 
