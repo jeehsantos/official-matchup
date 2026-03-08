@@ -83,9 +83,22 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Try to create auth user; if already exists, look them up
-      let userId: string;
+      // Check if a user with this email already exists
+      const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+      if (listError) throw listError;
 
+      const existingUser = listData.users.find(
+        (u: any) => u.email?.toLowerCase() === email.toLowerCase()
+      );
+
+      if (existingUser) {
+        return new Response(
+          JSON.stringify({ error: "This email is already registered. Staff accounts must use a new email that is not associated with any existing account." }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Create new auth user for staff
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
@@ -93,55 +106,9 @@ Deno.serve(async (req) => {
         user_metadata: { full_name, role: "venue_staff" },
       });
 
-      if (createError) {
-        if (createError.message?.includes("already been registered") || createError.message?.includes("already exists")) {
-          // User exists — look up by email and reuse
-          const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-          if (listError) throw listError;
+      if (createError) throw createError;
 
-          const existingUser = listData.users.find(
-            (u: any) => u.email?.toLowerCase() === email.toLowerCase()
-          );
-          if (!existingUser) {
-            return new Response(
-              JSON.stringify({ error: "Could not find existing user by email" }),
-              { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-          userId = existingUser.id;
-
-          // Ensure they have venue_staff role
-          const { data: existingRole } = await supabaseAdmin
-            .from("user_roles")
-            .select("id")
-            .eq("user_id", userId)
-            .eq("role", "venue_staff")
-            .maybeSingle();
-
-          if (!existingRole) {
-            await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: "venue_staff" });
-          }
-
-          // Check not already staff at this venue
-          const { data: existingStaff } = await supabaseAdmin
-            .from("venue_staff")
-            .select("id")
-            .eq("venue_id", venue_id)
-            .eq("user_id", userId)
-            .maybeSingle();
-
-          if (existingStaff) {
-            return new Response(
-              JSON.stringify({ error: "This user is already staff at this venue" }),
-              { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-        } else {
-          throw createError;
-        }
-      } else {
-        userId = newUser.user.id;
-      }
+      const userId = newUser.user.id;
 
       // Note: handle_new_user trigger automatically creates profile and user_roles
       // based on user_metadata, so we don't need to insert those manually.
