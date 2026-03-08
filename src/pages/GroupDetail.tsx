@@ -750,7 +750,50 @@ export default function GroupDetail() {
                               Joined {format(new Date(member.joined_at), "MMM yyyy")}
                             </p>
                           </div>
-                        </div>
+                          {isOrganizer && (
+                            <div className="flex gap-1">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                                      onClick={() => setMemberAction({
+                                        memberId: member.id,
+                                        userId: member.user_id,
+                                        name: member.profile?.full_name || "Member",
+                                        action: "remove",
+                                      })}
+                                    >
+                                      <UserMinus className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Remove from group</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                                      onClick={() => setMemberAction({
+                                        memberId: member.id,
+                                        userId: member.user_id,
+                                        name: member.profile?.full_name || "Member",
+                                        action: "ban",
+                                      })}
+                                    >
+                                      <Ban className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Ban from group</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          )}
                       ))}
                     </div>
                   </CardContent>
