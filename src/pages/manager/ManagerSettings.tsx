@@ -52,11 +52,26 @@ interface PasswordData {
   confirmPassword: string;
 }
 
+interface Venue {
+  id: string;
+  name: string;
+  stripe_account_id: string | null;
+}
+
+interface ConnectStatus {
+  connected: boolean;
+  details_submitted: boolean;
+  payouts_enabled: boolean;
+  charges_enabled: boolean;
+  account_id?: string;
+}
+
 export default function ManagerSettings() {
   const { user, userRole, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { data: managerVenues = [], isLoading: venuesLoading } = useManagerVenues();
   
   const [venues, setVenues] = useState<Venue[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState<string>("");
