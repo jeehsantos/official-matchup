@@ -1537,6 +1537,7 @@ export type Database = {
           phone: string | null
           photo_url: string | null
           slot_interval_minutes: number
+          slug: string | null
           stripe_account_id: string | null
           suburb: string | null
           updated_at: string
@@ -1559,6 +1560,7 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           slot_interval_minutes?: number
+          slug?: string | null
           stripe_account_id?: string | null
           suburb?: string | null
           updated_at?: string
@@ -1581,6 +1583,7 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           slot_interval_minutes?: number
+          slug?: string | null
           stripe_account_id?: string | null
           suburb?: string | null
           updated_at?: string
