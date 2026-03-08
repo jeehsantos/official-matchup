@@ -53,11 +53,13 @@ export default function Contact() {
   const onSubmit = async (data: ContactFormData) => {
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from("contact_messages").insert({
-        name: data.name,
-        email: data.email,
-        subject: data.subject,
-        message: data.message,
+      const { data: result, error } = await supabase.functions.invoke("send-contact-email", {
+        body: {
+          name: data.name,
+          email: data.email,
+          subject: data.subject,
+          message: data.message,
+        },
       });
       if (error) throw error;
       setIsSubmitted(true);
