@@ -695,6 +695,7 @@ export default function GroupDetail() {
                               size="sm"
                               variant="ghost"
                               className="h-8 px-2"
+                              title="Promote to admin"
                               onClick={() => promoteMember(member.id, member.user_id)}
                             >
                               <Crown className="h-4 w-4" />
