@@ -273,10 +273,15 @@ export default function VenueLanding() {
                 {venue.address && (
                   <div className="flex items-start gap-3 text-sm">
                     <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                    <span>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${venue.address}, ${venue.city}${venue.country ? `, ${venue.country}` : ""}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline hover:text-foreground transition-colors"
+                    >
                       {venue.address}, {venue.city}
                       {venue.country ? `, ${venue.country}` : ""}
-                    </span>
+                    </a>
                   </div>
                 )}
                 {venue.phone && (
@@ -294,6 +299,11 @@ export default function VenueLanding() {
                       {venue.email}
                     </a>
                   </div>
+                )}
+                {!venue.phone && !venue.email && (
+                  <p className="text-xs text-muted-foreground italic">
+                    No contact details available yet.
+                  </p>
                 )}
               </CardContent>
             </Card>
