@@ -9,7 +9,6 @@ interface AuthContextType {
   session: Session | null;
   userRole: AppRole | null;
   isLoading: boolean;
-  isSigningOut: boolean;
   signUp: (email: string, password: string, fullName: string, role?: AppRole, referralCode?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; role?: AppRole }>;
   signOut: () => Promise<void>;
@@ -25,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [roleLoaded, setRoleLoaded] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
+  
 
   const fetchUserRole = useCallback(async (userId: string): Promise<AppRole | null> => {
     try {
@@ -159,27 +158,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    setIsSigningOut(true);
-
-    // Always clear local session, even if server session is already invalid/expired.
-    await new Promise(resolve => setTimeout(resolve, 200));
-
-    const { error: globalError } = await supabase.auth.signOut({ scope: "global" });
-    if (globalError) {
-      console.warn("Global sign out failed, clearing local session:", globalError.message);
-    }
-
-    const { error: localError } = await supabase.auth.signOut({ scope: "local" });
-    if (localError) {
-      console.warn("Local sign out warning:", localError.message);
-    }
-
     setUser(null);
     setSession(null);
     setUserRole(null);
-    setRoleLoaded(true);
-
-    window.location.href = "/auth";
+    await supabase.auth.signOut({ scope: "local" });
+    window.location.replace("/auth");
   };
 
   const resetPassword = async (email: string) => {
@@ -196,7 +179,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         userRole,
         isLoading: isLoading || !roleLoaded,
-        isSigningOut,
         signUp,
         signIn,
         signOut,
@@ -204,14 +186,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resetPassword,
       }}
     >
-      {isSigningOut && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
-          <div className="flex flex-col items-center gap-3">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            <p className="text-sm font-medium text-muted-foreground">Signing out…</p>
-          </div>
-        </div>
-      )}
       {children}
     </AuthContext.Provider>
   );
