@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { useUserProfile } from "@/hooks/useUserProfile";
 
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+
 import {
   LayoutDashboard,
   Building2,
@@ -98,7 +98,6 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
 
           </Link>
           <div className="flex items-center gap-2">
-            <ThemeToggle variant="ghost" size="icon" />
             <Button
               variant="ghost"
               size="icon"
