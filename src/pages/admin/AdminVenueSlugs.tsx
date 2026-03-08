@@ -32,6 +32,7 @@ function AdminVenueSlugsContent() {
   const [editValue, setEditValue] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadType, setUploadType] = useState<"photo" | "banner">("photo");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileTargetId, setFileTargetId] = useState<string | null>(null);
 
@@ -40,7 +41,7 @@ function AdminVenueSlugsContent() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("venues")
-        .select("id, name, slug, city, is_active, photo_url")
+        .select("id, name, slug, city, is_active, photo_url, banner_url")
         .order("name");
       if (error) throw error;
       return data;
@@ -96,8 +97,9 @@ function AdminVenueSlugsContent() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const triggerFileInput = (venueId: string) => {
+  const triggerFileInput = (venueId: string, type: "photo" | "banner") => {
     setFileTargetId(venueId);
+    setUploadType(type);
     fileInputRef.current?.click();
   };
 
@@ -117,7 +119,8 @@ function AdminVenueSlugsContent() {
     setUploadingId(fileTargetId);
     try {
       const ext = file.name.split(".").pop();
-      const path = `venues/${fileTargetId}/photo.${ext}`;
+      const folder = uploadType === "banner" ? "banner" : "photo";
+      const path = `venues/${fileTargetId}/${folder}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("court-photos")
@@ -129,15 +132,16 @@ function AdminVenueSlugsContent() {
         .getPublicUrl(path);
 
       const photoUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      const column = uploadType === "banner" ? "banner_url" : "photo_url";
       const { error: updateError } = await supabase
         .from("venues")
-        .update({ photo_url: photoUrl })
+        .update({ [column]: photoUrl })
         .eq("id", fileTargetId);
       if (updateError) throw updateError;
 
       queryClient.invalidateQueries({ queryKey: ["admin-venues-slugs"] });
       queryClient.invalidateQueries({ queryKey: ["venue-directory"] });
-      toast({ title: "Venue photo updated" });
+      toast({ title: uploadType === "banner" ? "Banner image updated" : "Venue photo updated" });
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     } finally {
