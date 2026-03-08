@@ -686,7 +686,136 @@ export default function ManagerSettings() {
           </Card>
         </Collapsible>
 
-        {venues.length === 0 ? (
+        {/* Stripe Connect Card - Always visible */}
+        <Collapsible open={paymentOpen} onOpenChange={setPaymentOpen}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-left">
+                    <CreditCard className="h-5 w-5" />
+                    <div>
+                      <CardTitle>Payment Payouts</CardTitle>
+                      <CardDescription className="text-xs md:text-sm">
+                        Connect Stripe to receive payments
+                      </CardDescription>
+                    </div>
+                  </div>
+                  {paymentOpen ? (
+                    <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4 pt-0">
+                {/* Status Display */}
+                {connectStatus?.connected ? (
+                  <div className="space-y-4">
+                    {/* Fully Connected Success State */}
+                    {connectStatus.details_submitted && connectStatus.charges_enabled && connectStatus.payouts_enabled ? (
+                      <div className="p-3 md:p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center flex-shrink-0">
+                            <CheckCircle2 className="h-5 w-5 md:h-6 md:w-6 text-green-600 dark:text-green-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm md:text-base text-green-800 dark:text-green-200">
+                              Ready to Receive Payments
+                            </p>
+                            <p className="text-xs md:text-sm text-green-700 dark:text-green-300 mt-1">
+                              Your Stripe account is fully configured. Payments from bookings will be transferred to your bank account.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        <span className="font-medium text-sm md:text-base">Stripe Account Connected</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Details Submitted:</span>
+                        <Badge variant={connectStatus.details_submitted ? "default" : "secondary"}>
+                          {connectStatus.details_submitted ? "Complete" : "Pending"}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Payments:</span>
+                        <Badge variant={connectStatus.charges_enabled ? "default" : "secondary"}>
+                          {connectStatus.charges_enabled ? "Enabled" : "Disabled"}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Payouts:</span>
+                        <Badge variant={connectStatus.payouts_enabled ? "default" : "secondary"}>
+                          {connectStatus.payouts_enabled ? "Enabled" : "Disabled"}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {!connectStatus.details_submitted && (
+                      <div className="p-3 md:p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-yellow-800 dark:text-yellow-200">
+                            Complete Your Setup
+                          </p>
+                          <p className="text-xs md:text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                            Your Stripe account setup is incomplete. Click below to continue.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      {!connectStatus.details_submitted && (
+                        <Button onClick={handleConnectStripe} disabled={actionLoading} className="w-full sm:w-auto">
+                          {actionLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Continue Setup
+                        </Button>
+                      )}
+                      <Button 
+                        variant={connectStatus.details_submitted ? "default" : "outline"} 
+                        onClick={handleOpenDashboard} 
+                        disabled={actionLoading}
+                        className="w-full sm:w-auto"
+                      >
+                        {actionLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open Stripe Dashboard
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-3 md:p-4 bg-muted rounded-lg">
+                      <h4 className="font-medium mb-2 text-sm md:text-base">Why connect Stripe?</h4>
+                      <ul className="text-xs md:text-sm text-muted-foreground space-y-1">
+                        <li>• Receive court booking payments directly to your bank</li>
+                        <li>• Automatic payouts with transparent fee structure</li>
+                        <li>• View earnings and manage payouts from Stripe dashboard</li>
+                      </ul>
+                    </div>
+
+                    <Button onClick={handleConnectStripe} disabled={actionLoading} className="w-full md:w-auto">
+                      {actionLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Connect Stripe Account
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        {venues.length === 0 && (
           <Card>
             <CardContent className="py-8 text-center">
               <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -696,137 +825,6 @@ export default function ManagerSettings() {
               </p>
             </CardContent>
           </Card>
-        ) : (
-          <>
-            {/* Stripe Connect Card - Collapsible */}
-            <Collapsible open={paymentOpen} onOpenChange={setPaymentOpen}>
-              <Card>
-                <CollapsibleTrigger className="w-full">
-                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-left">
-                        <CreditCard className="h-5 w-5" />
-                        <div>
-                          <CardTitle>Payment Payouts</CardTitle>
-                          <CardDescription className="text-xs md:text-sm">
-                            Connect Stripe to receive payments
-                          </CardDescription>
-                        </div>
-                      </div>
-                      {paymentOpen ? (
-                        <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </div>
-                  </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent className="space-y-4 pt-0">
-                    {/* Status Display */}
-                    {connectStatus?.connected ? (
-                      <div className="space-y-4">
-                        {/* Fully Connected Success State */}
-                        {connectStatus.details_submitted && connectStatus.charges_enabled && connectStatus.payouts_enabled ? (
-                          <div className="p-3 md:p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-                            <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center flex-shrink-0">
-                                <CheckCircle2 className="h-5 w-5 md:h-6 md:w-6 text-green-600 dark:text-green-400" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-sm md:text-base text-green-800 dark:text-green-200">
-                                  Ready to Receive Payments
-                                </p>
-                                <p className="text-xs md:text-sm text-green-700 dark:text-green-300 mt-1">
-                                  Your Stripe account is fully configured. Payments from bookings will be transferred to your bank account.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="h-5 w-5 text-green-500" />
-                            <span className="font-medium text-sm md:text-base">Stripe Account Connected</span>
-                          </div>
-                        )}
-
-                        <div className="grid grid-cols-1 gap-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">Details Submitted:</span>
-                            <Badge variant={connectStatus.details_submitted ? "default" : "secondary"}>
-                              {connectStatus.details_submitted ? "Complete" : "Pending"}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">Payments:</span>
-                            <Badge variant={connectStatus.charges_enabled ? "default" : "secondary"}>
-                              {connectStatus.charges_enabled ? "Enabled" : "Disabled"}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">Payouts:</span>
-                            <Badge variant={connectStatus.payouts_enabled ? "default" : "secondary"}>
-                              {connectStatus.payouts_enabled ? "Enabled" : "Disabled"}
-                            </Badge>
-                          </div>
-                        </div>
-
-                        {!connectStatus.details_submitted && (
-                          <div className="p-3 md:p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg flex items-start gap-3">
-                            <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm text-yellow-800 dark:text-yellow-200">
-                                Complete Your Setup
-                              </p>
-                              <p className="text-xs md:text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                                Your Stripe account setup is incomplete. Click below to continue.
-                              </p>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex flex-col sm:flex-row gap-3">
-                          {!connectStatus.details_submitted && (
-                            <Button onClick={handleConnectStripe} disabled={actionLoading} className="w-full sm:w-auto">
-                              {actionLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                              Continue Setup
-                            </Button>
-                          )}
-                          <Button 
-                            variant={connectStatus.details_submitted ? "default" : "outline"} 
-                            onClick={handleOpenDashboard} 
-                            disabled={actionLoading}
-                            className="w-full sm:w-auto"
-                          >
-                            {actionLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                            <ExternalLink className="h-4 w-4 mr-2" />
-                            Open Stripe Dashboard
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="p-3 md:p-4 bg-muted rounded-lg">
-                          <h4 className="font-medium mb-2 text-sm md:text-base">Why connect Stripe?</h4>
-                          <ul className="text-xs md:text-sm text-muted-foreground space-y-1">
-                            <li>• Receive court booking payments directly to your bank</li>
-                            <li>• Automatic payouts with transparent fee structure</li>
-                            <li>• View earnings and manage payouts from Stripe dashboard</li>
-                          </ul>
-                        </div>
-
-                        <Button onClick={handleConnectStripe} disabled={actionLoading} className="w-full md:w-auto">
-                          {actionLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                          <CreditCard className="h-4 w-4 mr-2" />
-                          Connect Stripe Account
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </CollapsibleContent>
-              </Card>
-            </Collapsible>
-          </>
         )}
       </div>
     </ManagerLayout>
