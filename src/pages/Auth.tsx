@@ -232,11 +232,6 @@ export default function Auth() {
       <div className="relative min-h-screen flex flex-col items-center justify-center p-4 -mt-12">
 
       <div className="flex flex-col items-center gap-2 mb-8">
-        <img
-          src="/sportarena-logo.png"
-          alt="Sport Arena logo"
-          className="h-16 w-auto mix-blend-screen"
-        />
         <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           ← Back to home
         </Link>
