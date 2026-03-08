@@ -162,10 +162,6 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
 
           {/* Theme Toggle & Sign Out */}
           <div className="p-4 border-t border-border space-y-2 pb-20 lg:pb-4">
-            <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-sm text-muted-foreground">Theme</span>
-              <ThemeToggle variant="outline" size="icon" />
-            </div>
             <Button
               variant="ghost"
               className="w-full justify-start gap-3 text-muted-foreground"

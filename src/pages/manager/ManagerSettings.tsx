@@ -25,7 +25,10 @@ import {
   EyeOff,
   ChevronDown,
   ChevronUp,
-  LogOut
+  LogOut,
+  Palette,
+  Sun,
+  Moon
 } from "lucide-react";
 import {
   Collapsible,
@@ -33,6 +36,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useNavigate } from "react-router-dom";
+import { useTheme } from "@/hooks/useTheme";
 
 interface Venue {
   id: string;
@@ -76,6 +80,8 @@ export default function ManagerSettings() {
   const [profileOpen, setProfileOpen] = useState(true);
   const [securityOpen, setSecurityOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
   
   // Profile state
   const [profileData, setProfileData] = useState<ProfileData>({
@@ -613,6 +619,69 @@ export default function ManagerSettings() {
                     </>
                   )}
                 </Button>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        {/* Appearance / Theme Card */}
+        <Collapsible open={appearanceOpen} onOpenChange={setAppearanceOpen}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-left">
+                    <Palette className="h-5 w-5" />
+                    <div>
+                      <CardTitle>Appearance</CardTitle>
+                      <CardDescription className="text-xs md:text-sm">
+                        Customize the look and feel
+                      </CardDescription>
+                    </div>
+                  </div>
+                  {appearanceOpen ? (
+                    <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="pt-0">
+                <div className="space-y-3">
+                  <Label>Theme</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setTheme("light")}
+                      className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
+                        theme === "light"
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-muted-foreground/30"
+                      }`}
+                    >
+                      <Sun className="h-5 w-5" />
+                      <div className="text-left">
+                        <p className="text-sm font-medium">Light</p>
+                        <p className="text-xs text-muted-foreground">Bright appearance</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setTheme("dark")}
+                      className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
+                        theme === "dark"
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-muted-foreground/30"
+                      }`}
+                    >
+                      <Moon className="h-5 w-5" />
+                      <div className="text-left">
+                        <p className="text-sm font-medium">Dark</p>
+                        <p className="text-xs text-muted-foreground">Easier on the eyes</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
               </CardContent>
             </CollapsibleContent>
           </Card>
