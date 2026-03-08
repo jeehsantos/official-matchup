@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Loader2, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Database } from "@/integrations/supabase/types";
+import { useTranslation } from "react-i18next";
 
 type Group = Database["public"]["Tables"]["groups"]["Row"];
 
@@ -33,6 +34,7 @@ const formatTime = (time: string): string => {
 export default function Groups() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation("groups");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -40,13 +42,11 @@ export default function Groups() {
     }
   }, [user, authLoading, navigate]);
 
-  // Fetch groups the user organizes or is a member of
   const { data: myGroups = [], isLoading: loading } = useQuery<GroupWithMemberCount[]>({
     queryKey: ["my-groups", user?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      // Fetch groups where user is organizer
       const { data: organizerGroups, error: orgError } = await supabase
         .from("groups")
         .select("*")
@@ -58,7 +58,6 @@ export default function Groups() {
         return [];
       }
 
-      // Fetch groups where user is a member
       const { data: memberships, error: memError } = await supabase
         .from("group_members")
         .select("group_id")
@@ -83,7 +82,6 @@ export default function Groups() {
         }
       }
 
-      // Combine and deduplicate
       const allGroupsMap = new Map<string, typeof organizerGroups[0]>();
       [...(organizerGroups || []), ...(memberGroups || [])].forEach(g => {
         allGroupsMap.set(g.id, g);
@@ -91,7 +89,6 @@ export default function Groups() {
       
       const allGroups = Array.from(allGroupsMap.values());
 
-      // Fetch member counts for all groups
       const groupsWithCounts: GroupWithMemberCount[] = await Promise.all(
         allGroups.map(async (group) => {
           const { count } = await supabase
@@ -101,7 +98,7 @@ export default function Groups() {
           
           return {
             ...group,
-            memberCount: (count || 0) + 1, // +1 for organizer
+            memberCount: (count || 0) + 1,
           };
         })
       );
@@ -109,7 +106,7 @@ export default function Groups() {
       return groupsWithCounts;
     },
     enabled: !!user,
-    staleTime: 1000 * 60 * 3, // 3 minutes
+    staleTime: 1000 * 60 * 3,
     refetchOnWindowFocus: true,
   });
 
@@ -126,18 +123,16 @@ export default function Groups() {
   return (
     <MobileLayout>
       <div className="px-4 py-4 space-y-4">
-        {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="font-display text-2xl font-bold">My Groups</h1>
+          <h1 className="font-display text-2xl font-bold">{t("title")}</h1>
           <Link to="/groups/create">
             <Button size="sm" className="btn-athletic">
               <Plus className="h-4 w-4 mr-1" />
-              New
+              {t("new")}
             </Button>
           </Link>
         </div>
 
-        {/* Groups list */}
         {loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -163,16 +158,10 @@ export default function Groups() {
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                 <Users className="h-8 w-8 text-primary" />
               </div>
-              <h3 className="font-display font-semibold text-lg mb-2">
-                No groups yet
-              </h3>
-              <p className="text-muted-foreground text-sm mb-4">
-                Book a court to create your first group, or join an existing group via invite link
-              </p>
+              <h3 className="font-display font-semibold text-lg mb-2">{t("noGroups")}</h3>
+              <p className="text-muted-foreground text-sm mb-4">{t("noGroupsDesc")}</p>
               <Link to="/courts">
-                <Button className="btn-athletic">
-                  Browse Courts
-                </Button>
+                <Button className="btn-athletic">{t("browseCourts")}</Button>
               </Link>
             </CardContent>
           </Card>

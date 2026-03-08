@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { useTranslation } from "react-i18next";
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();
@@ -14,15 +15,13 @@ export default function PaymentSuccess() {
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [countdown, setCountdown] = useState(5);
   const pollCount = useRef(0);
+  const { t } = useTranslation("payment");
 
   const urlSessionId = searchParams.get("session_id");
   const checkoutSessionId = searchParams.get("checkout_session_id");
-  const paymentType = searchParams.get("type");
 
-  // For deferred flow, sessionId comes from verify-payment response
   const [resolvedSessionId, setResolvedSessionId] = useState<string | null>(urlSessionId);
 
-  // Poll DB for payment confirmation (webhook is source of truth)
   useEffect(() => {
     if (!user || (!urlSessionId && !checkoutSessionId)) return;
 
@@ -42,7 +41,6 @@ export default function PaymentSuccess() {
 
         if (data?.success && (data?.status === "completed" || data?.status === "transferred")) {
           clearInterval(pollInterval);
-          // For deferred flow, webhook returns the created sessionId
           if (data.sessionId) {
             setResolvedSessionId(data.sessionId);
           }
@@ -63,7 +61,6 @@ export default function PaymentSuccess() {
     return () => clearInterval(pollInterval);
   }, [urlSessionId, checkoutSessionId, user]);
 
-  // Countdown + redirect on success
   useEffect(() => {
     if (status === "success") {
       const timer = setInterval(() => {
@@ -103,10 +100,8 @@ export default function PaymentSuccess() {
                   <Loader2 className="h-10 w-10 text-primary animate-spin" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold mb-2">Processing Payment…</h2>
-                  <p className="text-muted-foreground">
-                    Confirming your payment. This may take a few moments.
-                  </p>
+                  <h2 className="text-xl font-semibold mb-2">{t("processing")}</h2>
+                  <p className="text-muted-foreground">{t("processingDesc")}</p>
                 </div>
               </>
             )}
@@ -117,20 +112,12 @@ export default function PaymentSuccess() {
                   <CheckCircle2 className="h-10 w-10 text-success" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-success mb-2">
-                    Payment Successful!
-                  </h2>
-                  <p className="text-muted-foreground">
-                    Your payment has been confirmed and your booking is secure.
-                  </p>
+                  <h2 className="text-xl font-semibold text-success mb-2">{t("success")}</h2>
+                  <p className="text-muted-foreground">{t("successDesc")}</p>
                 </div>
                 <div className="pt-4 space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Redirecting in {countdown} seconds...
-                  </p>
-                  <Button onClick={handleContinue} className="w-full">
-                    Continue Now
-                  </Button>
+                  <p className="text-sm text-muted-foreground">{t("redirecting", { count: countdown })}</p>
+                  <Button onClick={handleContinue} className="w-full">{t("continueNow")}</Button>
                 </div>
               </>
             )}
@@ -141,20 +128,12 @@ export default function PaymentSuccess() {
                   <XCircle className="h-10 w-10 text-destructive" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-destructive mb-2">
-                    Payment Verification Failed
-                  </h2>
-                  <p className="text-muted-foreground">
-                    There was an issue verifying your payment. Please contact support if the issue persists.
-                  </p>
+                  <h2 className="text-xl font-semibold text-destructive mb-2">{t("failed")}</h2>
+                  <p className="text-muted-foreground">{t("failedDesc")}</p>
                 </div>
                 <div className="pt-4 space-y-3">
-                  <Button onClick={handleContinue} variant="outline" className="w-full">
-                    Back to Game
-                  </Button>
-                  <Button onClick={() => navigate("/home")} className="w-full">
-                    Go to Home
-                  </Button>
+                  <Button onClick={handleContinue} variant="outline" className="w-full">{t("backToGame")}</Button>
+                  <Button onClick={() => navigate("/home")} className="w-full">{t("goHome")}</Button>
                 </div>
               </>
             )}

@@ -9,6 +9,7 @@ import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
 import { Loader2, Users, Calendar, MapPin, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
+import { useTranslation } from "react-i18next";
 
 type Group = Database["public"]["Tables"]["groups"]["Row"];
 
@@ -16,6 +17,7 @@ export default function JoinGroup() {
   const { code } = useParams<{ code: string }>();
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation("discover");
   
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
@@ -26,7 +28,6 @@ export default function JoinGroup() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      // Store redirect path in localStorage so it persists through registration
       localStorage.setItem('redirectAfterAuth', `/join/${code}`);
       navigate('/auth');
       return;
@@ -44,7 +45,6 @@ export default function JoinGroup() {
     setError(null);
     
     try {
-      // Find the invitation
       const { data: invitation, error: inviteError } = await supabase
         .from("group_invitations")
         .select("*, groups(*)")
@@ -53,27 +53,23 @@ export default function JoinGroup() {
         .single();
 
       if (inviteError || !invitation) {
-        setError("This invitation link is invalid or has expired.");
+        setError(t("inviteInvalidOrExpired"));
         return;
       }
 
-      // Check if invitation has expired
       if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) {
-        setError("This invitation link has expired.");
+        setError(t("inviteExpired"));
         return;
       }
 
-      // Check if max uses reached
       if (invitation.max_uses && invitation.use_count >= invitation.max_uses) {
-        setError("This invitation link has reached its maximum uses.");
+        setError(t("inviteMaxUses"));
         return;
       }
 
-      // Set the group
       const groupData = invitation.groups as unknown as Group;
       setGroup(groupData);
 
-      // Check if already a member
       const { data: existingMember } = await supabase
         .from("group_members")
         .select("id")
@@ -86,7 +82,7 @@ export default function JoinGroup() {
       }
     } catch (err) {
       console.error("Error validating invite:", err);
-      setError("An error occurred while validating the invitation.");
+      setError(t("inviteInvalidOrExpired"));
     } finally {
       setLoading(false);
     }
@@ -97,7 +93,6 @@ export default function JoinGroup() {
     
     setJoining(true);
     try {
-      // Add user to group
       const { error: joinError } = await supabase
         .from("group_members")
         .insert({
@@ -108,7 +103,6 @@ export default function JoinGroup() {
 
       if (joinError) throw joinError;
 
-      // Increment use count
       const { data: invitation } = await supabase
         .from("group_invitations")
         .select("use_count")
@@ -123,7 +117,7 @@ export default function JoinGroup() {
       }
 
       setJoined(true);
-      toast.success("Successfully joined the group!");
+      toast.success(t("successfullyJoined") + " " + group.name + "!");
     } catch (err) {
       console.error("Error joining group:", err);
       toast.error("Failed to join the group. Please try again.");
@@ -162,10 +156,10 @@ export default function JoinGroup() {
           <Card className="border-destructive/50">
             <CardContent className="p-6 text-center">
               <XCircle className="h-16 w-16 mx-auto mb-4 text-destructive" />
-              <h2 className="text-xl font-semibold mb-2">Invitation Invalid</h2>
+              <h2 className="text-xl font-semibold mb-2">{t("invitationInvalid")}</h2>
               <p className="text-muted-foreground mb-6">{error}</p>
               <Button onClick={() => navigate("/groups")} className="w-full">
-                Go to My Groups
+                {t("viewGroup")}
               </Button>
             </CardContent>
           </Card>
@@ -173,12 +167,12 @@ export default function JoinGroup() {
           <Card className="border-primary/50 bg-primary/5">
             <CardContent className="p-6 text-center">
               <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-primary" />
-              <h2 className="text-xl font-semibold mb-2">Welcome to the Team!</h2>
+              <h2 className="text-xl font-semibold mb-2">{t("welcomeToTeam")}</h2>
               <p className="text-muted-foreground mb-6">
-                You've successfully joined <strong>{group?.name}</strong>
+                {t("successfullyJoined")} <strong>{group?.name}</strong>
               </p>
               <Button onClick={() => navigate(`/groups/${group?.id}`)} className="w-full">
-                View Group
+                {t("viewGroup")}
               </Button>
             </CardContent>
           </Card>
@@ -186,12 +180,12 @@ export default function JoinGroup() {
           <Card className="border-primary/50 bg-primary/5">
             <CardContent className="p-6 text-center">
               <Users className="h-16 w-16 mx-auto mb-4 text-primary" />
-              <h2 className="text-xl font-semibold mb-2">Already a Member</h2>
+              <h2 className="text-xl font-semibold mb-2">{t("alreadyMember")}</h2>
               <p className="text-muted-foreground mb-6">
-                You're already a member of <strong>{group?.name}</strong>
+                {t("alreadyMemberDesc")} <strong>{group?.name}</strong>
               </p>
               <Button onClick={() => navigate(`/groups/${group?.id}`)} className="w-full">
-                View Group
+                {t("viewGroup")}
               </Button>
             </CardContent>
           </Card>
@@ -202,13 +196,11 @@ export default function JoinGroup() {
                 <SportIcon sport={group.sport_type} className="h-8 w-8" />
               </div>
               <CardTitle className="text-xl">{group.name}</CardTitle>
-              <CardDescription>You've been invited to join this group</CardDescription>
+              <CardDescription>{t("invitedToJoin")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {group.description && (
-                <p className="text-sm text-muted-foreground text-center">
-                  {group.description}
-                </p>
+                <p className="text-sm text-muted-foreground text-center">{group.description}</p>
               )}
               
               <div className="rounded-lg bg-muted/50 p-4 space-y-3">
@@ -234,22 +226,11 @@ export default function JoinGroup() {
                 </div>
               </div>
 
-              <Button 
-                onClick={handleJoin} 
-                disabled={joining}
-                className="w-full"
-                size="lg"
-              >
+              <Button onClick={handleJoin} disabled={joining} className="w-full" size="lg">
                 {joining ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Joining...
-                  </>
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />{t("joining")}</>
                 ) : (
-                  <>
-                    <Users className="h-4 w-4 mr-2" />
-                    Join Group
-                  </>
+                  <><Users className="h-4 w-4 mr-2" />{t("joinInviteLink")}</>
                 )}
               </Button>
             </CardContent>

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Calendar, Search } from "lucide-react";
 import { isBefore, parseISO } from "date-fns";
 import { useMyGames, type GameData } from "@/hooks/useMyGames";
+import { useTranslation } from "react-i18next";
 
 const isSessionPast = (sessionDate: string, startTime: string): boolean => {
   return isBefore(parseISO(`${sessionDate}T${startTime}`), new Date());
@@ -19,6 +20,7 @@ export default function Games() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { data: allGames = [], isLoading: loading } = useMyGames(user?.id);
+  const { t } = useTranslation("games");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -39,7 +41,6 @@ export default function Games() {
       }
     });
 
-    // Featured (rescue) sessions within the current booking week come first
     const now = new Date();
     const weekStart = startOfWeek(now, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
@@ -47,11 +48,8 @@ export default function Games() {
     upcoming.sort((a, b) => {
       const aFeaturedThisWeek = a.state === "rescue" && a.date >= weekStart && a.date <= weekEnd;
       const bFeaturedThisWeek = b.state === "rescue" && b.date >= weekStart && b.date <= weekEnd;
-
       if (aFeaturedThisWeek && !bFeaturedThisWeek) return -1;
       if (!aFeaturedThisWeek && bFeaturedThisWeek) return 1;
-
-      // Within same priority group, sort by date then time
       const dateDiff = a.date.getTime() - b.date.getTime();
       if (dateDiff !== 0) return dateDiff;
       return a.time.localeCompare(b.time);
@@ -76,17 +74,15 @@ export default function Games() {
       <div className="px-4 py-4 space-y-4 max-w-6xl mx-auto lg:px-6 lg:py-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-display text-2xl lg:text-3xl font-bold">My Games</h1>
-            <p className="text-muted-foreground text-sm">
-              Track your upcoming and past games
-            </p>
+            <h1 className="font-display text-2xl lg:text-3xl font-bold">{t("title")}</h1>
+            <p className="text-muted-foreground text-sm">{t("subtitle")}</p>
           </div>
         </div>
 
         <Tabs defaultValue="upcoming">
           <TabsList className="grid w-full grid-cols-2 max-w-md">
-            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-            <TabsTrigger value="past">Past</TabsTrigger>
+            <TabsTrigger value="upcoming">{t("upcoming")}</TabsTrigger>
+            <TabsTrigger value="past">{t("past")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="upcoming" className="mt-4">
@@ -106,16 +102,12 @@ export default function Games() {
                   <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                     <Calendar className="h-8 w-8 text-primary" />
                   </div>
-                  <h3 className="font-display font-semibold text-lg mb-2">
-                    No upcoming games
-                  </h3>
-                  <p className="text-muted-foreground text-sm mb-4">
-                    Book a court to start playing with your group
-                  </p>
+                  <h3 className="font-display font-semibold text-lg mb-2">{t("noUpcoming")}</h3>
+                  <p className="text-muted-foreground text-sm mb-4">{t("noUpcomingDesc")}</p>
                   <Link to="/courts">
                     <Button className="btn-athletic gap-2">
                       <Search className="h-4 w-4" />
-                      Browse Courts
+                      {t("browseCourts")}
                     </Button>
                   </Link>
                 </CardContent>
@@ -136,7 +128,7 @@ export default function Games() {
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                <p>No past games yet</p>
+                <p>{t("noPast")}</p>
               </div>
             )}
           </TabsContent>
