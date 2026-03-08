@@ -448,10 +448,21 @@ export default function Auth() {
                         Forgot password?
                       </button>
                     </div>
+                    {lockoutUntil && new Date() < lockoutUntil && (
+                      <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                        <ShieldAlert className="h-4 w-4 shrink-0" />
+                        <span>Account locked. Try again in {getLockoutTimeRemaining()}</span>
+                      </div>
+                    )}
+                    {remainingAttempts !== null && remainingAttempts > 0 && remainingAttempts <= 2 && !lockoutUntil && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        ⚠️ {remainingAttempts} login attempt{remainingAttempts === 1 ? '' : 's'} remaining before temporary lockout
+                      </p>
+                    )}
                     <Button
                       type="submit"
                       className="w-full btn-athletic"
-                      disabled={isSubmitting || isGoogleLoading}
+                      disabled={isSubmitting || isGoogleLoading || (lockoutUntil !== null && new Date() < lockoutUntil)}
                     >
                       {isSubmitting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
