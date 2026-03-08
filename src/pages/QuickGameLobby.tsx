@@ -587,26 +587,15 @@ export default function QuickGameLobby() {
   };
 
   const confirmKickPlayer = async () => {
-    if (!id || !kickTarget) return;
+    if (!id || !kickTarget || !challenge) return;
     setIsKicking(true);
     try {
-      const { data, error } = await supabase.functions.invoke("kick-challenge-player", {
-        body: {
-          challengeId: id,
-          targetUserId: kickTarget.id ? undefined : undefined,
-          // We need the user_id, not the player record id
-          // Find user_id from challenge players
-        },
-      });
-
-      // Get user_id from the challenge players data
-      const targetPlayer = challenge?.quick_challenge_players?.find(
+      // Find the user_id from the challenge players
+      const targetPlayer = (challenge as any).quick_challenge_players?.find(
         (p: any) => p.id === kickTarget.id
       );
 
-      if (!targetPlayer) {
-        throw new Error("Player not found");
-      }
+      if (!targetPlayer) throw new Error("Player not found");
 
       const { data: kickData, error: kickError } = await supabase.functions.invoke("kick-challenge-player", {
         body: {
