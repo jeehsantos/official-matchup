@@ -65,7 +65,7 @@ export function MobileLayout({
             <img
               src="/sportarena-logo.png"
               alt="Sport Arena logo"
-              className="h-10 w-auto mix-blend-screen"
+              className="h-10 w-auto dark:brightness-0 dark:invert"
             />
           </Link>
         </div>

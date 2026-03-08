@@ -23,13 +23,13 @@ export function GuestNavbar({ className }: GuestNavbarProps) {
   ];
 
   return (
-    <header className={cn("fixed top-0 left-0 right-0 z-50 border-b border-slate-200/70 bg-white/75 backdrop-blur-md", className)}>
+    <header className={cn("fixed top-0 left-0 right-0 z-50 border-b border-border/70 bg-background/75 backdrop-blur-md", className)}>
       <div className="mx-auto flex h-20 w-full items-center px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-20">
         <Link to="/" className="flex items-center lg:flex-1" aria-label="Sport Arena home">
-          <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-36 w-auto object-contain sm:h-36" />
+          <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-36 w-auto object-contain sm:h-36 dark:brightness-0 dark:invert" />
         </Link>
 
-        <nav className="hidden items-center justify-center gap-8 text-sm font-medium text-slate-600 md:flex lg:flex-1">
+        <nav className="hidden items-center justify-center gap-8 text-sm font-medium text-muted-foreground md:flex lg:flex-1">
           {navLinks.map((link) => {
             const isActive =
               link.href === "/"
@@ -41,8 +41,8 @@ export function GuestNavbar({ className }: GuestNavbarProps) {
                 key={link.href}
                 to={link.href}
                 className={cn(
-                  "transition-colors hover:text-sky-500",
-                  isActive && "text-blue-600"
+                  "transition-colors hover:text-primary",
+                  isActive && "text-primary"
                 )}
               >
                 {link.label}
@@ -53,12 +53,12 @@ export function GuestNavbar({ className }: GuestNavbarProps) {
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3 lg:flex-1 lg:justify-end">
           <Link to="/auth" className="hidden sm:block">
-            <Button variant="ghost" className="font-semibold text-slate-700">
+            <Button variant="ghost" className="font-semibold text-foreground">
               {t("nav.signIn")}
             </Button>
           </Link>
           <Link to="/auth?tab=signup" className="hidden sm:block">
-            <Button className="rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition-colors hover:bg-blue-700">
+            <Button className="rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-colors hover:bg-blue-700">
               {t("nav.getStarted")}
             </Button>
           </Link>
@@ -76,16 +76,16 @@ export function GuestNavbar({ className }: GuestNavbarProps) {
                     key={link.href}
                     to={link.href}
                     className={cn(
-                      "text-base font-medium text-slate-700 transition-colors hover:text-sky-500",
-                      location.pathname.startsWith(link.href) && link.href !== "/" && "text-blue-600",
-                      location.pathname === "/" && link.href === "/" && "text-blue-600"
+                      "text-base font-medium text-foreground transition-colors hover:text-primary",
+                      location.pathname.startsWith(link.href) && link.href !== "/" && "text-primary",
+                      location.pathname === "/" && link.href === "/" && "text-primary"
                     )}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     {link.label}
                   </Link>
                 ))}
-                <hr className="my-1 border-slate-200" />
+                <hr className="my-1 border-border" />
                 <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
                   <Button variant="outline" className="w-full">
                     {t("nav.signIn")}
