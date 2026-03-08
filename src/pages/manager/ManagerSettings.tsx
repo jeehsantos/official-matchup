@@ -360,7 +360,6 @@ export default function ManagerSettings() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/", { replace: true });
   };
 
   if (loading) {

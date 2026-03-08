@@ -82,7 +82,6 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/", { replace: true });
   };
 
   return (

@@ -1,34 +1,61 @@
 
+Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-## Sign-Out Flow Fix
+What I found (already verified):
+1) Data inconsistency exists now:
+   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
+   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
+2) `ManagerCourtFormNew` root causes:
+   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
+   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
+   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
+3) Backend side effect confirmed:
+   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
 
-### Problem
+Implementation plan (execute in this order):
+1. Database integrity hardening + backfill (migration)
+   - Backfill: set `is_multi_court=true` for any court that already has children.
+   - Add DB validation trigger(s) on `courts` to enforce:
+     - child cannot reference itself
+     - child parent must be in same venue
+     - parent cannot be set `is_multi_court=false` while children exist
+     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
+   - This guarantees the bug cannot recur from any client path.
 
-The sign-out flow causes a visible redirect chain: current page → `/auth` → `/` (landing). This happens because:
+2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
+   - Remove direct `window.history.replaceState` usage.
+   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
+   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
+   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
 
-1. `signOut()` in `auth-context.tsx` sets `user` to `null` immediately, then calls `window.location.href = '/'`
-2. Before the full page reload takes effect, React re-renders — any `ProtectedRoute` wrapper sees `user === null` and calls `navigate("/auth")`
-3. Meanwhile, callers (MobileLayout, Profile, ManagerLayout, ManagerSettings) also call `navigate("/", { replace: true })` after `await signOut()`, adding another competing navigation
-4. Finally `window.location.href = '/'` fires, doing the full reload to landing
+3. Multi-court UI behavior safeguards
+   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
+   - Disable/harden turning off multi-court when children exist (with clear message).
+   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
 
-### Solution
+4. Availability resilience (backend function)
+   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
+   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
 
-**Remove all `navigate()` calls after `signOut()`** in every caller. The `window.location.href = '/'` in `auth-context.tsx` already handles the redirect with a clean full-page reload, which is the correct approach (clears all in-memory state).
+5. Verification I will perform (not asking you to test manually)
+   - DB checks:
+     - verify parent `57e11168...` becomes `is_multi_court=true`
+     - verify child links remain unchanged
+     - verify no rows exist with `children > 0 AND is_multi_court=false`
+   - Functional checks:
+     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
+   - UI checks:
+     - exercise add-sub-court flow and confirm:
+       - main court remains main
+       - child appears as child tab
+       - subsequent saves update correct court record
+       - no panel collapse/desync
 
-### Files to Edit
-
-1. **`src/components/layout/MobileLayout.tsx`** — Remove `navigate("/", { replace: true })` from `handleSignOut`
-2. **`src/pages/Profile.tsx`** — Same
-3. **`src/pages/manager/ManagerSettings.tsx`** — Same
-4. **`src/components/layout/ManagerLayout.tsx`** — Same
-5. **`src/components/layout/AdminLayout.tsx`** — Same (already doesn't navigate, but verify)
-
-Each handler becomes simply:
-```typescript
-const handleSignOut = async () => {
-  await signOut();
-};
-```
-
-No database changes. No new files. Single-concept fix across 4-5 files.
-
+Technical details:
+- Files to update:
+  - `supabase/migrations/<new>.sql`
+  - `src/pages/manager/ManagerCourtFormNew.tsx`
+  - `supabase/functions/get-availability/index.ts`
+- No money/payment logic touched.
+- No auth model changes.
+- Existing routing and form schema preserved; this is a consistency + state synchronization fix.

@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
 import { GuestBottomNav } from "./GuestBottomNav";
 import { Header } from "./Header";
@@ -43,7 +43,6 @@ export function MobileLayout({
   rightAction,
 }: MobileLayoutProps) {
   const location = useLocation();
-  const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
@@ -52,7 +51,6 @@ export function MobileLayout({
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/", { replace: true });
   };
 
   const isLoggedIn = !!user;

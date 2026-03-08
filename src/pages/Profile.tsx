@@ -234,7 +234,6 @@ export default function Profile() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/", { replace: true });
   };
 
   // Password validation
