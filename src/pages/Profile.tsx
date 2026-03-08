@@ -193,7 +193,7 @@ export default function Profile() {
     fetchStats();
   }, [user]);
 
-
+  const handleSave = async () => {
     if (!user) return;
 
     setSaving(true);
