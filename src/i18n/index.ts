@@ -13,6 +13,7 @@ import enProfile from "./locales/en/profile.json";
 import enPayment from "./locales/en/payment.json";
 import enDiscover from "./locales/en/discover.json";
 import enCourts from "./locales/en/courts.json";
+import enManager from "./locales/en/manager.json";
 
 import ptCommon from "./locales/pt/common.json";
 import ptLanding from "./locales/pt/landing.json";
@@ -25,8 +26,9 @@ import ptProfile from "./locales/pt/profile.json";
 import ptPayment from "./locales/pt/payment.json";
 import ptDiscover from "./locales/pt/discover.json";
 import ptCourts from "./locales/pt/courts.json";
+import ptManager from "./locales/pt/manager.json";
 
-const ns = ["common", "landing", "auth", "about", "contact", "games", "groups", "profile", "payment", "discover", "courts"] as const;
+const ns = ["common", "landing", "auth", "about", "contact", "games", "groups", "profile", "payment", "discover", "courts", "manager"] as const;
 
 i18n
   .use(LanguageDetector)
@@ -45,6 +47,7 @@ i18n
         payment: enPayment,
         discover: enDiscover,
         courts: enCourts,
+        manager: enManager,
       },
       pt: {
         common: ptCommon,
@@ -58,6 +61,7 @@ i18n
         payment: ptPayment,
         discover: ptDiscover,
         courts: ptCourts,
+        manager: ptManager,
       },
     },
     fallbackLng: "en",

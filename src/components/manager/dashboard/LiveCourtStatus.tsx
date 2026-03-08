@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, CheckCircle2, Timer } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
+import { useTranslation } from "react-i18next";
 import type { LiveCourtInfo } from "@/hooks/useManagerDashboard";
 
 interface LiveCourtStatusProps {
@@ -10,27 +11,24 @@ interface LiveCourtStatusProps {
   loading: boolean;
 }
 
-function getStatusConfig(status: LiveCourtInfo["status"]) {
+function getStatusConfig(status: LiveCourtInfo["status"], t: (key: string) => string) {
   switch (status) {
     case "in_use":
       return {
-        label: "IN USE",
-        variant: "default" as const,
+        label: t("dashboard.inUse"),
         className: "bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-800",
         cardBorder: "border-l-4 border-l-blue-500",
       };
     case "upcoming":
       return {
-        label: "UPCOMING",
-        variant: "outline" as const,
+        label: t("dashboard.upcoming"),
         className: "bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-800",
         cardBorder: "border-l-4 border-l-amber-500",
       };
     case "available":
     default:
       return {
-        label: "AVAILABLE",
-        variant: "outline" as const,
+        label: t("dashboard.available"),
         className: "bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800",
         cardBorder: "border-l-4 border-l-emerald-500",
       };
@@ -43,12 +41,14 @@ function getSportLabel(sports: string[] | null): string {
 }
 
 export function LiveCourtStatus({ courts, loading }: LiveCourtStatusProps) {
+  const { t } = useTranslation("manager");
+
   if (loading) {
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          <h2 className="text-lg font-semibold">Live Court Status</h2>
+          <h2 className="text-lg font-semibold">{t("dashboard.liveCourtStatus")}</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {[1, 2, 3, 4].map((i) => (
@@ -64,11 +64,11 @@ export function LiveCourtStatus({ courts, loading }: LiveCourtStatusProps) {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          <h2 className="text-lg font-semibold">Live Court Status</h2>
+          <h2 className="text-lg font-semibold">{t("dashboard.liveCourtStatus")}</h2>
         </div>
         <Card>
           <CardContent className="p-6 text-center text-muted-foreground">
-            No courts found. Add a venue to see live status.
+            {t("dashboard.noCourtsFound")}
           </CardContent>
         </Card>
       </div>
@@ -79,11 +79,11 @@ export function LiveCourtStatus({ courts, loading }: LiveCourtStatusProps) {
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-        <h2 className="text-lg font-semibold">Live Court Status</h2>
+        <h2 className="text-lg font-semibold">{t("dashboard.liveCourtStatus")}</h2>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {courts.map((item) => {
-          const config = getStatusConfig(item.status);
+          const config = getStatusConfig(item.status, t);
           return (
             <Card key={item.court.id} className={`${config.cardBorder} overflow-hidden`}>
               <CardContent className="p-4">
@@ -104,7 +104,7 @@ export function LiveCourtStatus({ courts, loading }: LiveCourtStatusProps) {
                       <span className="font-medium">{item.currentBooking.bookerName}</span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {item.currentBooking.remainingMinutes}m remaining
+                      {item.currentBooking.remainingMinutes}m {t("dashboard.remaining")}
                     </p>
                     <Progress value={item.currentBooking.progressPercent} className="h-1.5" />
                   </div>
@@ -116,7 +116,7 @@ export function LiveCourtStatus({ courts, loading }: LiveCourtStatusProps) {
                     <div>
                       <span className="font-medium">{item.nextBooking.bookerName}</span>
                       <p className="text-xs text-muted-foreground">
-                        Starts in {item.nextBooking.startsInMinutes}m
+                        {t("dashboard.startsIn")} {item.nextBooking.startsInMinutes}m
                       </p>
                     </div>
                   </div>
@@ -125,7 +125,7 @@ export function LiveCourtStatus({ courts, loading }: LiveCourtStatusProps) {
                 {item.status === "available" && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                    <span>No Active Booking</span>
+                    <span>{t("dashboard.noActiveBooking")}</span>
                   </div>
                 )}
               </CardContent>

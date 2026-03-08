@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MapPin, Clock, CalendarDays, Phone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
+import { useTranslation } from "react-i18next";
 import type { UpcomingBookingInfo } from "@/hooks/useManagerDashboard";
 import { RescheduleBookingDialog } from "@/components/manager/RescheduleBookingDialog";
 
@@ -15,28 +16,29 @@ interface UpcomingBookingsProps {
   onRefresh?: () => void;
 }
 
-function getPaymentBadge(status: string) {
+function getPaymentBadge(status: string, t: (key: string) => string) {
   switch (status) {
     case "completed":
-      return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800 text-[10px]">CONFIRMED</Badge>;
+      return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800 text-[10px]">{t("dashboard.confirmed")}</Badge>;
     case "pending":
-      return <Badge className="bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-800 text-[10px]">PENDING</Badge>;
+      return <Badge className="bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-800 text-[10px]">{t("dashboard.pending")}</Badge>;
     case "failed":
     case "cancelled":
-      return <Badge className="bg-destructive/10 text-destructive border-destructive/20 text-[10px]">CANCELLED</Badge>;
+      return <Badge className="bg-destructive/10 text-destructive border-destructive/20 text-[10px]">{t("dashboard.cancelled")}</Badge>;
     default:
       return <Badge variant="outline" className="text-[10px]">{status.toUpperCase()}</Badge>;
   }
 }
 
 export function UpcomingBookings({ bookings, loading, onRefresh }: UpcomingBookingsProps) {
+  const { t } = useTranslation("manager");
   const [rescheduleBooking, setRescheduleBooking] = useState<UpcomingBookingInfo | null>(null);
 
   if (loading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Upcoming Bookings</CardTitle>
+          <CardTitle className="text-lg">{t("dashboard.upcomingBookings")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {[1, 2, 3].map((i) => (
@@ -51,12 +53,12 @@ export function UpcomingBookings({ bookings, loading, onRefresh }: UpcomingBooki
     <>
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Upcoming Bookings</CardTitle>
+          <CardTitle className="text-lg">{t("dashboard.upcomingBookings")}</CardTitle>
         </CardHeader>
         <CardContent>
           {bookings.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              No upcoming bookings.
+              {t("dashboard.noUpcomingBookings")}
             </div>
           ) : (
             <div className="space-y-3 max-h-[400px] overflow-y-auto scrollbar-hide">
@@ -94,7 +96,7 @@ export function UpcomingBookings({ bookings, loading, onRefresh }: UpcomingBooki
                           <p className="text-[10px] text-muted-foreground">{booking.bookingRef}</p>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {getPaymentBadge(booking.paymentStatus)}
+                          {getPaymentBadge(booking.paymentStatus, t)}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -121,7 +123,7 @@ export function UpcomingBookings({ bookings, loading, onRefresh }: UpcomingBooki
 
                       <p className="text-[10px] text-muted-foreground mt-1">
                         {booking.date === format(new Date(), "yyyy-MM-dd")
-                          ? <span className="font-semibold text-primary">Today</span>
+                          ? <span className="font-semibold text-primary">{t("dashboard.todayLabel")}</span>
                           : format(parseISO(booking.date), "EEE, MMM d")}
                       </p>
                     </div>

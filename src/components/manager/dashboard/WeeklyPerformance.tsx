@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useTranslation } from "react-i18next";
 import type { DailyPerformance } from "@/hooks/useManagerDashboard";
 
 interface WeeklyPerformanceProps {
@@ -10,11 +11,13 @@ interface WeeklyPerformanceProps {
 }
 
 export function WeeklyPerformance({ data, loading, periodLabel = "Weekly" }: WeeklyPerformanceProps) {
+  const { t } = useTranslation("manager");
+
   if (loading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">{periodLabel} Performance</CardTitle>
+          <CardTitle className="text-lg">{periodLabel} {t("dashboard.performance")}</CardTitle>
         </CardHeader>
         <CardContent>
           <Skeleton className="h-64 w-full rounded-lg" />
@@ -29,15 +32,15 @@ export function WeeklyPerformance({ data, loading, periodLabel = "Weekly" }: Wee
     <Card className="flex flex-col">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">{periodLabel} Performance</CardTitle>
+          <CardTitle className="text-lg">{periodLabel} {t("dashboard.performance")}</CardTitle>
           <div className="flex items-center gap-4 text-xs">
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-sm bg-primary" />
-              <span className="text-muted-foreground">Revenue</span>
+              <span className="text-muted-foreground">{t("dashboard.revenueLabel")}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-sm bg-emerald-400" />
-              <span className="text-muted-foreground">Bookings</span>
+              <span className="text-muted-foreground">{t("dashboard.bookingsLabel")}</span>
             </div>
           </div>
         </div>
@@ -45,7 +48,7 @@ export function WeeklyPerformance({ data, loading, periodLabel = "Weekly" }: Wee
       <CardContent className="flex-1 min-h-0">
         {!hasData ? (
           <div className="h-full min-h-[13rem] flex items-center justify-center text-sm text-muted-foreground">
-            No performance data for this period yet.
+            {t("dashboard.noPerformanceData")}
           </div>
         ) : (
           <div className="w-full aspect-[16/9] min-h-[13rem] max-h-[20rem]">
@@ -64,7 +67,7 @@ export function WeeklyPerformance({ data, loading, periodLabel = "Weekly" }: Wee
                   }}
                   formatter={(value: number, name: string) => [
                     name === "revenue" ? `$${value.toFixed(2)}` : value,
-                    name === "revenue" ? "Revenue" : "Bookings",
+                    name === "revenue" ? t("dashboard.revenueLabel") : t("dashboard.bookingsLabel"),
                   ]}
                 />
                 <Bar yAxisId="left" dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={40} />

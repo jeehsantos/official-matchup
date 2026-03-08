@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Calendar, DollarSign, TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTranslation } from "react-i18next";
 import type { DashboardStats } from "@/hooks/useManagerDashboard";
 
 interface StatsCardsProps {
@@ -10,23 +11,25 @@ interface StatsCardsProps {
 }
 
 export function StatsCards({ stats, loading, periodLabel }: StatsCardsProps) {
+  const { t } = useTranslation("manager");
+
   const cards = [
     {
-      label: `${periodLabel} Bookings`,
+      label: `${periodLabel} ${t("dashboard.bookings")}`,
       value: stats.totalBookings.toLocaleString(),
       icon: Calendar,
       iconBg: "bg-primary/10",
       iconColor: "text-primary",
     },
     {
-      label: `Revenue (${periodLabel})`,
+      label: `${t("dashboard.revenue")} (${periodLabel})`,
       value: `$${stats.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: DollarSign,
       iconBg: "bg-accent/20",
       iconColor: "text-accent-foreground",
     },
     {
-      label: "Utilization Rate",
+      label: t("dashboard.utilizationRate"),
       value: `${stats.utilizationRate}%`,
       icon: TrendingUp,
       iconBg: "bg-secondary/50",

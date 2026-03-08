@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useState, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { useUserProfile } from "@/hooks/useUserProfile";
-
+import { useTranslation } from "react-i18next";
 
 import {
   LayoutDashboard,
@@ -23,29 +23,8 @@ interface ManagerLayoutProps {
   children: ReactNode;
 }
 
-const navItems = [
-{ icon: LayoutDashboard, label: "Dashboard", path: "/manager" },
-{ icon: Building2, label: "Venues", path: "/manager/courts" },
-{ icon: Calendar, label: "Availability", path: "/manager/availability" },
-{ icon: Package, label: "Equipment", path: "/manager/equipment" },
-{ icon: CreditCard, label: "Bookings", path: "/manager/bookings" },
-{ icon: Settings, label: "Settings", path: "/manager/settings" }];
-
-
-interface MobileNavItem {
-  icon: React.ComponentType<{className?: string;}>;
-  label: string;
-  path: string;
-}
-
-const mobileNavItems: MobileNavItem[] = [
-{ icon: LayoutDashboard, label: "Dashboard", path: "/manager" },
-{ icon: Building2, label: "Venues", path: "/manager/courts" },
-{ icon: CreditCard, label: "Bookings", path: "/manager/bookings" },
-{ icon: Settings, label: "Settings", path: "/manager/settings" }];
-
-
 export function ManagerLayout({ children }: ManagerLayoutProps) {
+  const { t } = useTranslation("manager");
   const location = useLocation();
   const navigate = useNavigate();
   const { user, userRole, signOut, isLoading } = useAuth();
@@ -55,19 +34,34 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
 
   const isStaff = userRole === "venue_staff";
 
+  const navItems = useMemo(() => [
+    { icon: LayoutDashboard, label: t("nav.dashboard"), path: "/manager" },
+    { icon: Building2, label: t("nav.venues"), path: "/manager/courts" },
+    { icon: Calendar, label: t("nav.availability"), path: "/manager/availability" },
+    { icon: Package, label: t("nav.equipment"), path: "/manager/equipment" },
+    { icon: CreditCard, label: t("nav.bookings"), path: "/manager/bookings" },
+    { icon: Settings, label: t("nav.settings"), path: "/manager/settings" },
+  ], [t]);
+
+  const mobileNavItems = useMemo(() => [
+    { icon: LayoutDashboard, label: t("nav.dashboard"), path: "/manager" },
+    { icon: Building2, label: t("nav.venues"), path: "/manager/courts" },
+    { icon: CreditCard, label: t("nav.bookings"), path: "/manager/bookings" },
+    { icon: Settings, label: t("nav.settings"), path: "/manager/settings" },
+  ], [t]);
+
   // Filter nav items for staff
   const staffAllowedPaths = ["/manager/availability", "/manager/equipment", "/manager/bookings", "/manager/settings"];
   const filteredNavItems = useMemo(() =>
     isStaff ? navItems.filter(item => staffAllowedPaths.includes(item.path)) : navItems,
-    [isStaff]
+    [isStaff, navItems]
   );
   const filteredMobileNavItems = useMemo(() =>
     isStaff ? mobileNavItems.filter(item => staffAllowedPaths.includes(item.path)) : mobileNavItems,
-    [isStaff]
+    [isStaff, mobileNavItems]
   );
 
   useEffect(() => {
-    // Only redirect after loading is complete
     if (!isLoading) {
       setHasCheckedAuth(true);
 
@@ -76,7 +70,6 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
       } else if (userRole && userRole !== "court_manager" && userRole !== "venue_staff") {
         navigate("/", { replace: true });
       } else if (isStaff) {
-        // Redirect staff away from forbidden pages
         const currentPath = location.pathname;
         const isAllowed = staffAllowedPaths.some(p => currentPath === p || currentPath.startsWith(p + "/"));
         if (!isAllowed) {
@@ -86,16 +79,13 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
     }
   }, [user, userRole, isLoading, navigate, location.pathname]);
 
-  // Show loading while checking auth
   if (isLoading || !hasCheckedAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>);
-
   }
 
-  // Don't render if not authenticated or not a court manager/staff
   if (!user || userRole && userRole !== "court_manager" && userRole !== "venue_staff") {
     return null;
   }
@@ -114,14 +104,12 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
               src="/sportarena-logo.png"
               alt="Sport Arena logo"
               className="h-14 w-auto max-w-[180px] object-contain" />
-
           </Link>
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setSidebarOpen(!sidebarOpen)}>
-
               {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
           </div>
@@ -133,7 +121,6 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
       <div
         className="lg:hidden fixed inset-0 bg-black/50 z-40"
         onClick={() => setSidebarOpen(false)} />
-
       }
 
       {/* Sidebar */}
@@ -149,12 +136,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
                 src="/sportarena-logo.png"
                 alt="Sport Arena logo"
                 className="h-20 w-auto max-w-[200px] object-contain" />
-
-              <div>
-                
-
-                
-              </div>
+              <div></div>
             </Link>
           </div>
 
@@ -174,11 +156,9 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
                     "bg-primary text-primary-foreground" :
                     "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}>
-
                   <Icon className="h-5 w-5" />
                   <span className="font-medium">{label}</span>
                 </Link>);
-
             })}
           </nav>
 
@@ -192,7 +172,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
               className="w-full justify-start gap-3 text-muted-foreground"
               onClick={handleSignOut}>
               <LogOut className="h-5 w-5" />
-              Sign Out
+              {t("nav.signOut")}
             </Button>
           </div>
         </div>
@@ -220,27 +200,22 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
                   "text-primary" :
                   "text-muted-foreground hover:text-foreground"
                 )}>
-
                 <span
                   className={cn(
                     "absolute top-0 h-1 w-10 rounded-full bg-primary transition-opacity duration-200",
                     isActive ? "opacity-100" : "opacity-0"
                   )} />
-
                 <span
                   className={cn(
                     "flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200",
                     isActive && "bg-primary/10"
                   )}>
-
                   <Icon className={cn("h-5 w-5", isActive && "stroke-[2.5]")} />
                 </span>
                 <span className="text-[10px] font-medium">{label}</span>
               </Link>);
-
           })}
         </div>
       </nav>
     </div>);
-
 }

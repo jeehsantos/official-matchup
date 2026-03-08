@@ -12,20 +12,22 @@ import { StatsCards } from "@/components/manager/dashboard/StatsCards";
 import { LiveCourtStatus } from "@/components/manager/dashboard/LiveCourtStatus";
 import { WeeklyPerformance } from "@/components/manager/dashboard/WeeklyPerformance";
 import { UpcomingBookings } from "@/components/manager/dashboard/UpcomingBookings";
-
-const periodLabels: Record<DashboardPeriod, string> = {
-  daily: "Today",
-  weekly: "This Week",
-  monthly: "This Month"
-};
+import { useTranslation } from "react-i18next";
 
 export default function ManagerDashboard() {
+  const { t } = useTranslation("manager");
   const { user } = useAuth();
   const { profile } = useUserProfile();
   const rawFirstName = profile?.full_name?.split(" ")[0] || "";
   const firstName = rawFirstName.charAt(0).toUpperCase() + rawFirstName.slice(1).toLowerCase();
   const [period, setPeriod] = useState<DashboardPeriod>("monthly");
   const { stats, liveCourts, weeklyPerformance, upcomingBookings, loading, refreshAll } = useManagerDashboard(period);
+
+  const periodLabels: Record<DashboardPeriod, string> = {
+    daily: t("dashboard.today"),
+    weekly: t("dashboard.thisWeek"),
+    monthly: t("dashboard.thisMonth"),
+  };
 
   const today = format(new Date(), "EEEE, MMMM d");
 
@@ -36,10 +38,10 @@ export default function ManagerDashboard() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-xl sm:text-2xl font-bold">
-              Welcome back{firstName ? `, ${firstName}` : ""}! 👋
+              {t("dashboard.welcomeBack")}{firstName ? `, ${firstName}` : ""}! 👋
             </h1>
             <p className="text-sm text-muted-foreground">
-              Here's an overview of your venue's performance.
+              {t("dashboard.overviewSubtitle")}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -52,9 +54,9 @@ export default function ManagerDashboard() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="daily">Today</SelectItem>
-                <SelectItem value="weekly">This Week</SelectItem>
-                <SelectItem value="monthly">This Month</SelectItem>
+                <SelectItem value="daily">{t("dashboard.today")}</SelectItem>
+                <SelectItem value="weekly">{t("dashboard.thisWeek")}</SelectItem>
+                <SelectItem value="monthly">{t("dashboard.thisMonth")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -71,17 +73,6 @@ export default function ManagerDashboard() {
           <WeeklyPerformance data={weeklyPerformance} loading={loading} periodLabel={periodLabels[period]} />
           <UpcomingBookings bookings={upcomingBookings} loading={loading} onRefresh={refreshAll} />
         </div>
-
-        {/* Quick action FAB for mobile */}
-        
-
-
-
-
-
-
-        
       </div>
     </ManagerLayout>);
-
 }
