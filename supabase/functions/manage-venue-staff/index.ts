@@ -83,7 +83,9 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Create auth user with email confirmed
+      // Try to create auth user; if already exists, look them up
+      let userId: string;
+
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
@@ -92,17 +94,54 @@ Deno.serve(async (req) => {
       });
 
       if (createError) {
-        // Check for duplicate email
         if (createError.message?.includes("already been registered") || createError.message?.includes("already exists")) {
-          return new Response(
-            JSON.stringify({ error: "A user with this email already exists" }),
-            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        throw createError;
-      }
+          // User exists — look up by email and reuse
+          const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+          if (listError) throw listError;
 
-      const userId = newUser.user.id;
+          const existingUser = listData.users.find(
+            (u: any) => u.email?.toLowerCase() === email.toLowerCase()
+          );
+          if (!existingUser) {
+            return new Response(
+              JSON.stringify({ error: "Could not find existing user by email" }),
+              { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          userId = existingUser.id;
+
+          // Ensure they have venue_staff role
+          const { data: existingRole } = await supabaseAdmin
+            .from("user_roles")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("role", "venue_staff")
+            .maybeSingle();
+
+          if (!existingRole) {
+            await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: "venue_staff" });
+          }
+
+          // Check not already staff at this venue
+          const { data: existingStaff } = await supabaseAdmin
+            .from("venue_staff")
+            .select("id")
+            .eq("venue_id", venue_id)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (existingStaff) {
+            return new Response(
+              JSON.stringify({ error: "This user is already staff at this venue" }),
+              { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        } else {
+          throw createError;
+        }
+      } else {
+        userId = newUser.user.id;
+      }
 
       // Note: handle_new_user trigger automatically creates profile and user_roles
       // based on user_metadata, so we don't need to insert those manually.
