@@ -52,10 +52,10 @@ export default function Landing() {
       <GuestNavbar />
 
       <main>
-        <section className="overflow-hidden bg-gradient-to-br from-blue-50 to-sky-100 dark:from-background dark:to-muted px-6 pb-12 pt-28 lg:pb-16 lg:pt-32 xl:pb-20 xl:pt-36">
-          <div className="mx-auto grid max-w-7xl items-center gap-8 lg:grid-cols-2 lg:gap-10 xl:gap-12">
+        <section className="min-h-[calc(100dvh-72px)] flex items-center overflow-hidden bg-gradient-to-br from-blue-50 to-sky-100 dark:from-background dark:to-muted px-6 py-8 lg:py-12">
+          <div className="mx-auto grid max-w-7xl items-center gap-8 lg:grid-cols-2 lg:gap-10 xl:gap-12 w-full">
             <div>
-              <h1 className="mb-6 text-5xl font-extrabold leading-tight md:text-6xl">
+              <h1 className="mb-4 text-4xl font-extrabold leading-tight sm:mb-6 sm:text-5xl lg:text-6xl">
                 {t("hero.title1")} <br />
                 <span className="text-primary">{t("hero.title2")}</span>
               </h1>
