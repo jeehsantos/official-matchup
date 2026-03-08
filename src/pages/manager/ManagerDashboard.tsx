@@ -15,7 +15,7 @@ import { UpcomingBookings } from "@/components/manager/dashboard/UpcomingBooking
 const periodLabels: Record<DashboardPeriod, string> = {
   daily: "Today",
   weekly: "This Week",
-  monthly: "This Month",
+  monthly: "This Month"
 };
 
 export default function ManagerDashboard() {
@@ -69,15 +69,15 @@ export default function ManagerDashboard() {
         </div>
 
         {/* Quick action FAB for mobile */}
-        <div className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50">
-          <Link to="/manager/courts/new">
-            <Button size="lg" className="rounded-full shadow-lg h-12 w-12 lg:h-auto lg:w-auto lg:px-4 lg:rounded-lg">
-              <Plus className="h-5 w-5 lg:mr-2" />
-              <span className="hidden lg:inline">New Venue</span>
-            </Button>
-          </Link>
-        </div>
+        
+
+
+
+
+
+
+        
       </div>
-    </ManagerLayout>
-  );
+    </ManagerLayout>);
+
 }
