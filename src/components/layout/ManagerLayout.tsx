@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
@@ -48,6 +49,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, userRole, signOut, isLoading } = useAuth();
+  const { profile } = useUserProfile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
@@ -131,7 +133,9 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
                 className="h-26 w-auto mix-blend-screen" />
 
               <div>
-                <span className="text-xs text-muted-foreground block">Court Manager</span>
+                <span className="text-xs text-muted-foreground block">
+                  {profile?.full_name || "Court Manager"}
+                </span>
               </div>
             </Link>
           </div>
@@ -162,11 +166,13 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
 
           {/* Theme Toggle & Sign Out */}
           <div className="p-4 border-t border-border space-y-2 pb-20 lg:pb-4">
+            {profile?.full_name && (
+              <p className="px-3 text-sm font-medium truncate">{profile.full_name}</p>
+            )}
             <Button
               variant="ghost"
               className="w-full justify-start gap-3 text-muted-foreground"
               onClick={handleSignOut}>
-
               <LogOut className="h-5 w-5" />
               Sign Out
             </Button>
