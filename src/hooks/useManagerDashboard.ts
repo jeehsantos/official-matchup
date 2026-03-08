@@ -383,7 +383,19 @@ export function useManagerDashboard(period: DashboardPeriod) {
       return;
     }
 
-    const bookerIds = [...new Set(upcomingSlots.filter((s) => s.booked_by_user_id).map((s) => s.booked_by_user_id as string))];
+    // Filter out bookings that have already ended today
+    const nowTime = format(new Date(), "HH:mm:ss");
+    const filteredSlots = upcomingSlots.filter((slot) => {
+      if (slot.available_date === today && slot.end_time <= nowTime) return false;
+      return true;
+    });
+
+    if (filteredSlots.length === 0) {
+      setUpcomingBookings([]);
+      return;
+    }
+
+    const bookerIds = [...new Set(filteredSlots.filter((s) => s.booked_by_user_id).map((s) => s.booked_by_user_id as string))];
     let profileMap: Record<string, string> = {};
     if (bookerIds.length > 0) {
       const { data: profiles } = await supabase
@@ -395,7 +407,7 @@ export function useManagerDashboard(period: DashboardPeriod) {
 
     const courtMap = Object.fromEntries(courts.map((c) => [c.id, c]));
 
-    const mapped: UpcomingBookingInfo[] = upcomingSlots.map((slot, i) => {
+    const mapped: UpcomingBookingInfo[] = filteredSlots.map((slot) => {
       const court = courtMap[slot.court_id];
       const name = profileMap[slot.booked_by_user_id!] || "Unknown";
       const initials = name
