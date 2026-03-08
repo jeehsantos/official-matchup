@@ -19,8 +19,8 @@ export function StripeSetupAlert({ hasVenues, className }: StripeSetupAlertProps
       <AlertDescription className="mt-2 space-y-3">
         <p className="text-sm">
           {hasVenues
-            ? "You must complete your Stripe account setup before you can add courts or configure availability. Go to Settings → Payment Setup and complete the onboarding process."
-            : "You need to create a venue and complete Stripe account setup before you can manage courts and availability."}
+            ? "You must complete your Stripe account setup before you can add courts or configure availability. Go to Settings → Payment Payouts and complete the onboarding process."
+            : "You must set up your Stripe account first before you can create venues, add courts, or configure availability. Go to Settings → Payment Payouts to get started."}
         </p>
         <Link to="/manager/settings">
           <Button variant="outline" size="sm" className="gap-2 border-destructive/50 hover:bg-destructive/10">
