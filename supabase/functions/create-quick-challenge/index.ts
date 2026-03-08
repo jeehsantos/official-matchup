@@ -120,9 +120,11 @@ serve(async (req) => {
 
     const splitPricePerPlayer = Math.ceil((courtAmountWithEquipment / totalPlayers) * 100) / 100;
     const effectivePaymentType = effectivePaymentTiming === "at_booking" ? "single" : paymentType;
+    // price_per_player always stores the per-player share (court cost / total players)
+    // payment_type determines WHO pays (single = organizer pays all, split = each player pays their share)
     const pricePerPlayer = effectivePaymentType === "split"
       ? splitPricePerPlayer + serviceFee
-      : courtAmountWithEquipment;
+      : splitPricePerPlayer;
     const initialStatus = effectivePaymentTiming === "at_booking" ? "pending_payment" : "open";
 
     const { data: challenge, error: challengeError } = await supabaseAdmin
