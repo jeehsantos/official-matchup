@@ -88,13 +88,13 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 glass border-b border-border/50 h-14">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 glass border-b border-border/50 h-16">
         <div className="flex items-center justify-between h-full px-4">
           <Link to="/manager" className="flex items-center" aria-label="Sport Arena manager home">
             <img
               src="/sportarena-logo.png"
               alt="Sport Arena logo"
-              className="h-12 w-auto max-w-[160px] object-contain mix-blend-screen" />
+              className="h-14 w-auto max-w-[180px] object-contain mix-blend-screen" />
 
           </Link>
           <div className="flex items-center gap-2">
@@ -180,7 +180,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-64 pt-14 lg:pt-0 h-[calc(100dvh-3.5rem)] overflow-y-auto scrollbar-hide lg:h-auto lg:min-h-screen lg:overflow-visible pb-20 lg:pb-0">
+      <main className="lg:ml-64 pt-16 lg:pt-0 h-[calc(100dvh-4rem)] overflow-y-auto scrollbar-hide lg:h-auto lg:min-h-screen lg:overflow-visible pb-20 lg:pb-0">
         {children}
       </main>
 
