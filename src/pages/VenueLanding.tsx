@@ -147,10 +147,15 @@ export default function VenueLanding() {
           </h1>
           <div className="flex items-center gap-2 mt-2 text-muted-foreground">
             <MapPin className="h-4 w-4" />
-            <span>
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${venue.address}, ${venue.city}${venue.suburb ? `, ${venue.suburb}` : ""}${venue.country ? `, ${venue.country}` : ""}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground hover:underline transition-colors"
+            >
               {venue.address}, {venue.city}
               {venue.suburb ? `, ${venue.suburb}` : ""}
-            </span>
+            </a>
           </div>
         </div>
       </div>
