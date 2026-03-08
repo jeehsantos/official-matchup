@@ -1,0 +1,56 @@
+{
+  "hero": {
+    "title1": "Book courts faster.",
+    "title2": "Play harder.",
+    "description": "courts in seconds. The cleanest way to manage your games and keep your team moving.",
+    "findAndBook": "Find and book",
+    "ctaPlay": "Start Playing Free",
+    "ctaBrowse": "Browse Courts",
+    "activePlayers": "Active Players",
+    "verifiedVenues": "Verified Venues",
+    "courtConfirmed": "Court Confirmed!",
+    "courtConfirmedDetail": "Stanley St Courts, 10 AM"
+  },
+  "howItWorks": {
+    "label": "How it works",
+    "title": "From search to serve, fast",
+    "subtitle": "A three-step flow that keeps players and managers in sync.",
+    "forPlayers": "For Players & Organizers",
+    "forManagers": "For Court Managers",
+    "playerStep1Title": "Discover Courts",
+    "playerStep1Desc": "Browse verified venues across New Zealand and find the perfect court.",
+    "playerStep2Title": "Join or Create Groups",
+    "playerStep2Desc": "Connect with regular players or organize your own recurring games.",
+    "playerStep3Title": "Book & Play",
+    "playerStep3Desc": "Reserve your spot and enjoy hassle-free sports sessions.",
+    "managerStep1Title": "List Your Courts",
+    "managerStep1Desc": "Register your venue and showcase your facilities with photos.",
+    "managerStep2Title": "Manage Availability",
+    "managerStep2Desc": "Set your court schedules and pricing.",
+    "managerStep3Title": "Grow Your Business",
+    "managerStep3Desc": "Reach more players and fill your courts efficiently."
+  },
+  "cta": {
+    "title": "Ready to Find Your Next Game?",
+    "description": "Join players and court managers across New Zealand discovering the easier way to book and play sports.",
+    "createAccount": "Create Free Account",
+    "contactUs": "Contact Us"
+  },
+  "landingFooter": {
+    "tagline": "The smarter way to book courts and guarantee games.",
+    "location": "Auckland, New Zealand",
+    "product": "Product",
+    "company": "Company",
+    "browseCourts": "Browse Courts",
+    "forPlayers": "For Players",
+    "forCourtManagers": "For Court Managers",
+    "communityGroups": "Community Groups",
+    "aboutUs": "About Us",
+    "contact": "Contact",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service",
+    "allRightsReserved": "© 2024 Sport Arena. All rights reserved.",
+    "about": "About",
+    "browse": "Browse"
+  }
+}
