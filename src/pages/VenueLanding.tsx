@@ -129,6 +129,14 @@ export default function VenueLanding() {
 
   return (
     <PublicLayout>
+      {/* Back button */}
+      <div className="max-w-6xl mx-auto px-4 pt-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1.5 text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+      </div>
+
       {/* Hero */}
       <div className="relative">
         {venue.photo_url ? (
