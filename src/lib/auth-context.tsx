@@ -133,32 +133,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    // If signup successful and we have a user, create ONLY the selected role
+    // handle_new_user trigger creates profile + role automatically
     if (!error && data.user) {
-      // First check if role already exists (to avoid duplicates)
-      const { data: existingRole } = await supabase
-        .from("user_roles")
-        .select("id")
-        .eq("user_id", data.user.id)
-        .eq("role", role)
-        .maybeSingle();
-
-      if (!existingRole) {
-        const { error: roleError } = await supabase
-          .from("user_roles")
-          .insert({
-            user_id: data.user.id,
-            role: role,
-          });
-        
-        if (roleError) {
-          console.error("Error creating user role:", roleError);
-        } else {
-          setUserRole(role);
-        }
-      } else {
-        setUserRole(role);
-      }
+      // Set the role locally for immediate UI use
+      setUserRole(role);
     }
 
     return { error: error as Error | null };
