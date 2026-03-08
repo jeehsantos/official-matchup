@@ -29,6 +29,8 @@ import { useToast } from "@/hooks/use-toast";
 import { CourtPhotosUpload } from "@/components/manager/CourtPhotosUpload";
 import { VenueDetailsEditor } from "@/components/manager/VenueDetailsEditor";
 import { AllowedSportsSelector } from "@/components/manager/AllowedSportsSelector";
+import { StripeSetupAlert } from "@/components/manager/StripeSetupAlert";
+import { useManagerStripeReady } from "@/hooks/useStripeConnectStatus";
 import { nzCities, getSuburbsForCity } from "@/data/nzLocations";
 import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
 
@@ -86,6 +88,7 @@ export default function ManagerCourtFormNew() {
   const [venueData, setVenueData] = useState<any>(null);
   const [venueAllowedSports, setVenueAllowedSports] = useState<string[]>([]);
   const [venueAmenities, setVenueAmenities] = useState<string[]>([]);
+  const { data: stripeStatus, isLoading: stripeLoading } = useManagerStripeReady();
 
   // Multi-court state — selectedTabCourtId is the single source of truth for which court is being edited
   const [selectedTabCourtId, setSelectedTabCourtId] = useState<string | null>(null);
@@ -551,7 +554,7 @@ export default function ManagerCourtFormNew() {
             </Button>
             <Button
               onClick={handleSubmit(onSubmit)}
-              disabled={submitting}
+              disabled={submitting || (!isEditing && !stripeStatus?.isReady)}
               className="gap-2"
             >
               {submitting ? (
@@ -563,6 +566,11 @@ export default function ManagerCourtFormNew() {
             </Button>
           </div>
         </div>
+
+        {/* Stripe Setup Warning for new courts */}
+        {!isEditing && !stripeLoading && !stripeStatus?.isReady && (
+          <StripeSetupAlert hasVenues={stripeStatus?.hasVenues ?? false} />
+        )}
 
         {/* Mobile: Preview Panel at top */}
         <div className="lg:hidden">

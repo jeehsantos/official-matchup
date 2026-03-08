@@ -19,6 +19,8 @@ import { WeeklyScheduleEditor } from "@/components/manager/WeeklyScheduleEditor"
 import { DateOverridesEditor } from "@/components/manager/DateOverridesEditor";
 import { AvailabilityPreview } from "@/components/manager/AvailabilityPreview";
 import { VenueConfigEditor } from "@/components/manager/VenueConfigEditor";
+import { useManagerStripeReady } from "@/hooks/useStripeConnectStatus";
+import { StripeSetupAlert } from "@/components/manager/StripeSetupAlert";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
 type Venue = Database["public"]["Tables"]["venues"]["Row"];
@@ -41,6 +43,7 @@ export default function ManagerAvailability() {
   const [selectedCourt, setSelectedCourt] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const { data: stripeStatus, isLoading: stripeLoading } = useManagerStripeReady();
 
   useEffect(() => {
     if (user) {
@@ -118,6 +121,10 @@ export default function ManagerAvailability() {
           <h1 className="font-display text-2xl font-bold">Availability</h1>
           <p className="text-muted-foreground">Configure your venue's opening hours and exceptions</p>
         </div>
+
+        {!stripeLoading && !stripeStatus?.isReady && (
+          <StripeSetupAlert hasVenues={stripeStatus?.hasVenues ?? false} />
+        )}
 
         {courts.length === 0 ? (
           <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">

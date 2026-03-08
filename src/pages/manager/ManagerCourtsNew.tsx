@@ -32,6 +32,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
+import { useManagerStripeReady } from "@/hooks/useStripeConnectStatus";
+import { StripeSetupAlert } from "@/components/manager/StripeSetupAlert";
 
 interface Venue {
   id: string;
@@ -61,6 +63,7 @@ interface VenueWithCourts {
 export default function ManagerCourtsNew() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { data: stripeStatus, isLoading: stripeLoading } = useManagerStripeReady();
   const [venueGroups, setVenueGroups] = useState<VenueWithCourts[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Court | null>(null);
@@ -210,13 +213,18 @@ export default function ManagerCourtsNew() {
             <p className="text-sm text-muted-foreground">Manage your sports venues and courts in one place.</p>
           </div>
           <Link to="/manager/courts/new">
-            <Button className="gap-2">
+            <Button className="gap-2" disabled={!stripeStatus?.isReady}>
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Add New Venue</span>
               <span className="sm:hidden">Add</span>
             </Button>
           </Link>
         </div>
+
+        {/* Stripe Setup Warning */}
+        {!stripeLoading && !stripeStatus?.isReady && (
+          <StripeSetupAlert hasVenues={stripeStatus?.hasVenues ?? false} />
+        )}
 
         {/* Content */}
         {loading ? (
@@ -301,7 +309,7 @@ export default function ManagerCourtsNew() {
                       </div>
                     </div>
                     <Link to={`/manager/courts/new?venue_id=${venue.id}`}>
-                      <Button variant="outline" size="sm" className="gap-1.5">
+                      <Button variant="outline" size="sm" className="gap-1.5" disabled={!stripeStatus?.isReady}>
                         <Plus className="h-3.5 w-3.5" />
                         Add Court
                       </Button>
