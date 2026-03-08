@@ -23,11 +23,19 @@ import {
   Edit,
   Loader2,
   Users,
-  Trash2
+  Trash2,
+  Pencil
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
+
+interface Venue {
+  id: string;
+  name: string;
+  city: string;
+  address: string;
+}
 
 interface Court {
   id: string;
@@ -39,60 +47,111 @@ interface Court {
   is_active: boolean;
   photo_url: string | null;
   venue_id: string;
-  venue?: {
-    name: string;
-    city: string;
-    address: string;
-  };
+  parent_court_id: string | null;
+}
+
+interface VenueWithCourts {
+  venue: Venue;
+  courts: Court[];
 }
 
 export default function ManagerCourtsNew() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [courts, setCourts] = useState<Court[]>([]);
+  const [venueGroups, setVenueGroups] = useState<VenueWithCourts[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Court | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
-      fetchCourts();
+      fetchData();
     }
   }, [user]);
 
-  const fetchCourts = async () => {
+  const fetchData = async () => {
     try {
-      // First get venues owned by user
-      const { data: venues } = await supabase
+      const { data: venues, error: venuesError } = await supabase
         .from("venues")
-        .select("id")
-        .eq("owner_id", user?.id);
+        .select("id, name, city, address")
+        .eq("owner_id", user?.id)
+        .order("created_at", { ascending: false });
 
+      if (venuesError) throw venuesError;
       if (!venues || venues.length === 0) {
-        setCourts([]);
+        setVenueGroups([]);
         setLoading(false);
         return;
       }
 
       const venueIds = venues.map(v => v.id);
 
-      // Then get only parent courts (main venues) for those venues
-      const { data, error } = await supabase
+      const { data: courts, error: courtsError } = await supabase
         .from("courts")
-        .select(`
-          *,
-          venue:venues(name, city, address)
-        `)
+        .select("id, name, allowed_sports, capacity, hourly_rate, is_indoor, is_active, photo_url, venue_id, parent_court_id")
         .in("venue_id", venueIds)
-        .is("parent_court_id", null) // Only show parent courts (main venues)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setCourts(data || []);
+      if (courtsError) throw courtsError;
+
+      const groups: VenueWithCourts[] = venues.map(venue => ({
+        venue,
+        courts: (courts || []).filter(c => c.venue_id === venue.id),
+      }));
+
+      setVenueGroups(groups);
     } catch (error) {
-      console.error("Error fetching courts:", error);
+      console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      const { count, error: countError } = await supabase
+        .from("court_availability")
+        .select("id", { count: "exact", head: true })
+        .eq("court_id", deleteTarget.id)
+        .eq("is_booked", true);
+
+      if (countError) throw countError;
+
+      if (count && count > 0) {
+        toast({
+          title: "Cannot delete court",
+          description: "This court has active bookings. Please cancel all bookings first.",
+          variant: "destructive",
+        });
+        setDeleteTarget(null);
+        return;
+      }
+
+      const { error } = await supabase
+        .from("courts")
+        .delete()
+        .eq("id", deleteTarget.id);
+
+      if (error) throw error;
+
+      toast({ title: "Court deleted successfully" });
+      setVenueGroups(prev =>
+        prev.map(g => ({
+          ...g,
+          courts: g.courts.filter(c => c.id !== deleteTarget.id),
+        }))
+      );
+      setDeleteTarget(null);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete court",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -103,22 +162,23 @@ export default function ManagerCourtsNew() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-2xl font-bold">My Venues</h1>
-            <p className="text-muted-foreground">Manage your sports venues and courts</p>
+            <p className="text-sm text-muted-foreground">Manage your sports venues and courts in one place.</p>
           </div>
           <Link to="/manager/courts/new">
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
-              Add Venue
+              <span className="hidden sm:inline">Add New Venue</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </Link>
         </div>
 
-        {/* Courts List */}
+        {/* Content */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : courts.length === 0 ? (
+        ) : venueGroups.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -132,75 +192,111 @@ export default function ManagerCourtsNew() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {courts.map((court) => (
-              <Card key={court.id} className="overflow-hidden">
-                {/* Image */}
-                <div className="h-40 bg-muted relative">
-                  {court.photo_url ? (
-                    <img 
-                      src={court.photo_url} 
-                      alt={court.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <SportIcon sport={court.allowed_sports?.[0] || "other"} size="lg" />
+          <div className="space-y-6">
+            {venueGroups.map(({ venue, courts }) => (
+              <Card key={venue.id} className="overflow-hidden">
+                <CardContent className="p-4 md:p-6">
+                  {/* Venue Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg md:text-xl font-bold">{venue.name}</h2>
+                        <Link to={`/manager/venues/${venue.id}/edit`}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <Pencil className="h-3.5 w-3.5 text-primary" />
+                          </Button>
+                        </Link>
+                      </div>
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {venue.city}
+                      </div>
                     </div>
-                  )}
-                  <div className="absolute top-2 right-2 flex gap-2">
-                    <Badge variant={court.is_active ? "default" : "secondary"}>
-                      {court.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                    <Badge variant="outline" className="bg-background">
-                      {court.is_indoor ? "Indoor" : "Outdoor"}
-                    </Badge>
-                  </div>
-                </div>
-                
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h3 className="font-semibold">{court.name}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {getSportLabel(court.allowed_sports?.[0] || "other")}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {court.venue && (
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
-                      <MapPin className="h-3 w-3" />
-                      {court.venue.name}, {court.venue.city}
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center justify-between text-sm mb-4">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <Users className="h-3 w-3" />
-                      {court.capacity} players
-                    </div>
-                    <div className="flex items-center gap-1 font-semibold text-primary">
-                      <DollarSign className="h-3 w-3" />
-                      {court.hourly_rate}/hr
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <Link to={`/manager/courts/${court.id}/edit`} className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full gap-1">
-                        <Edit className="h-3 w-3" />
-                        Edit Venue
+                    <Link to={`/manager/courts/new?venue_id=${venue.id}`}>
+                      <Button variant="outline" size="sm" className="gap-1.5">
+                        <Plus className="h-3.5 w-3.5" />
+                        Add Court
                       </Button>
                     </Link>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDeleteTarget(court)}
-                    >
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
                   </div>
+
+                  {/* Courts Grid */}
+                  {courts.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground text-sm border border-dashed rounded-lg">
+                      No courts added yet. Add your first court to this venue.
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                      {courts.map((court) => (
+                        <div key={court.id} className="rounded-lg border bg-card overflow-hidden">
+                          {/* Court Image */}
+                          <div className="h-36 bg-muted relative">
+                            {court.photo_url ? (
+                              <img
+                                src={court.photo_url}
+                                alt={court.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <SportIcon sport={court.allowed_sports?.[0] || "other"} size="lg" />
+                              </div>
+                            )}
+                            <div className="absolute top-2 right-2 flex gap-1.5">
+                              <Badge
+                                variant={court.is_active ? "default" : "destructive"}
+                                className="text-[11px] px-2 py-0.5"
+                              >
+                                {court.is_active ? "Active" : "Maintenance"}
+                              </Badge>
+                              <Badge variant="outline" className="bg-background/80 text-[11px] px-2 py-0.5">
+                                {court.is_indoor ? "Indoor" : "Outdoor"}
+                              </Badge>
+                            </div>
+                          </div>
+
+                          {/* Court Info */}
+                          <div className="p-3 space-y-3">
+                            <div>
+                              <h3 className="font-semibold text-sm">{court.name}</h3>
+                              <p className="text-xs text-muted-foreground">
+                                {getSportLabel(court.allowed_sports?.[0] || "other")}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <Users className="h-3 w-3" />
+                                {court.capacity} players max
+                              </div>
+                              <div className="flex items-center gap-0.5 font-semibold text-primary">
+                                <DollarSign className="h-3 w-3" />
+                                {court.hourly_rate.toFixed(2)}<span className="text-muted-foreground font-normal">/hr</span>
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-2">
+                              <Link to={`/manager/courts/${court.id}/edit`} className="flex-1">
+                                <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs h-8">
+                                  <Edit className="h-3 w-3" />
+                                  Edit Court
+                                </Button>
+                              </Link>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => setDeleteTarget(court)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -213,7 +309,7 @@ export default function ManagerCourtsNew() {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete "{deleteTarget?.name}"?</AlertDialogTitle>
               <AlertDialogDescription>
-                This action cannot be undone. The venue and all its data will be permanently removed.
+                This action cannot be undone. The court and all its data will be permanently removed.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -221,49 +317,9 @@ export default function ManagerCourtsNew() {
               <AlertDialogAction
                 disabled={deleteLoading}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={async (e) => {
+                onClick={(e) => {
                   e.preventDefault();
-                  if (!deleteTarget) return;
-                  setDeleteLoading(true);
-                  try {
-                    // Check for active bookings
-                    const { count, error: countError } = await supabase
-                      .from("court_availability")
-                      .select("id", { count: "exact", head: true })
-                      .eq("court_id", deleteTarget.id)
-                      .eq("is_booked", true);
-
-                    if (countError) throw countError;
-
-                    if (count && count > 0) {
-                      toast({
-                        title: "Cannot delete venue",
-                        description: "This venue has active bookings. Please cancel all bookings first before deleting.",
-                        variant: "destructive",
-                      });
-                      setDeleteTarget(null);
-                      return;
-                    }
-
-                    const { error } = await supabase
-                      .from("courts")
-                      .delete()
-                      .eq("id", deleteTarget.id);
-
-                    if (error) throw error;
-
-                    toast({ title: "Venue deleted successfully" });
-                    setCourts(courts.filter(c => c.id !== deleteTarget.id));
-                    setDeleteTarget(null);
-                  } catch (error: any) {
-                    toast({
-                      title: "Error",
-                      description: error.message || "Failed to delete venue",
-                      variant: "destructive",
-                    });
-                  } finally {
-                    setDeleteLoading(false);
-                  }
+                  handleDelete();
                 }}
               >
                 {deleteLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
