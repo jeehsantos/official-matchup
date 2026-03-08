@@ -388,19 +388,9 @@ export default function ManagerBookings() {
       <Card className="overflow-hidden">
         <CardContent className="p-3 sm:p-4">
           <div className="space-y-2">
-            {/* Row 1: Name + Phone + Badge + Reschedule */}
+            {/* Row 1: Name + Badge + Reschedule */}
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold text-sm sm:text-base truncate max-w-[120px] sm:max-w-none">{booking.bookerName}</h3>
-              {booking.bookerPhone && (
-                <a
-                  href={`tel:${booking.bookerPhone}`}
-                  className="inline-flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground hover:text-primary transition-colors shrink-0 border border-border/50 rounded-full px-1.5 py-0.5"
-                  title={`Call ${booking.bookerPhone}`}
-                >
-                  <Phone className="h-3 w-3" />
-                  <span className="hidden xs:inline">{booking.bookerPhone}</span>
-                </a>
-              )}
               {getStatusBadge(booking)}
               {canReschedule && (
                 <Button
@@ -414,6 +404,18 @@ export default function ManagerBookings() {
                 </Button>
               )}
             </div>
+
+            {/* Row 2: Phone number */}
+            {booking.bookerPhone && (
+              <a
+                href={`tel:${booking.bookerPhone}`}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors border border-border/50 rounded-full px-2 py-0.5 w-fit"
+                title={`Call ${booking.bookerPhone}`}
+              >
+                <Phone className="h-3 w-3" />
+                {booking.bookerPhone}
+              </a>
+            )}
 
             {/* Row 2: Date + Time */}
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs sm:text-sm text-muted-foreground">
