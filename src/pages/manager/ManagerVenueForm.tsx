@@ -50,12 +50,13 @@ export default function ManagerVenueForm() {
     defaultValues: { is_active: true },
   });
 
-  useEffect(() => { if (isEditing && id) fetchVenue(); }, [id, isEditing]);
+  useEffect(() => { if (isEditing && venueId) fetchVenue(); }, [venueId, isEditing]);
 
   const fetchVenue = async () => {
     try {
-      const { data, error } = await supabase.from("venues").select("*").eq("id", id).eq("owner_id", user?.id).single();
+      const { data, error } = await supabase.from("venues").select("*").eq("id", venueId).eq("owner_id", user?.id).single();
       if (error) throw error;
+      setVenueSlug(data.slug || null);
       reset({ name: data.name, address: data.address, city: data.city, description: data.description || "", phone: data.phone || "", email: data.email || "", photo_url: data.photo_url || "", is_active: data.is_active ?? true });
     } catch (error) { console.error("Error fetching venue:", error); navigate("/manager/venues"); } finally { setLoading(false); }
   };
@@ -65,7 +66,7 @@ export default function ManagerVenueForm() {
     setSubmitting(true);
     try {
       if (isEditing) {
-        const { error } = await supabase.from("venues").update({ name: data.name, address: data.address, city: data.city, description: data.description || null, phone: data.phone || null, email: data.email || null, photo_url: data.photo_url || null, is_active: data.is_active }).eq("id", id).eq("owner_id", user.id);
+        const { error } = await supabase.from("venues").update({ name: data.name, address: data.address, city: data.city, description: data.description || null, phone: data.phone || null, email: data.email || null, photo_url: data.photo_url || null, is_active: data.is_active }).eq("id", venueId).eq("owner_id", user.id);
         if (error) throw error;
         toast({ title: t("venueForm.venueUpdated") });
       } else {
@@ -82,7 +83,7 @@ export default function ManagerVenueForm() {
     if (!confirm(t("venueForm.deleteConfirm"))) return;
     setDeleting(true);
     try {
-      const { error } = await supabase.from("venues").delete().eq("id", id).eq("owner_id", user?.id);
+      const { error } = await supabase.from("venues").delete().eq("id", venueId).eq("owner_id", user?.id);
       if (error) throw error;
       toast({ title: t("venueForm.venueDeleted") });
       navigate("/manager/venues");
