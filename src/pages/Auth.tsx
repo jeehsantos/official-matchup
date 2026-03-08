@@ -317,6 +317,7 @@ export default function Auth() {
       ) : (
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
+            <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-16 w-auto mx-auto mb-2" />
             <CardTitle className="font-display">Welcome</CardTitle>
             <CardDescription>
               Sign in to manage your games or create an account
