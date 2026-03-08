@@ -212,7 +212,20 @@ export default function Discover() {
     setSelectedCity("all");
     setCitySearchQuery("");
     setShowAllCities(false);
+    setRescuePage(1);
+    setChallengePage(1);
   };
+
+  // Reset pages when filters/search change
+  useEffect(() => { setRescuePage(1); }, [selectedSport, selectedCourtType, selectedCity, searchQuery]);
+  useEffect(() => { setChallengePage(1); }, [selectedSport, selectedCourtType, selectedCity, searchQuery]);
+
+  // Paginated slices
+  const rescueTotalPages = Math.max(1, Math.ceil(filteredRescueGames.length / ITEMS_PER_PAGE));
+  const paginatedRescueGames = filteredRescueGames.slice((rescuePage - 1) * ITEMS_PER_PAGE, rescuePage * ITEMS_PER_PAGE);
+
+  const challengeTotalPages = Math.max(1, Math.ceil(filteredChallenges.length / ITEMS_PER_PAGE));
+  const paginatedChallenges = filteredChallenges.slice((challengePage - 1) * ITEMS_PER_PAGE, challengePage * ITEMS_PER_PAGE);
 
   const FilterPanelBody = (
     <>
