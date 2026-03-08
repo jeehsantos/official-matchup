@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,33 +16,47 @@ import {
   ChevronUp,
   Eye,
   EyeOff,
+  Building2,
 } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
 
 interface StaffMember {
   id: string;
   user_id: string;
+  venue_id: string;
   created_at: string;
   profile?: {
     full_name: string | null;
     user_id: string;
   };
-  email?: string;
+}
+
+interface StaffWithVenues {
+  user_id: string;
+  full_name: string;
+  venues: { staff_id: string; venue_id: string; venue_name: string }[];
+  created_at: string;
+}
+
+interface VenueOption {
+  id: string;
+  name: string;
 }
 
 interface StaffAccessSectionProps {
-  venueId: string;
+  venues: VenueOption[];
 }
 
-export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
+export function StaffAccessSection({ venues }: StaffAccessSectionProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [staffList, setStaffList] = useState<StaffWithVenues[]>([]);
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -52,40 +67,57 @@ export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
     email: "",
     password: "",
   });
+  const [selectedVenueIds, setSelectedVenueIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (venueId) {
+    if (venues.length > 0) {
       fetchStaff();
     }
-  }, [venueId]);
+  }, [venues]);
 
   const fetchStaff = async () => {
-    if (!venueId) return;
+    if (venues.length === 0) return;
     setLoading(true);
     try {
+      const venueIds = venues.map((v) => v.id);
       const { data, error } = await supabase
         .from("venue_staff")
-        .select("id, user_id, created_at")
-        .eq("venue_id", venueId)
+        .select("id, user_id, venue_id, created_at")
+        .in("venue_id", venueIds)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      // Fetch profiles for each staff member
       if (data && data.length > 0) {
-        const userIds = data.map((s) => s.user_id);
+        const userIds = [...new Set(data.map((s) => s.user_id))];
         const { data: profiles } = await supabase
           .from("profiles")
           .select("user_id, full_name")
           .in("user_id", userIds);
 
-        const staffWithProfiles = data.map((s) => ({
-          ...s,
-          profile: profiles?.find((p) => p.user_id === s.user_id),
-        }));
-        setStaff(staffWithProfiles);
+        // Group by user_id
+        const grouped = new Map<string, StaffWithVenues>();
+        for (const row of data) {
+          const profile = profiles?.find((p) => p.user_id === row.user_id);
+          const venueName = venues.find((v) => v.id === row.venue_id)?.name || "Unknown";
+
+          if (!grouped.has(row.user_id)) {
+            grouped.set(row.user_id, {
+              user_id: row.user_id,
+              full_name: profile?.full_name || "Unknown",
+              venues: [],
+              created_at: row.created_at,
+            });
+          }
+          grouped.get(row.user_id)!.venues.push({
+            staff_id: row.id,
+            venue_id: row.venue_id,
+            venue_name: venueName,
+          });
+        }
+        setStaffList(Array.from(grouped.values()));
       } else {
-        setStaff([]);
+        setStaffList([]);
       }
     } catch (error) {
       console.error("Error fetching staff:", error);
@@ -94,11 +126,34 @@ export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
     }
   };
 
+  const toggleVenue = (venueId: string) => {
+    setSelectedVenueIds((prev) =>
+      prev.includes(venueId) ? prev.filter((id) => id !== venueId) : [...prev, venueId]
+    );
+  };
+
+  const selectAllVenues = () => {
+    if (selectedVenueIds.length === venues.length) {
+      setSelectedVenueIds([]);
+    } else {
+      setSelectedVenueIds(venues.map((v) => v.id));
+    }
+  };
+
   const handleAddStaff = async () => {
     if (!formData.email || !formData.password || !formData.full_name) {
       toast({
         title: "Missing fields",
         description: "Please fill in all fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (selectedVenueIds.length === 0) {
+      toast({
+        title: "No venues selected",
+        description: "Please select at least one venue for the staff member",
         variant: "destructive",
       });
       return;
@@ -118,14 +173,13 @@ export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
       const { data, error } = await supabase.functions.invoke("manage-venue-staff", {
         body: {
           action: "add",
-          venue_id: venueId,
+          venue_ids: selectedVenueIds,
           email: formData.email.trim().toLowerCase(),
           password: formData.password,
           full_name: formData.full_name.trim(),
         },
       });
 
-      // Edge function returns error in data body for non-2xx responses
       if (data?.error) {
         toast({
           title: "Cannot add staff",
@@ -139,6 +193,7 @@ export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
 
       toast({ title: "Staff member added successfully" });
       setFormData({ full_name: "", email: "", password: "" });
+      setSelectedVenueIds([]);
       setShowPassword(false);
       fetchStaff();
     } catch (error: any) {
@@ -152,14 +207,19 @@ export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
     }
   };
 
-  const handleRemoveStaff = async (staffId: string) => {
-    setRemovingId(staffId);
+  const handleRemoveStaff = async (userId: string) => {
+    // Remove all venue_staff rows for this user across all manager's venues
+    const staffEntries = staffList.find((s) => s.user_id === userId)?.venues || [];
+    if (staffEntries.length === 0) return;
+
+    setRemovingId(userId);
     try {
+      const staffIds = staffEntries.map((e) => e.staff_id);
       const { data, error } = await supabase.functions.invoke("manage-venue-staff", {
         body: {
           action: "remove",
-          staff_id: staffId,
-          venue_id: venueId,
+          staff_ids: staffIds,
+          venue_ids: staffEntries.map((e) => e.venue_id),
         },
       });
 
@@ -190,7 +250,7 @@ export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
                 <div>
                   <CardTitle>Staff Access</CardTitle>
                   <CardDescription className="text-xs md:text-sm">
-                    Add staff members to manage availability, equipment and bookings
+                    Add staff members and assign them to your venues
                   </CardDescription>
                 </div>
               </div>
@@ -259,10 +319,54 @@ export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
                     </Button>
                   </div>
                 </div>
+
+                {/* Venue Selection */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      Assign to Venues
+                    </Label>
+                    {venues.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-auto py-1 px-2"
+                        onClick={selectAllVenues}
+                      >
+                        {selectedVenueIds.length === venues.length ? "Deselect All" : "Select All"}
+                      </Button>
+                    )}
+                  </div>
+                  <div className="space-y-2 p-3 border border-border rounded-md bg-background">
+                    {venues.map((venue) => (
+                      <div key={venue.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`venue-${venue.id}`}
+                          checked={selectedVenueIds.includes(venue.id)}
+                          onCheckedChange={() => toggleVenue(venue.id)}
+                        />
+                        <label
+                          htmlFor={`venue-${venue.id}`}
+                          className="text-sm cursor-pointer flex-1"
+                        >
+                          {venue.name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
               <Button
                 onClick={handleAddStaff}
-                disabled={adding || !formData.email || !formData.password || !formData.full_name}
+                disabled={
+                  adding ||
+                  !formData.email ||
+                  !formData.password ||
+                  !formData.full_name ||
+                  selectedVenueIds.length === 0
+                }
                 className="w-full md:w-auto"
               >
                 {adding ? (
@@ -286,22 +390,29 @@ export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
                 <div className="flex items-center justify-center py-6">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-              ) : staff.length === 0 ? (
+              ) : staffList.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">
                   No staff members added yet
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {staff.map((member) => (
+                  {staffList.map((member) => (
                     <div
-                      key={member.id}
+                      key={member.user_id}
                       className="flex items-center justify-between p-3 border border-border rounded-lg"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium truncate">
-                          {member.profile?.full_name || "Unknown"}
+                          {member.full_name}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {member.venues.map((v) => (
+                            <Badge key={v.staff_id} variant="secondary" className="text-xs">
+                              {v.venue_name}
+                            </Badge>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
                           Added {new Date(member.created_at).toLocaleDateString()}
                         </p>
                       </div>
@@ -309,10 +420,10 @@ export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
                         variant="ghost"
                         size="icon"
                         className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
-                        onClick={() => handleRemoveStaff(member.id)}
-                        disabled={removingId === member.id}
+                        onClick={() => handleRemoveStaff(member.user_id)}
+                        disabled={removingId === member.user_id}
                       >
-                        {removingId === member.id ? (
+                        {removingId === member.user_id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <Trash2 className="h-4 w-4" />

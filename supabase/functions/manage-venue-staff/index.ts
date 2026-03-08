@@ -45,16 +45,17 @@ Deno.serve(async (req) => {
     const { action } = body;
 
     if (action === "add") {
-      const { venue_id, email, password, full_name } = body;
+      // Support both single venue_id (legacy) and multiple venue_ids
+      const venueIds: string[] = body.venue_ids || (body.venue_id ? [body.venue_id] : []);
+      const { email, password, full_name } = body;
 
-      if (!venue_id || !email || !password || !full_name) {
+      if (venueIds.length === 0 || !email || !password || !full_name) {
         return new Response(
-          JSON.stringify({ error: "Missing required fields: venue_id, email, password, full_name" }),
+          JSON.stringify({ error: "Missing required fields: venue_ids, email, password, full_name" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Validate password length
       if (password.length < 6) {
         return new Response(
           JSON.stringify({ error: "Password must be at least 6 characters" }),
@@ -62,22 +63,17 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Verify caller owns the venue
-      const { data: venue, error: venueError } = await supabaseAdmin
+      // Verify caller owns ALL requested venues
+      const { data: ownedVenues, error: venueError } = await supabaseAdmin
         .from("venues")
-        .select("id, owner_id")
-        .eq("id", venue_id)
-        .single();
+        .select("id")
+        .in("id", venueIds)
+        .eq("owner_id", callerId);
 
-      if (venueError || !venue) {
-        return new Response(JSON.stringify({ error: "Venue not found" }), {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      if (venueError) throw venueError;
 
-      if (venue.owner_id !== callerId) {
-        return new Response(JSON.stringify({ error: "Not authorized to manage this venue" }), {
+      if (!ownedVenues || ownedVenues.length !== venueIds.length) {
+        return new Response(JSON.stringify({ error: "Not authorized to manage one or more of these venues" }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -110,15 +106,14 @@ Deno.serve(async (req) => {
 
       const userId = newUser.user.id;
 
-      // Note: handle_new_user trigger automatically creates profile and user_roles
-      // based on user_metadata, so we don't need to insert those manually.
-
-      // Insert venue_staff link
-      const { error: staffError } = await supabaseAdmin.from("venue_staff").insert({
-        venue_id,
+      // Insert venue_staff links for all selected venues
+      const staffRows = venueIds.map((vid: string) => ({
+        venue_id: vid,
         user_id: userId,
         added_by: callerId,
-      });
+      }));
+
+      const { error: staffError } = await supabaseAdmin.from("venue_staff").insert(staffRows);
 
       if (staffError) {
         // Cleanup: delete user if staff link fails
@@ -129,42 +124,44 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          staff: { id: userId, email, full_name },
+          staff: { id: userId, email, full_name, venue_count: venueIds.length },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     if (action === "remove") {
-      const { staff_id, venue_id } = body;
+      // Support both single staff_id (legacy) and multiple staff_ids
+      const staffIds: string[] = body.staff_ids || (body.staff_id ? [body.staff_id] : []);
+      const venueIds: string[] = body.venue_ids || (body.venue_id ? [body.venue_id] : []);
 
-      if (!staff_id || !venue_id) {
+      if (staffIds.length === 0 || venueIds.length === 0) {
         return new Response(
-          JSON.stringify({ error: "Missing required fields: staff_id, venue_id" }),
+          JSON.stringify({ error: "Missing required fields: staff_ids, venue_ids" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Verify caller owns the venue
-      const { data: venue, error: venueError } = await supabaseAdmin
+      // Verify caller owns all venues
+      const { data: ownedVenues, error: venueError } = await supabaseAdmin
         .from("venues")
-        .select("id, owner_id")
-        .eq("id", venue_id)
-        .single();
+        .select("id")
+        .in("id", venueIds)
+        .eq("owner_id", callerId);
 
-      if (venueError || !venue || venue.owner_id !== callerId) {
+      if (venueError || !ownedVenues || ownedVenues.length !== venueIds.length) {
         return new Response(JSON.stringify({ error: "Not authorized" }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Get user_id from venue_staff
+      // Get user_id from the first staff row (all should be same user)
       const { data: staffRow, error: staffLookupError } = await supabaseAdmin
         .from("venue_staff")
         .select("user_id")
-        .eq("id", staff_id)
-        .eq("venue_id", venue_id)
+        .in("id", staffIds)
+        .limit(1)
         .single();
 
       if (staffLookupError || !staffRow) {
@@ -176,8 +173,10 @@ Deno.serve(async (req) => {
 
       const staffUserId = staffRow.user_id;
 
-      // Delete venue_staff row
-      await supabaseAdmin.from("venue_staff").delete().eq("id", staff_id);
+      // Delete all venue_staff rows
+      for (const sid of staffIds) {
+        await supabaseAdmin.from("venue_staff").delete().eq("id", sid);
+      }
 
       // Check if user is staff at any other venue
       const { data: otherStaff } = await supabaseAdmin
