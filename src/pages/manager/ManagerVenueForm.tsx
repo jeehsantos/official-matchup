@@ -116,6 +116,13 @@ export default function ManagerVenueForm() {
         
         toast({ title: "Venue updated successfully" });
       } else {
+        // Check if user has a Stripe account on their profile to auto-attach
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("stripe_account_id")
+          .eq("user_id", user.id)
+          .single();
+
         const { error } = await supabase
           .from("venues")
           .insert({
@@ -128,6 +135,7 @@ export default function ManagerVenueForm() {
             email: data.email || null,
             photo_url: data.photo_url || null,
             is_active: data.is_active,
+            stripe_account_id: (profile as any)?.stripe_account_id || null,
           });
 
         if (error) throw error;
