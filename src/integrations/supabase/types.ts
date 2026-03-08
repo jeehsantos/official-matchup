@@ -1522,6 +1522,7 @@ export type Database = {
         Row: {
           address: string
           amenities: string[] | null
+          banner_url: string | null
           city: string
           country: string | null
           created_at: string
@@ -1545,6 +1546,7 @@ export type Database = {
         Insert: {
           address: string
           amenities?: string[] | null
+          banner_url?: string | null
           city: string
           country?: string | null
           created_at?: string
@@ -1568,6 +1570,7 @@ export type Database = {
         Update: {
           address?: string
           amenities?: string[] | null
+          banner_url?: string | null
           city?: string
           country?: string | null
           created_at?: string
