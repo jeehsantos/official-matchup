@@ -732,6 +732,27 @@ async function handleQuickChallengePayment(
     })
     .eq("id", playerRecordId);
 
+  // Mark court_availability slot as booked now that payment is confirmed
+  const courtId = metadata.court_id;
+  const scheduledDate = metadata.scheduled_date;
+  const scheduledTime = metadata.scheduled_time;
+
+  if (courtId && scheduledDate && scheduledTime) {
+    const { error: courtUpdateError } = await supabaseAdmin
+      .from("court_availability")
+      .update({ is_booked: true, payment_status: "completed" })
+      .eq("court_id", courtId)
+      .eq("available_date", scheduledDate)
+      .eq("start_time", scheduledTime)
+      .eq("booked_by_user_id", userId);
+
+    if (courtUpdateError) {
+      console.error("Failed to mark court slot as booked (non-fatal):", courtUpdateError);
+    } else {
+      console.log("Court slot marked as booked for challenge:", challengeId);
+    }
+  }
+
   // Check and update challenge status
   const { data: challenge } = await supabaseAdmin
     .from("quick_challenges")

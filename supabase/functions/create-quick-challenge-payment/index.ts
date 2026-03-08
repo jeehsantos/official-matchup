@@ -307,6 +307,9 @@ serve(async (req) => {
         player_record_id: playerRecord.id,
         venue_stripe_account_id: venue?.stripe_account_id || "",
         destination_charge: venue?.stripe_account_id ? "true" : "false",
+        court_id: challenge.court_id || "",
+        scheduled_date: challenge.scheduled_date || "",
+        scheduled_time: challenge.scheduled_time || "",
       },
     };
 

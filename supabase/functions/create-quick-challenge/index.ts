@@ -108,24 +108,12 @@ serve(async (req) => {
     const courtAmountWithEquipment = courtAmount + equipmentTotal;
     const serviceFee = Number(platformResult.data?.player_fee ?? 0);
 
-    let effectivePaymentTiming = courtResult.data.payment_timing ?? "at_booking";
-    if (effectivePaymentTiming === "before_session") {
-      const sessionStart = new Date(`${scheduledDate}T${scheduledTime}`);
-      const hoursBeforeSession = courtResult.data.payment_hours_before ?? 24;
-      const deadline = new Date(sessionStart.getTime() - hoursBeforeSession * 60 * 60 * 1000);
-      if (new Date() >= deadline) {
-        effectivePaymentTiming = "at_booking";
-      }
-    }
-
+    // Quick Challenges ALWAYS require upfront payment — ignore court's before_session setting.
+    // The webhook will mark the slot as booked once payment is confirmed.
     const splitPricePerPlayer = Math.ceil((courtAmountWithEquipment / totalPlayers) * 100) / 100;
-    const effectivePaymentType = effectivePaymentTiming === "at_booking" ? "single" : paymentType;
-    // price_per_player always stores the per-player share (court cost / total players)
-    // payment_type determines WHO pays (single = organizer pays all, split = each player pays their share)
-    const pricePerPlayer = effectivePaymentType === "split"
-      ? splitPricePerPlayer + serviceFee
-      : splitPricePerPlayer;
-    const initialStatus = effectivePaymentTiming === "at_booking" ? "pending_payment" : "open";
+    const effectivePaymentType = "single"; // organizer always pays upfront for quick challenges
+    const pricePerPlayer = splitPricePerPlayer;
+    const initialStatus = courtAmountWithEquipment > 0 ? "pending_payment" : "open";
 
     const { data: challenge, error: challengeError } = await supabaseAdmin
       .from("quick_challenges")
@@ -154,7 +142,7 @@ serve(async (req) => {
         available_date: scheduledDate,
         start_time: scheduledTime,
         end_time: endTime,
-        is_booked: effectivePaymentTiming !== "at_booking",
+        is_booked: false,
         booked_by_user_id: user.id,
         payment_status: "pending",
       })
@@ -195,8 +183,8 @@ serve(async (req) => {
         funding_required: courtAmountWithEquipment,
         funding_current: 0,
         price_per_player: pricePerPlayer,
-        effective_payment_timing: effectivePaymentTiming,
-        requires_payment_at_booking: effectivePaymentTiming === "at_booking",
+        effective_payment_timing: "at_booking",
+        requires_payment_at_booking: true,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
