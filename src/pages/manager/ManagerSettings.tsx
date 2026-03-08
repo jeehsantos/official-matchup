@@ -692,7 +692,7 @@ export default function ManagerSettings() {
               <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="font-semibold mb-2">No Venues Yet</h3>
               <p className="text-muted-foreground text-sm">
-                Create a venue first to configure payment settings.
+                Complete your Stripe account setup above first, then you'll be able to create venues and start accepting bookings.
               </p>
             </CardContent>
           </Card>
