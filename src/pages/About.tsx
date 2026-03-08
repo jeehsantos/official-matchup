@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Check, Lightbulb, Sprout, Trophy } from "lucide-react";
 import { GuestNavbar } from "@/components/layout/GuestNavbar";
+import { Footer } from "@/components/layout/Footer";
 
 const journeyCards = [
   {
@@ -181,20 +182,7 @@ export default function About() {
         </section>
       </main>
 
-      <footer className="border-t border-slate-100 bg-white px-4 py-12 sm:px-6">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 text-center md:flex-row md:text-left">
-          <Link to="/" className="flex items-center" aria-label="Sport Arena home">
-            <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-10 w-auto object-contain" />
-          </Link>
-          <div className="flex gap-6 text-sm text-slate-500 sm:gap-8">
-            <Link to="/" className="transition hover:text-blue-600">Home</Link>
-            <Link to="/about" className="transition hover:text-blue-600">Our Story</Link>
-            <Link to="/courts" className="transition hover:text-blue-600">Venues</Link>
-            <Link to="/contact" className="transition hover:text-blue-600">Contact</Link>
-          </div>
-          <p className="text-sm text-slate-400">© {new Date().getFullYear()} Sport Arena Ltd.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
