@@ -141,7 +141,7 @@ serve(async (req) => {
 
       const balance = Number(creditBalance) || 0;
 
-      if (balance < pricePerPlayer) {
+      if (balance < courtShareDollars) {
         throw new Error("Insufficient credits");
       }
 
@@ -149,7 +149,7 @@ serve(async (req) => {
       const { data: useResult, error: useError } = await supabaseAdmin
         .rpc("use_user_credits", {
           p_user_id: user.id,
-          p_amount: pricePerPlayer,
+          p_amount: courtShareDollars,
           p_reason: `Quick Match payment: ${challenge.game_mode}`,
           p_session_id: null,
         });
