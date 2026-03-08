@@ -63,7 +63,7 @@ export function GuestNavbar({ className }: GuestNavbarProps) {
 
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon" aria-label="Open menu">
+              <Button variant="ghost" size="icon" aria-label="Open menu" className="ml-auto">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
