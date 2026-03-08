@@ -183,10 +183,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     setIsSigningOut(true);
     
-    // Reset state and sign out in parallel with a short animation delay
+    // Try global sign out first; fall back to local-only if session is already gone
     await Promise.all([
       new Promise(resolve => setTimeout(resolve, 200)),
-      supabase.auth.signOut(),
+      supabase.auth.signOut({ scope: 'global' }).catch(() =>
+        supabase.auth.signOut({ scope: 'local' })
+      ),
     ]);
     
     setUser(null);
