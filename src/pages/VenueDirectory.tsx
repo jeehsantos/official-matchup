@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,10 +7,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { MapPin, ArrowRight, ArrowLeft } from "lucide-react";
+import { MapPin, ArrowRight, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+
+const VENUES_PER_PAGE = 19;
 
 export default function VenueDirectory() {
   const navigate = useNavigate();
+  const [currentPage, setCurrentPage] = useState(1);
+
   const { data: venues, isLoading } = useQuery({
     queryKey: ["venue-directory"],
     queryFn: async () => {
@@ -23,6 +28,12 @@ export default function VenueDirectory() {
       return data;
     },
   });
+
+  const totalPages = venues ? Math.ceil(venues.length / VENUES_PER_PAGE) : 1;
+  const paginatedVenues = venues?.slice(
+    (currentPage - 1) * VENUES_PER_PAGE,
+    currentPage * VENUES_PER_PAGE
+  );
 
   return (
     <PublicLayout>
@@ -44,60 +55,88 @@ export default function VenueDirectory() {
               <Skeleton key={i} className="h-56 rounded-lg" />
             ))}
           </div>
-        ) : venues && venues.length > 0 ? (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {venues.map((venue) => (
-              <Link key={venue.id} to={`/venue/${venue.slug}`}>
-                <Card className="overflow-hidden hover:shadow-md hover:border-primary/50 transition-all h-full">
-                  {venue.photo_url ? (
-                    <div className="h-40 overflow-hidden">
-                      <img
-                        src={venue.photo_url}
-                        alt={venue.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="h-40 bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center">
-                      <MapPin className="h-10 w-10 text-primary/40" />
-                    </div>
-                  )}
-                  <CardContent className="p-4 space-y-2">
-                    <h2 className="font-semibold text-lg">{venue.name}</h2>
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <MapPin className="h-3.5 w-3.5" />
-                      <span>
-                        {venue.city}
-                        {venue.suburb ? `, ${venue.suburb}` : ""}
-                      </span>
-                    </div>
-                    {venue.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {venue.description}
-                      </p>
-                    )}
-                    {venue.amenities && venue.amenities.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pt-1">
-                        {venue.amenities.slice(0, 3).map((a: string) => (
-                          <Badge key={a} variant="secondary" className="text-xs capitalize">
-                            {a}
-                          </Badge>
-                        ))}
-                        {venue.amenities.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{venue.amenities.length - 3}
-                          </Badge>
-                        )}
+        ) : paginatedVenues && paginatedVenues.length > 0 ? (
+          <>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {paginatedVenues.map((venue) => (
+                <Link key={venue.id} to={`/venue/${venue.slug}`}>
+                  <Card className="overflow-hidden hover:shadow-md hover:border-primary/50 transition-all h-full">
+                    {venue.photo_url ? (
+                      <div className="h-40 overflow-hidden">
+                        <img
+                          src={venue.photo_url}
+                          alt={venue.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-40 bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center">
+                        <MapPin className="h-10 w-10 text-primary/40" />
                       </div>
                     )}
-                    <div className="flex items-center gap-1 text-sm text-primary font-medium pt-1">
-                      View venue <ArrowRight className="h-3.5 w-3.5" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
+                    <CardContent className="p-4 space-y-2">
+                      <h2 className="font-semibold text-lg">{venue.name}</h2>
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5" />
+                        <span>
+                          {venue.city}
+                          {venue.suburb ? `, ${venue.suburb}` : ""}
+                        </span>
+                      </div>
+                      {venue.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {venue.description}
+                        </p>
+                      )}
+                      {venue.amenities && venue.amenities.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {venue.amenities.slice(0, 3).map((a: string) => (
+                            <Badge key={a} variant="secondary" className="text-xs capitalize">
+                              {a}
+                            </Badge>
+                          ))}
+                          {venue.amenities.length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{venue.amenities.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 text-sm text-primary font-medium pt-1">
+                        View venue <ArrowRight className="h-3.5 w-3.5" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-8">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === 1}
+                  onClick={() => { setCurrentPage((p) => p - 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground px-3">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === totalPages}
+                  onClick={() => { setCurrentPage((p) => p + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-16">
             <MapPin className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
