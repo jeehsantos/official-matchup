@@ -689,10 +689,11 @@ export default function QuickGameLobby() {
 
   // Format date/time
   const formattedDateTime = challenge.scheduled_date ?
-  format(
-    new Date(`${challenge.scheduled_date}T${challenge.scheduled_time || "00:00"}`),
-    "EEEE, MMMM d • h:mm a"
-  ) :
+  (() => {
+    const start = new Date(`${challenge.scheduled_date}T${challenge.scheduled_time || "00:00"}`);
+    const end = new Date(start.getTime() + 60 * 60 * 1000); // 1 hour duration
+    return `${format(start, "EEEE, MMMM d • h:mm a")} – ${format(end, "h:mm a")}`;
+  })() :
   "Date TBD";
 
   const venueAddress = [challenge.venues?.address, challenge.venues?.city].
