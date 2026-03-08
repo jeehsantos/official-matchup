@@ -254,9 +254,9 @@ export default function ManagerSettings() {
                     <Input id="city" value={profileData.city} onChange={(e) => setProfileData(prev => ({ ...prev, city: e.target.value }))} placeholder={t("settings.cityPlaceholder")} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone" className="flex items-center gap-2"><Phone className="h-4 w-4" />{t("settings.phoneNumber")}</Label>
-                    <Input id="phone" type="tel" value={profileData.phone} onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))} placeholder={t("settings.phonePlaceholder")} />
-                    <p className="text-xs text-muted-foreground">{t("settings.phoneHint")}</p>
+                    <Label htmlFor="phone" className="flex items-center gap-2"><Phone className="h-4 w-4" />{t("settings.phoneNumber")} <span className="text-destructive">*</span></Label>
+                    <Input id="phone" type="tel" value={profileData.phone} onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))} placeholder={t("settings.phonePlaceholder")} required />
+                    <p className="text-xs text-muted-foreground">{t("settings.phoneHint")} This will be displayed on your venue's public page.</p>
                   </div>
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2"><Mail className="h-4 w-4" />{t("settings.emailAddress")}</Label>
