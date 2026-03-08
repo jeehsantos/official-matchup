@@ -554,7 +554,7 @@ export default function ManagerCourtFormNew() {
             </Button>
             <Button
               onClick={handleSubmit(onSubmit)}
-              disabled={submitting}
+              disabled={submitting || (!isEditing && !stripeStatus?.isReady)}
               className="gap-2"
             >
               {submitting ? (
@@ -566,6 +566,11 @@ export default function ManagerCourtFormNew() {
             </Button>
           </div>
         </div>
+
+        {/* Stripe Setup Warning for new courts */}
+        {!isEditing && !stripeLoading && !stripeStatus?.isReady && (
+          <StripeSetupAlert hasVenues={stripeStatus?.hasVenues ?? false} />
+        )}
 
         {/* Mobile: Preview Panel at top */}
         <div className="lg:hidden">
