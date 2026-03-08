@@ -125,8 +125,17 @@ export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
         },
       });
 
+      // Edge function returns error in data body for non-2xx responses
+      if (data?.error) {
+        toast({
+          title: "Cannot add staff",
+          description: data.error,
+          variant: "destructive",
+        });
+        return;
+      }
+
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
 
       toast({ title: "Staff member added successfully" });
       setFormData({ full_name: "", email: "", password: "" });

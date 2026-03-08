@@ -93,8 +93,8 @@ Deno.serve(async (req) => {
 
       if (existingUser) {
         return new Response(
-          JSON.stringify({ error: "This email is already registered. Staff accounts must use a new email that is not associated with any existing account." }),
-          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ success: false, error: "This email is already registered. Staff accounts must use a new email that is not associated with any existing account." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
