@@ -90,8 +90,8 @@ export default function ManagerBookings() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
 
-  // Derive venues list for filters
-  const venues: Venue[] = managerVenues.map(v => ({ id: v.id, name: v.name }));
+  // Derive venues list for filters (memoized to prevent infinite fetch loops)
+  const venues: Venue[] = useMemo(() => managerVenues.map(v => ({ id: v.id, name: v.name })), [managerVenues]);
 
   // Step 1: Fetch courts once venues are loaded
   useEffect(() => {
