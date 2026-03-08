@@ -36,6 +36,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
 import { useManagerVenues } from "@/hooks/useManagerVenues";
+import { useTranslation } from "react-i18next";
 
 interface Booking {
   id: string;
@@ -74,6 +75,7 @@ const ITEMS_PER_PAGE = 15;
 
 export default function ManagerBookings() {
   const { user } = useAuth();
+  const { t } = useTranslation("manager");
   const { data: managerVenues = [], isLoading: venuesLoading } = useManagerVenues();
   const [courts, setCourts] = useState<Court[]>([]);
   const [courtIds, setCourtIds] = useState<string[]>([]);
@@ -90,28 +92,22 @@ export default function ManagerBookings() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
 
-  // Derive venues list for filters (memoized to prevent infinite fetch loops)
   const venues: Venue[] = useMemo(() => managerVenues.map(v => ({ id: v.id, name: v.name })), [managerVenues]);
 
-  // Step 1: Fetch courts once venues are loaded
   useEffect(() => {
     if (venuesLoading) return;
-
     if (managerVenues.length === 0) {
       setCourts([]);
       setCourtIds([]);
       setInitLoading(false);
       return;
     }
-
     (async () => {
       const venueIds = managerVenues.map((v) => v.id);
-
       const { data: courtsData } = await supabase
         .from("courts")
         .select("id, name, venue_id")
         .in("venue_id", venueIds);
-
       const allCourts = courtsData || [];
       setCourts(allCourts);
       setCourtIds(allCourts.map((c) => c.id));
@@ -119,20 +115,17 @@ export default function ManagerBookings() {
     })();
   }, [managerVenues, venuesLoading]);
 
-  // Filter courts based on selected venue
   const filteredCourts = useMemo(() => {
     if (selectedVenue === "all") return courts;
     return courts.filter((c) => c.venue_id === selectedVenue);
   }, [courts, selectedVenue]);
 
-  // Compute active court IDs for query
   const activeCourtIds = useMemo(() => {
     if (selectedCourt !== "all") return [selectedCourt];
     if (selectedVenue !== "all") return filteredCourts.map((c) => c.id);
     return courtIds;
   }, [selectedCourt, selectedVenue, filteredCourts, courtIds]);
 
-  // Reset filters
   useEffect(() => {
     setSelectedCourt("all");
     setCurrentPage(1);
@@ -142,29 +135,24 @@ export default function ManagerBookings() {
     setCurrentPage(1);
   }, [selectedCourt, dateRange, activeTab]);
 
-  // Step 2: Fetch bookings with server-side pagination + filtering
   const fetchBookings = useCallback(async () => {
     if (activeCourtIds.length === 0) {
       setBookings([]);
       setTotalCount(0);
       return;
     }
-
     setLoading(true);
-
     try {
       const today = format(new Date(), "yyyy-MM-dd");
       const rangeStart = (currentPage - 1) * ITEMS_PER_PAGE;
       const rangeEnd = rangeStart + ITEMS_PER_PAGE - 1;
 
-      // Build the base query for counting
       let countQuery = supabase
         .from("court_availability")
         .select("id", { count: "exact", head: true })
         .in("court_id", activeCourtIds)
         .eq("is_booked", true);
 
-      // Build the data query
       let dataQuery = supabase
         .from("court_availability")
         .select(
@@ -174,28 +162,20 @@ export default function ManagerBookings() {
         .in("court_id", activeCourtIds)
         .eq("is_booked", true);
 
-      // Apply tab-specific date filters to push filtering to DB
-      // For active: future dates only (today handled client-side by end_time check)
-      // For completed: past dates only (today handled client-side by end_time check)
-      // We include today in both queries and do the time-based split client-side
       if (activeTab === "active") {
-        // Fetch today and future — we'll filter out already-ended today slots client-side
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayStr = format(yesterday, "yyyy-MM-dd");
         countQuery = countQuery.gt("available_date", yesterdayStr);
         dataQuery = dataQuery.gt("available_date", yesterdayStr);
       } else if (activeTab === "completed") {
-        // Fetch today and past — we'll filter out not-yet-ended today slots client-side
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const tomorrowStr = format(tomorrow, "yyyy-MM-dd");
         countQuery = countQuery.lt("available_date", tomorrowStr);
         dataQuery = dataQuery.lt("available_date", tomorrowStr);
       }
-      // "cancelled" tab needs session join — we fetch all and filter after
 
-      // Apply date range filter
       if (dateRange?.from) {
         const fromStr = format(dateRange.from, "yyyy-MM-dd");
         countQuery = countQuery.gte("available_date", fromStr);
@@ -207,16 +187,13 @@ export default function ManagerBookings() {
         dataQuery = dataQuery.lte("available_date", toStr);
       }
 
-      // Sort: active = ascending (closest first), completed = descending (most recent first)
       const ascending = activeTab === "active";
       dataQuery = dataQuery
         .order("available_date", { ascending })
         .order("start_time", { ascending: true })
         .range(rangeStart, rangeEnd);
 
-      // Execute count and data in parallel
       const [countResult, dataResult] = await Promise.all([countQuery, dataQuery]);
-
       const count = countResult.count || 0;
       const rows = dataResult.data || [];
 
@@ -227,7 +204,6 @@ export default function ManagerBookings() {
         return;
       }
 
-      // Batch-fetch related data in parallel
       const sessionIds = [
         ...new Set(rows.filter((r) => r.booked_by_session_id).map((r) => r.booked_by_session_id as string)),
       ];
@@ -237,25 +213,16 @@ export default function ManagerBookings() {
 
       const [sessionsResult, profilesResult] = await Promise.all([
         sessionIds.length > 0
-          ? supabase
-              .from("sessions")
-              .select("id, is_cancelled, group:groups(name)")
-              .in("id", sessionIds)
+          ? supabase.from("sessions").select("id, is_cancelled, group:groups(name)").in("id", sessionIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
-          ? supabase
-              .from("profiles")
-              .select("user_id, full_name, phone")
-              .in("user_id", userIds)
+          ? supabase.from("profiles").select("user_id, full_name, phone").in("user_id", userIds)
           : Promise.resolve({ data: [] }),
       ]);
 
       const sessionsMap: Record<string, { is_cancelled: boolean; groupName: string }> = {};
       (sessionsResult.data || []).forEach((s: any) => {
-        sessionsMap[s.id] = {
-          is_cancelled: s.is_cancelled,
-          groupName: s.group?.name || "",
-        };
+        sessionsMap[s.id] = { is_cancelled: s.is_cancelled, groupName: s.group?.name || "" };
       });
 
       const profilesMap: Record<string, { full_name: string; phone: string | null }> = {};
@@ -263,19 +230,16 @@ export default function ManagerBookings() {
         profilesMap[p.user_id] = { full_name: p.full_name || "Unknown", phone: p.phone };
       });
 
-      // Build court lookup from local state
       const courtMap: Record<string, Court> = {};
       courts.forEach((c) => (courtMap[c.id] = c));
       const venueMap: Record<string, Venue> = {};
       venues.forEach((v) => (venueMap[v.id] = v));
 
-      // Map to enriched bookings
       const enriched: Booking[] = rows.map((r) => {
         const court = courtMap[r.court_id];
         const venue = court ? venueMap[court.venue_id] : undefined;
         const session = r.booked_by_session_id ? sessionsMap[r.booked_by_session_id] : null;
         const profile = r.booked_by_user_id ? profilesMap[r.booked_by_user_id] : null;
-
         return {
           id: r.id,
           available_date: r.available_date,
@@ -297,23 +261,18 @@ export default function ManagerBookings() {
         };
       });
 
-      // Client-side filtering for precise active/completed split on today's bookings
       const now = new Date();
       let finalBookings = enriched;
-      let finalCount = count;
 
       if (activeTab === "cancelled") {
         finalBookings = enriched.filter((b) => b.isSessionCancelled);
-        finalCount = finalBookings.length;
       } else if (activeTab === "active") {
-        // Exclude cancelled sessions AND already-ended bookings
         finalBookings = enriched.filter((b) => {
           if (b.isSessionCancelled) return false;
           const endDt = new Date(`${b.available_date}T${b.end_time}`);
           return endDt > now;
         });
       } else if (activeTab === "completed") {
-        // Only show bookings that have actually ended
         finalBookings = enriched.filter((b) => {
           if (b.isSessionCancelled) return false;
           const endDt = new Date(`${b.available_date}T${b.end_time}`);
@@ -322,7 +281,7 @@ export default function ManagerBookings() {
       }
 
       setBookings(finalBookings);
-      setTotalCount(activeTab === "cancelled" || activeTab === "active" || activeTab === "completed" ? finalBookings.length : count);
+      setTotalCount(finalBookings.length);
     } catch (error) {
       console.error("Error fetching bookings:", error);
     } finally {
@@ -330,7 +289,6 @@ export default function ManagerBookings() {
     }
   }, [activeCourtIds, activeTab, dateRange, currentPage, courts, venues]);
 
-  // Trigger fetch when dependencies change
   useEffect(() => {
     if (!initLoading) {
       fetchBookings();
@@ -349,31 +307,30 @@ export default function ManagerBookings() {
 
   const getStatusBadge = (booking: Booking) => {
     const isPast = new Date(`${booking.available_date}T${booking.end_time}`) < new Date();
-
     if (booking.isSessionCancelled) {
       return (
         <Badge variant="destructive" className="gap-1">
-          <XCircle className="h-3 w-3" /> Cancelled
+          <XCircle className="h-3 w-3" /> {t("bookings.cancelled")}
         </Badge>
       );
     }
     if (isPast) {
       return (
         <Badge variant="default" className="gap-1 bg-blue-600">
-          <CheckCircle className="h-3 w-3" /> Completed
+          <CheckCircle className="h-3 w-3" /> {t("bookings.completed")}
         </Badge>
       );
     }
     if (booking.payment_status === "completed") {
       return (
         <Badge variant="default" className="gap-1 bg-green-600">
-          <CheckCircle className="h-3 w-3" /> Paid
+          <CheckCircle className="h-3 w-3" /> {t("bookings.paid")}
         </Badge>
       );
     }
     return (
       <Badge variant="secondary" className="gap-1">
-        <AlertCircle className="h-3 w-3" /> Pending
+        <AlertCircle className="h-3 w-3" /> {t("bookings.pending")}
       </Badge>
     );
   };
@@ -381,12 +338,10 @@ export default function ManagerBookings() {
   const BookingCard = ({ booking }: { booking: Booking }) => {
     const isPast = new Date(`${booking.available_date}T${booking.end_time}`) < new Date();
     const canReschedule = !isPast && !booking.isSessionCancelled;
-
     return (
       <Card className="overflow-hidden">
         <CardContent className="p-3 sm:p-4">
           <div className="space-y-2">
-            {/* Row 1: Name + Badge + Reschedule */}
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold text-sm sm:text-base truncate max-w-[120px] sm:max-w-none">{booking.bookerName}</h3>
               {getStatusBadge(booking)}
@@ -398,12 +353,10 @@ export default function ManagerBookings() {
                   onClick={() => setRescheduleBooking(booking)}
                 >
                   <CalendarDays className="h-3 w-3 mr-1" />
-                  Reschedule
+                  {t("bookings.reschedule")}
                 </Button>
               )}
             </div>
-
-            {/* Row 2: Phone number */}
             {booking.bookerPhone && (
               <a
                 href={`tel:${booking.bookerPhone}`}
@@ -414,8 +367,6 @@ export default function ManagerBookings() {
                 {booking.bookerPhone}
               </a>
             )}
-
-            {/* Row 2: Date + Time */}
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs sm:text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
@@ -426,8 +377,6 @@ export default function ManagerBookings() {
                 {formatTime(booking.start_time)} - {formatTime(booking.end_time)}
               </div>
             </div>
-
-            {/* Row 3: Venue */}
             <div className="text-xs sm:text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
@@ -464,11 +413,10 @@ export default function ManagerBookings() {
     if (totalPages <= 1) return null;
     const start = (currentPage - 1) * ITEMS_PER_PAGE + 1;
     const end = Math.min(currentPage * ITEMS_PER_PAGE, totalCount);
-
     return (
       <div className="flex items-center justify-between pt-4">
         <p className="text-sm text-muted-foreground">
-          Showing {start} to {end} of {totalCount} bookings
+          {t("bookings.showing")} {start} {t("bookings.to")} {end} {t("bookings.of")} {totalCount} {t("bookings.bookingsLabel")}
         </p>
         <div className="flex items-center gap-2">
           <Button
@@ -478,10 +426,10 @@ export default function ManagerBookings() {
             disabled={currentPage === 1}
           >
             <ChevronLeft className="h-4 w-4" />
-            Previous
+            {t("bookings.previous")}
           </Button>
           <span className="text-sm">
-            Page {currentPage} of {totalPages}
+            {t("bookings.page")} {currentPage} {t("bookings.ofPages")} {totalPages}
           </span>
           <Button
             variant="outline"
@@ -489,7 +437,7 @@ export default function ManagerBookings() {
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
           >
-            Next
+            {t("bookings.next")}
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -535,49 +483,41 @@ export default function ManagerBookings() {
       <div className="p-4 md:p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="font-display text-2xl font-bold">Bookings</h1>
-            <p className="text-muted-foreground">View and manage all your venue bookings</p>
+            <h1 className="font-display text-2xl font-bold">{t("bookings.title")}</h1>
+            <p className="text-muted-foreground">{t("bookings.subtitle")}</p>
           </div>
         </div>
 
-        {/* Filters */}
         <Card>
           <CardContent className="p-4">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Filter className="h-4 w-4" />
-                <span className="text-sm font-medium">Filters:</span>
+                <span className="text-sm font-medium">{t("bookings.filters")}</span>
               </div>
-
               <div className="flex flex-col sm:flex-row gap-3 flex-1">
                 <Select value={selectedVenue} onValueChange={setSelectedVenue}>
                   <SelectTrigger className="w-full sm:w-[200px]">
-                    <SelectValue placeholder="All Venues" />
+                    <SelectValue placeholder={t("bookings.allVenues")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Venues</SelectItem>
+                    <SelectItem value="all">{t("bookings.allVenues")}</SelectItem>
                     {venues.map((venue) => (
-                      <SelectItem key={venue.id} value={venue.id}>
-                        {venue.name}
-                      </SelectItem>
+                      <SelectItem key={venue.id} value={venue.id}>{venue.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-
                 <Select value={selectedCourt} onValueChange={setSelectedCourt}>
                   <SelectTrigger className="w-full sm:w-[200px]">
-                    <SelectValue placeholder="All Courts" />
+                    <SelectValue placeholder={t("bookings.allCourts")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Courts</SelectItem>
+                    <SelectItem value="all">{t("bookings.allCourts")}</SelectItem>
                     {filteredCourts.map((court) => (
-                      <SelectItem key={court.id} value={court.id}>
-                        {court.name}
-                      </SelectItem>
+                      <SelectItem key={court.id} value={court.id}>{court.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -590,14 +530,12 @@ export default function ManagerBookings() {
                       <Calendar className="mr-2 h-4 w-4" />
                       {dateRange?.from ? (
                         dateRange.to ? (
-                          <>
-                            {format(dateRange.from, "MMM d")} - {format(dateRange.to, "MMM d, yyyy")}
-                          </>
+                          <>{format(dateRange.from, "MMM d")} - {format(dateRange.to, "MMM d, yyyy")}</>
                         ) : (
                           format(dateRange.from, "MMM d, yyyy")
                         )
                       ) : (
-                        "All Dates"
+                        t("bookings.allDates")
                       )}
                     </Button>
                   </PopoverTrigger>
@@ -612,7 +550,7 @@ export default function ManagerBookings() {
                     {dateRange && (
                       <div className="p-3 border-t">
                         <Button variant="outline" className="w-full" onClick={() => setDateRange(undefined)}>
-                          Clear Date Range
+                          {t("bookings.clearDateRange")}
                         </Button>
                       </div>
                     )}
@@ -623,44 +561,41 @@ export default function ManagerBookings() {
           </CardContent>
         </Card>
 
-        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as BookingTab)}>
           <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
             <TabsTrigger value="active" className="gap-2">
               <AlertCircle className="h-4 w-4 hidden sm:inline" />
-              Active
+              {t("bookings.active")}
             </TabsTrigger>
             <TabsTrigger value="cancelled" className="gap-2">
               <XCircle className="h-4 w-4 hidden sm:inline" />
-              Cancelled
+              {t("bookings.cancelled")}
             </TabsTrigger>
             <TabsTrigger value="completed" className="gap-2">
               <CheckCircle className="h-4 w-4 hidden sm:inline" />
-              Completed
+              {t("bookings.completed")}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="active" className="mt-4 space-y-3">
             <TabContent
               emptyIcon={AlertCircle}
-              emptyTitle="No active bookings"
-              emptyDescription="Active bookings will appear here when customers book your venues."
+              emptyTitle={t("bookings.noActiveBookings")}
+              emptyDescription={t("bookings.noActiveBookingsDesc")}
             />
           </TabsContent>
-
           <TabsContent value="cancelled" className="mt-4 space-y-3">
             <TabContent
               emptyIcon={XCircle}
-              emptyTitle="No cancelled bookings"
-              emptyDescription="Cancelled bookings will appear here."
+              emptyTitle={t("bookings.noCancelledBookings")}
+              emptyDescription={t("bookings.noCancelledBookingsDesc")}
             />
           </TabsContent>
-
           <TabsContent value="completed" className="mt-4 space-y-3">
             <TabContent
               emptyIcon={CheckCircle}
-              emptyTitle="No completed bookings"
-              emptyDescription="Completed bookings will appear here."
+              emptyTitle={t("bookings.noCompletedBookings")}
+              emptyDescription={t("bookings.noCompletedBookingsDesc")}
             />
           </TabsContent>
         </Tabs>
