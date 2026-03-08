@@ -109,14 +109,15 @@ serve(async (req) => {
       return false;
     });
 
-    // Clean up same-user orphaned rows for this slot before inserting
+    // Clean up orphaned unbooked rows that would cause unique constraint violations
     if (!hasOverlap) {
       const orphanedIds = (overlaps || [])
         .filter((row) => {
           const existingStart = timeToMinutes(row.start_time);
           const existingEnd = timeToMinutes(row.end_time);
           const timesOverlap = bookingStartMin < existingEnd && bookingStartMin + durationMinutes > existingStart;
-          return timesOverlap && !row.is_booked && row.booked_by_user_id === user.id;
+          // Clean any unbooked row that overlaps — same user, null user, or abandoned
+          return timesOverlap && !row.is_booked;
         })
         .map((row) => row.id);
 
