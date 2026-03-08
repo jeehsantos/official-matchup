@@ -341,7 +341,7 @@ export default function ManagerBookings() {
     if (isPast) {
       return <Badge variant="default" className="gap-1 bg-blue-600"><CheckCircle className="h-3 w-3" /> Completed</Badge>;
     }
-    if (booking.payment_status === "paid") {
+    if (booking.payment_status === "completed") {
       return <Badge variant="default" className="gap-1 bg-green-600"><CheckCircle className="h-3 w-3" /> Paid</Badge>;
     }
     return <Badge variant="secondary" className="gap-1"><AlertCircle className="h-3 w-3" /> Pending</Badge>;
