@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -20,7 +21,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { useManagerVenues } from "@/hooks/useManagerVenues";
 
 interface StaffMember {
   id: string;
@@ -30,11 +30,16 @@ interface StaffMember {
     full_name: string | null;
     user_id: string;
   };
+  email?: string;
 }
 
-export function StaffAccessSection() {
+interface StaffAccessSectionProps {
+  venueId: string;
+}
+
+export function StaffAccessSection({ venueId }: StaffAccessSectionProps) {
+  const { user } = useAuth();
   const { toast } = useToast();
-  const { data: managerVenues = [] } = useManagerVenues();
   const [open, setOpen] = useState(false);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,46 +53,33 @@ export function StaffAccessSection() {
     password: "",
   });
 
-  // Use first venue to query staff list (all venues share same staff)
-  const firstVenueId = managerVenues[0]?.id;
-
   useEffect(() => {
-    if (firstVenueId) {
+    if (venueId) {
       fetchStaff();
     }
-  }, [firstVenueId]);
+  }, [venueId]);
 
   const fetchStaff = async () => {
-    if (!firstVenueId) return;
+    if (!venueId) return;
     setLoading(true);
     try {
-      // Get unique staff user_ids across all manager venues
-      const venueIds = managerVenues.map((v) => v.id);
       const { data, error } = await supabase
         .from("venue_staff")
-        .select("id, user_id, created_at, venue_id")
-        .in("venue_id", venueIds)
+        .select("id, user_id, created_at")
+        .eq("venue_id", venueId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      // Deduplicate by user_id (staff appears in multiple venues)
-      const uniqueStaffMap = new Map<string, typeof data[0]>();
-      data?.forEach((s) => {
-        if (!uniqueStaffMap.has(s.user_id)) {
-          uniqueStaffMap.set(s.user_id, s);
-        }
-      });
-      const uniqueStaff = Array.from(uniqueStaffMap.values());
-
-      if (uniqueStaff.length > 0) {
-        const userIds = uniqueStaff.map((s) => s.user_id);
+      // Fetch profiles for each staff member
+      if (data && data.length > 0) {
+        const userIds = data.map((s) => s.user_id);
         const { data: profiles } = await supabase
           .from("profiles")
           .select("user_id, full_name")
           .in("user_id", userIds);
 
-        const staffWithProfiles = uniqueStaff.map((s) => ({
+        const staffWithProfiles = data.map((s) => ({
           ...s,
           profile: profiles?.find((p) => p.user_id === s.user_id),
         }));
@@ -126,12 +118,14 @@ export function StaffAccessSection() {
       const { data, error } = await supabase.functions.invoke("manage-venue-staff", {
         body: {
           action: "add",
+          venue_id: venueId,
           email: formData.email.trim().toLowerCase(),
           password: formData.password,
           full_name: formData.full_name.trim(),
         },
       });
 
+      // Edge function returns error in data body for non-2xx responses
       if (data?.error) {
         toast({
           title: "Cannot add staff",
@@ -143,10 +137,7 @@ export function StaffAccessSection() {
 
       if (error) throw error;
 
-      toast({
-        title: "Staff member added successfully",
-        description: `Assigned to all ${data?.venues_assigned || ""} venues`,
-      });
+      toast({ title: "Staff member added successfully" });
       setFormData({ full_name: "", email: "", password: "" });
       setShowPassword(false);
       fetchStaff();
@@ -168,13 +159,14 @@ export function StaffAccessSection() {
         body: {
           action: "remove",
           staff_id: staffId,
+          venue_id: venueId,
         },
       });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      toast({ title: "Staff member removed from all venues" });
+      toast({ title: "Staff member removed" });
       fetchStaff();
     } catch (error: any) {
       toast({
@@ -198,7 +190,7 @@ export function StaffAccessSection() {
                 <div>
                   <CardTitle>Staff Access</CardTitle>
                   <CardDescription className="text-xs md:text-sm">
-                    Staff members are automatically assigned to all your venues
+                    Add staff members to manage availability, equipment and bookings
                   </CardDescription>
                 </div>
               </div>
@@ -268,9 +260,6 @@ export function StaffAccessSection() {
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                New staff will be assigned to all {managerVenues.length} venue{managerVenues.length !== 1 ? "s" : ""} you manage.
-              </p>
               <Button
                 onClick={handleAddStaff}
                 disabled={adding || !formData.email || !formData.password || !formData.full_name}
@@ -305,7 +294,7 @@ export function StaffAccessSection() {
                 <div className="space-y-2">
                   {staff.map((member) => (
                     <div
-                      key={member.user_id}
+                      key={member.id}
                       className="flex items-center justify-between p-3 border border-border rounded-lg"
                     >
                       <div className="min-w-0 flex-1">

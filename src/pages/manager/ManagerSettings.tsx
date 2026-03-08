@@ -808,7 +808,7 @@ export default function ManagerSettings() {
 
         {/* Staff Access Section - Only for court_manager */}
         {userRole === "court_manager" && venues.length > 0 && (
-          <StaffAccessSection />
+          <StaffAccessSection venueId={selectedVenueId} />
         )}
 
         {venues.length === 0 && userRole === "court_manager" && (
