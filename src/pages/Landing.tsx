@@ -211,6 +211,7 @@ export default function Landing() {
               <h4 className="mb-6 text-sm font-bold uppercase tracking-widest text-muted-foreground">{t("landingFooter.product")}</h4>
               <ul className="space-y-4 text-sm font-medium text-foreground/70">
                 <li><Link to="/courts#browse-courts" className="transition hover:text-primary">{t("landingFooter.browseCourts")}</Link></li>
+                <li><Link to="/venue" className="transition hover:text-primary">Venues</Link></li>
                 <li><Link to="/auth?tab=signup&role=player" className="transition hover:text-primary">{t("landingFooter.forPlayers")}</Link></li>
                 <li><Link to="/auth?tab=signup&role=court_manager" className="transition hover:text-primary">{t("landingFooter.forCourtManagers")}</Link></li>
                 <li><Link to="/groups" className="transition hover:text-primary">{t("landingFooter.communityGroups")}</Link></li>
