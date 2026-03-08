@@ -287,6 +287,57 @@ serve(async (req) => {
     const fundingRequired = courtAmountWithEquipment;
     const fundingCurrent = 0;
 
+    // Notify group members about new session
+    try {
+      const { data: groupData } = await supabaseAdmin
+        .from("groups")
+        .select("name")
+        .eq("id", groupId)
+        .single();
+
+      const { data: members } = await supabaseAdmin
+        .from("group_members")
+        .select("user_id")
+        .eq("group_id", groupId);
+
+      const otherMembers = (members || []).filter((m) => m.user_id !== user.id);
+
+      if (otherMembers.length > 0) {
+        // Insert in-app notifications for all group members
+        const notifications = otherMembers.map((m) => ({
+          user_id: m.user_id,
+          type: "game_reminder" as const,
+          title: "New Session Booked",
+          message: `A new session has been booked for ${groupData?.name || "your group"} on ${sessionDate} at ${startTime.slice(0, 5)}.`,
+          data: { session_id: session.id, group_id: groupId },
+        }));
+
+        await supabaseAdmin.from("notifications").insert(notifications);
+
+        // Send push notifications (fire-and-forget)
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        for (const member of otherMembers) {
+          fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${serviceRoleKey}`,
+            },
+            body: JSON.stringify({
+              user_id: member.user_id,
+              title: "New Session Booked",
+              body: `A new session for ${groupData?.name || "your group"} on ${sessionDate} at ${startTime.slice(0, 5)}.`,
+              type: "game_reminder",
+              url: `/games`,
+            }),
+          }).catch(() => {}); // fire-and-forget
+        }
+      }
+    } catch (notifErr) {
+      console.warn("Non-critical: failed to send session notifications:", notifErr);
+    }
+
     return new Response(
       JSON.stringify({
         session_id: session.id,

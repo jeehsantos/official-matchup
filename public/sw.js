@@ -52,3 +52,34 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+// ── Push Notification Handler ──
+self.addEventListener("push", (event) => {
+  let data = { title: "Sport Arena", body: "You have a new notification" };
+  try {
+    if (event.data) data = event.data.json();
+  } catch (_) {}
+
+  const options = {
+    body: data.body || data.message || "",
+    icon: "/pwa-icon.svg",
+    badge: "/pwa-icon.svg",
+    data: data.url ? { url: data.url } : undefined,
+    vibrate: [100, 50, 100],
+  };
+
+  event.waitUntil(self.registration.showNotification(data.title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window" }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(url) && "focus" in client) return client.focus();
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});

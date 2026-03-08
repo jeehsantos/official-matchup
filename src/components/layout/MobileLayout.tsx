@@ -15,6 +15,7 @@ import {
   X
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 interface MobileLayoutProps {
   children: ReactNode;
@@ -45,6 +46,9 @@ export function MobileLayout({
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Register push subscription for authenticated users
+  usePushSubscription(user?.id);
 
   const handleSignOut = async () => {
     await signOut();
