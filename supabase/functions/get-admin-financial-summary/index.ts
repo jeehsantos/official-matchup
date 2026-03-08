@@ -143,6 +143,15 @@ Deno.serve(async (req) => {
     const totalStripeFeeActualCents = stripeFeeActualTotalCents + qcStripeFeeActualCents;
     const stripeFeeCoverageCents = totalServiceFeeCents - totalPlatformFeeCents;
     const netPlatformPositionCents = totalServiceFeeCents - stripeFeeCoverageCents;
+    const trueNetProfitCents = totalServiceFeeCents - totalStripeFeeActualCents;
+
+    // Fee health status based on coverage ratio
+    let feeHealthStatus: "healthy" | "warning" | "critical" = "healthy";
+    if (totalStripeFeeActualCents > 0) {
+      const coverageRatio = stripeFeeCoverageCents / totalStripeFeeActualCents;
+      if (coverageRatio < 0.95) feeHealthStatus = "critical";
+      else if (coverageRatio < 1.05) feeHealthStatus = "warning";
+    }
 
     // ─── Top venues ───
     const { data: topVenuesData } = await supabaseAdmin
@@ -215,6 +224,9 @@ Deno.serve(async (req) => {
         credits_liability_total_nzd: centsToNzd(creditsLiabilityCents),
         net_platform_position_cents: netPlatformPositionCents,
         net_platform_position_nzd: centsToNzd(netPlatformPositionCents),
+        true_net_profit_cents: trueNetProfitCents,
+        true_net_profit_nzd: centsToNzd(trueNetProfitCents),
+        fee_health_status: feeHealthStatus,
       },
       breakdown: {
         session_payments: {

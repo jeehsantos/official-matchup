@@ -3,9 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AdminLayout } from "@/components/layout/AdminLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,8 +19,12 @@ import {
   Clock,
   AlertTriangle,
   BarChart3,
+  ShieldCheck,
+  ShieldAlert,
+  Settings,
 } from "lucide-react";
 import { format, subDays } from "date-fns";
+import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 
 interface FinancialSummary {
   summary: {
@@ -43,6 +48,9 @@ interface FinancialSummary {
     credits_liability_total_nzd: string;
     net_platform_position_cents: number;
     net_platform_position_nzd: string;
+    true_net_profit_cents: number;
+    true_net_profit_nzd: string;
+    fee_health_status: "healthy" | "warning" | "critical";
   };
   breakdown: {
     session_payments: { count: number; gross_cents: number; recipient_cents: number; service_fee_cents: number };
@@ -53,19 +61,48 @@ interface FinancialSummary {
   date_range: { start_date: string; end_date: string };
 }
 
+function FeeHealthBadge({ status }: { status: "healthy" | "warning" | "critical" }) {
+  if (status === "healthy") {
+    return (
+      <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/10">
+        <ShieldCheck className="h-3 w-3 mr-1" /> Healthy
+      </Badge>
+    );
+  }
+  if (status === "warning") {
+    return (
+      <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-500/10">
+        <ShieldAlert className="h-3 w-3 mr-1" /> Warning
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="destructive">
+      <ShieldAlert className="h-3 w-3 mr-1" /> Critical
+    </Badge>
+  );
+}
+
 function AdminFinanceContent() {
   const [startDate, setStartDate] = useState(format(subDays(new Date(), 30), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
+  const { data: platformSettings } = useQuery({
+    queryKey: ["admin-platform-settings-config"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("platform_settings")
+        .select("player_fee, manager_fee_percentage, stripe_percent, stripe_fixed, is_active")
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const { data, isLoading, error, refetch } = useQuery<FinancialSummary>({
     queryKey: ["admin-finance", startDate, endDate],
     queryFn: async () => {
-      const { data: result, error } = await supabase.functions.invoke("get-admin-financial-summary", {
-        method: "GET",
-        headers: {},
-        body: undefined,
-      });
-      // The function uses query params, so we need to call it differently
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const url = `https://${projectId}.supabase.co/functions/v1/get-admin-financial-summary?start_date=${startDate}&end_date=${endDate}`;
       const session = await supabase.auth.getSession();
@@ -88,8 +125,8 @@ function AdminFinanceContent() {
     { label: "Court Payables (Pending)", value: `$${s.pending_court_payables_total_nzd}`, icon: Clock, color: "text-amber-600" },
     { label: "Transferred to Courts", value: `$${s.transferred_to_courts_total_nzd}`, icon: ArrowRightLeft, color: "text-blue-600" },
     { label: "Service Fees Earned", value: `$${s.service_fee_total_nzd}`, icon: TrendingUp, color: "text-emerald-600" },
-    { label: "Platform Fees (Our Share)", value: `$${s.platform_fee_total_nzd}`, icon: Wallet, color: "text-primary" },
-    { label: "Stripe Fee Coverage", value: `$${s.stripe_fee_coverage_nzd}`, icon: CreditCard, color: "text-muted-foreground" },
+    { label: "Stripe Fees (Actual)", value: `$${s.stripe_fee_actual_total_nzd}`, icon: CreditCard, color: "text-muted-foreground" },
+    { label: "True Net Profit", value: `$${s.true_net_profit_nzd}`, icon: Wallet, color: Number(s.true_net_profit_nzd) >= 0 ? "text-emerald-600" : "text-destructive" },
     { label: "Credits Liability", value: `$${s.credits_liability_total_nzd}`, icon: AlertTriangle, color: "text-destructive" },
     { label: "Net Platform Position", value: `$${s.net_platform_position_nzd}`, icon: BarChart3, color: "text-primary" },
   ] : [];
@@ -97,6 +134,41 @@ function AdminFinanceContent() {
   return (
     <AdminLayout title="Financial Dashboard">
       <div className="space-y-6">
+        {/* Current Fee Configuration */}
+        {platformSettings && (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Settings className="h-4 w-4 text-primary" />
+                Current Fee Configuration
+              </CardTitle>
+              <CardDescription>Active settings used for new payments</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Player Fee</p>
+                  <p className="text-lg font-semibold">${Number(platformSettings.player_fee).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Manager Commission</p>
+                  <p className="text-lg font-semibold">{Number(platformSettings.manager_fee_percentage)}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Stripe Rate</p>
+                  <p className="text-lg font-semibold">{(Number(platformSettings.stripe_percent) * 100).toFixed(1)}% + ${Number(platformSettings.stripe_fixed).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <Badge className={platformSettings.is_active ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/10" : "bg-destructive/10 text-destructive"}>
+                    {platformSettings.is_active ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Date Range Picker */}
         <Card>
           <CardContent className="p-4">
@@ -148,6 +220,56 @@ function AdminFinanceContent() {
           </Card>
         ) : (
           <>
+            {/* Fee Health Warning */}
+            {s && s.fee_health_status !== "healthy" && (
+              <Card className={s.fee_health_status === "critical" ? "border-destructive bg-destructive/5" : "border-amber-500 bg-amber-500/5"}>
+                <CardContent className="p-4 flex items-start gap-3">
+                  <AlertTriangle className={`h-5 w-5 mt-0.5 flex-shrink-0 ${s.fee_health_status === "critical" ? "text-destructive" : "text-amber-600"}`} />
+                  <div>
+                    <p className="font-semibold text-sm">
+                      {s.fee_health_status === "critical" ? "Stripe Fee Coverage Deficit" : "Stripe Fee Coverage Marginal"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Actual Stripe fees (${s.stripe_fee_actual_total_nzd}) {s.fee_health_status === "critical" ? "exceed" : "are close to"} estimated coverage (${s.stripe_fee_coverage_nzd}).
+                      Consider increasing the Stripe rate in Platform Fees settings.
+                    </p>
+                  </div>
+                  <FeeHealthBadge status={s.fee_health_status} />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Platform Health Card */}
+            {s && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <ShieldCheck className="h-4 w-4" />
+                    Platform Fee Health
+                    <FeeHealthBadge status={s.fee_health_status} />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Service Fees Collected</p>
+                      <p className="text-xl font-bold">${s.service_fee_total_nzd}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Actual Stripe Fees</p>
+                      <p className="text-xl font-bold text-muted-foreground">${s.stripe_fee_actual_total_nzd}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">True Net Profit</p>
+                      <p className={`text-xl font-bold ${Number(s.true_net_profit_nzd) >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+                        ${s.true_net_profit_nzd}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {summaryCards.map((card) => (
                 <Card key={card.label}>

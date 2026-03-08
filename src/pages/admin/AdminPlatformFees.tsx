@@ -279,6 +279,58 @@ function AdminPlatformFeesContent() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Multi-price Simulation */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              Price Simulation
+            </CardTitle>
+            <CardDescription>
+              Platform net profit across court prices (after Stripe fees)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 text-muted-foreground font-medium">Court Price</th>
+                    <th className="text-right py-2 text-muted-foreground font-medium">Player Pays</th>
+                    <th className="text-right py-2 text-muted-foreground font-medium">Service Fee</th>
+                    <th className="text-right py-2 text-muted-foreground font-medium">Stripe Fee</th>
+                    <th className="text-right py-2 text-muted-foreground font-medium">Platform Net</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[20, 30, 50, 80, 100, 150].map((courtPrice) => {
+                    const sub = courtPrice + examplePlayerFee;
+                    const total = Math.ceil(((sub + exampleStripeFix) / (1 - exampleStripePct)) * 100) / 100;
+                    const stripeFee = +(total - sub).toFixed(2);
+                    const serviceFee = examplePlayerFee + stripeFee;
+                    const platformNet = examplePlayerFee;
+                    return (
+                      <tr key={courtPrice} className="border-b border-border/50">
+                        <td className="py-2 font-medium">${courtPrice.toFixed(2)}</td>
+                        <td className="text-right py-2">${total.toFixed(2)}</td>
+                        <td className="text-right py-2">${serviceFee.toFixed(2)}</td>
+                        <td className="text-right py-2 text-muted-foreground">${stripeFee.toFixed(2)}</td>
+                        <td className={`text-right py-2 font-semibold ${platformNet >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+                          ${platformNet.toFixed(2)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Platform net = player fee (${examplePlayerFee.toFixed(2)}). Stripe fees are fully covered by the gross-up formula.
+              Actual Stripe fees may vary for international cards.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </AdminLayout>
   );
