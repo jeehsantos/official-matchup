@@ -754,6 +754,7 @@ export type Database = {
           phone: string | null
           preferred_sports: string[] | null
           referral_code: string | null
+          stripe_account_id: string | null
           updated_at: string
           user_id: string
         }
@@ -768,6 +769,7 @@ export type Database = {
           phone?: string | null
           preferred_sports?: string[] | null
           referral_code?: string | null
+          stripe_account_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -782,6 +784,7 @@ export type Database = {
           phone?: string | null
           preferred_sports?: string[] | null
           referral_code?: string | null
+          stripe_account_id?: string | null
           updated_at?: string
           user_id?: string
         }
