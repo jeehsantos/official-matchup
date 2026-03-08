@@ -1022,7 +1022,9 @@ export default function QuickGameLobby() {
                     isCurrentUser={player?.isMe}
                     onJoin={() => handleJoinSlot("left", i)}
                     onPay={handlePayment}
-                    isJoining={isJoiningThis} />);
+                    isJoining={isJoiningThis}
+                    isOrganizer={isOrganizer}
+                    onKick={(p) => setKickTarget(p)} />);
 
 
               })}
@@ -1054,12 +1056,9 @@ export default function QuickGameLobby() {
                     isCurrentUser={player?.isMe}
                     onJoin={() => handleJoinSlot("right", i)}
                     onPay={handlePayment}
-                    isJoining={isJoiningThis} />);
-
-
-              })}
-            </div>
-          </div>
+                    isJoining={isJoiningThis}
+                    isOrganizer={isOrganizer}
+                    onKick={(p) => setKickTarget(p)} />);
         </div>
 
         {/* Central Panel */}
@@ -1251,7 +1250,9 @@ export default function QuickGameLobby() {
                   isCurrentUser={player?.isMe}
                   onJoin={() => handleJoinSlot("right", i)}
                   onPay={handlePayment}
-                  isJoining={isJoiningThis} />);
+                  isJoining={isJoiningThis}
+                  isOrganizer={isOrganizer}
+                  onKick={(p) => setKickTarget(p)} />);
 
 
             })}
