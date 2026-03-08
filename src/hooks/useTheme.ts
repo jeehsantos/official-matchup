@@ -1,51 +1,58 @@
-import { useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React from 'react';
 
 type Theme = 'light' | 'dark';
 
 const THEME_STORAGE_KEY = 'theme';
 const THEME_CACHE_KEY = 'theme-cache';
 
-export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    // Always check localStorage first and use it if available
-    const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
-    if (stored) {
-      sessionStorage.setItem(THEME_CACHE_KEY, stored);
-      return stored;
-    }
+interface ThemeContextValue {
+  theme: Theme;
+  setTheme: (t: Theme) => void;
+  toggleTheme: () => void;
+}
 
-    // Fall back to cached theme (e.g. if auth sign-out cleared localStorage)
-    const cached = sessionStorage.getItem(THEME_CACHE_KEY) as Theme | null;
-    if (cached) {
-      localStorage.setItem(THEME_STORAGE_KEY, cached);
-      return cached;
-    }
+const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-    // Only use system preference if no stored preference exists
-    // Then immediately save it to prevent future changes
-    const systemPreference = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    localStorage.setItem(THEME_STORAGE_KEY, systemPreference);
-    sessionStorage.setItem(THEME_CACHE_KEY, systemPreference);
-    return systemPreference;
-  });
+function getInitialTheme(): Theme {
+  const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
+  if (stored) {
+    sessionStorage.setItem(THEME_CACHE_KEY, stored);
+    return stored;
+  }
+  const cached = sessionStorage.getItem(THEME_CACHE_KEY) as Theme | null;
+  if (cached) {
+    localStorage.setItem(THEME_STORAGE_KEY, cached);
+    return cached;
+  }
+  const systemPreference: Theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  localStorage.setItem(THEME_STORAGE_KEY, systemPreference);
+  sessionStorage.setItem(THEME_CACHE_KEY, systemPreference);
+  return systemPreference;
+}
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
 
   useEffect(() => {
     const root = window.document.documentElement;
-    
     if (theme === 'dark') {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
-    
-    // Always persist theme choice
     localStorage.setItem(THEME_STORAGE_KEY, theme);
     sessionStorage.setItem(THEME_CACHE_KEY, theme);
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  };
+  const setTheme = useCallback((t: Theme) => setThemeState(t), []);
+  const toggleTheme = useCallback(() => setThemeState(prev => prev === 'light' ? 'dark' : 'light'), []);
 
-  return { theme, setTheme, toggleTheme };
+  return React.createElement(ThemeContext.Provider, { value: { theme, setTheme, toggleTheme } }, children);
+}
+
+export function useTheme(): ThemeContextValue {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
+  return ctx;
 }
