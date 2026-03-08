@@ -186,17 +186,92 @@ export default function ManagerCourtsNew() {
                     </div>
                   </div>
                   
-                  <Link to={`/manager/courts/${court.id}/edit`}>
-                    <Button variant="outline" size="sm" className="w-full gap-1">
-                      <Edit className="h-3 w-3" />
-                      Edit Venue
+                  <div className="flex gap-2">
+                    <Link to={`/manager/courts/${court.id}/edit`} className="flex-1">
+                      <Button variant="outline" size="sm" className="w-full gap-1">
+                        <Edit className="h-3 w-3" />
+                        Edit Venue
+                      </Button>
+                    </Link>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDeleteTarget(court)}
+                    >
+                      <Trash2 className="h-3 w-3 text-destructive" />
                     </Button>
-                  </Link>
+                  </div>
                 </CardContent>
               </Card>
             ))}
           </div>
         )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete "{deleteTarget?.name}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. The venue and all its data will be permanently removed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteLoading}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleteLoading}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (!deleteTarget) return;
+                  setDeleteLoading(true);
+                  try {
+                    // Check for active bookings
+                    const { count, error: countError } = await supabase
+                      .from("court_availability")
+                      .select("id", { count: "exact", head: true })
+                      .eq("court_id", deleteTarget.id)
+                      .eq("is_booked", true);
+
+                    if (countError) throw countError;
+
+                    if (count && count > 0) {
+                      toast({
+                        title: "Cannot delete venue",
+                        description: "This venue has active bookings. Please cancel all bookings first before deleting.",
+                        variant: "destructive",
+                      });
+                      setDeleteTarget(null);
+                      return;
+                    }
+
+                    const { error } = await supabase
+                      .from("courts")
+                      .delete()
+                      .eq("id", deleteTarget.id);
+
+                    if (error) throw error;
+
+                    toast({ title: "Venue deleted successfully" });
+                    setCourts(courts.filter(c => c.id !== deleteTarget.id));
+                    setDeleteTarget(null);
+                  } catch (error: any) {
+                    toast({
+                      title: "Error",
+                      description: error.message || "Failed to delete venue",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setDeleteLoading(false);
+                  }
+                }}
+              >
+                {deleteLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </ManagerLayout>
   );
