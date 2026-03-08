@@ -69,7 +69,7 @@ interface Court {
 
 type BookingTab = "active" | "cancelled" | "completed";
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 15;
 
 export default function ManagerBookings() {
   const { user } = useAuth();
