@@ -1,67 +1,61 @@
 
+Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-## Staff Access Management -- Corrected Plan
+What I found (already verified):
+1) Data inconsistency exists now:
+   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
+   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
+2) `ManagerCourtFormNew` root causes:
+   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
+   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
+   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
+3) Backend side effect confirmed:
+   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
 
-### Overview
-Court managers can **create new staff accounts** directly from Settings by entering an email and password. The system creates a new user with the `venue_staff` role. Staff get restricted access to Availability, Equipment, Bookings, and their own Settings (without Payment Payouts or Staff Access sections).
+Implementation plan (execute in this order):
+1. Database integrity hardening + backfill (migration)
+   - Backfill: set `is_multi_court=true` for any court that already has children.
+   - Add DB validation trigger(s) on `courts` to enforce:
+     - child cannot reference itself
+     - child parent must be in same venue
+     - parent cannot be set `is_multi_court=false` while children exist
+     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
+   - This guarantees the bug cannot recur from any client path.
 
-### User Flow
-1. Court manager opens Settings, expands "Staff Access" section.
-2. Enters staff **email**, **password**, and **full name**, then clicks "Add Staff".
-3. Backend edge function creates a new auth user + profile + `venue_staff` role + `venue_staff` table row.
-4. Staff list displays below with name, email, and a Remove button.
-5. Staff logs in with those credentials and sees a restricted manager layout.
+2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
+   - Remove direct `window.history.replaceState` usage.
+   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
+   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
+   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
 
-### Database Changes (single migration)
+3. Multi-court UI behavior safeguards
+   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
+   - Disable/harden turning off multi-court when children exist (with clear message).
+   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
 
-1. **Add `venue_staff` to `app_role` enum.**
+4. Availability resilience (backend function)
+   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
+   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
 
-2. **Create `venue_staff` table**: `id`, `venue_id` (FK venues), `user_id`, `added_by`, `created_at`. Unique on `(venue_id, user_id)`.
+5. Verification I will perform (not asking you to test manually)
+   - DB checks:
+     - verify parent `57e11168...` becomes `is_multi_court=true`
+     - verify child links remain unchanged
+     - verify no rows exist with `children > 0 AND is_multi_court=false`
+   - Functional checks:
+     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
+   - UI checks:
+     - exercise add-sub-court flow and confirm:
+       - main court remains main
+       - child appears as child tab
+       - subsequent saves update correct court record
+       - no panel collapse/desync
 
-3. **RLS on `venue_staff`**: Court managers can CRUD where they own the venue. Staff can SELECT own rows.
-
-4. **`is_venue_staff` security definer function**: checks if a user is staff for a given venue. Used in RLS policies on other tables.
-
-5. **Add RLS policies** on `courts`, `court_availability`, `venue_weekly_rules`, `venue_date_overrides`, `equipment_inventory`, `booking_holds`, `sessions`, `session_players`, `venues` to grant staff SELECT access (and UPDATE on availability/equipment) via `is_venue_staff`.
-
-### Edge Function: `manage-venue-staff`
-
-- **Add staff**: Accepts `{ action: "add", venue_id, email, password, full_name }`.
-  - Validates caller owns the venue (service role lookup).
-  - Creates auth user via `supabase.auth.admin.createUser()` with `email_confirm: true`.
-  - Inserts profile row, `venue_staff` role in `user_roles`, and row in `venue_staff` table.
-  - Returns created staff info.
-
-- **Remove staff**: Accepts `{ action: "remove", staff_id }`.
-  - Validates caller owns the venue.
-  - Deletes `venue_staff` row. Removes `venue_staff` role from `user_roles` if no other venue links remain. Optionally deletes the auth user.
-
-Config: `verify_jwt = false` (manual auth check inside).
-
-### Frontend Changes
-
-1. **New "Staff Access" collapsible in `ManagerSettings.tsx`** (visible only to `court_manager`):
-   - Form: full name, email, password inputs + "Add Staff" button.
-   - Staff list table fetched from `venue_staff` joined with `profiles`.
-   - Remove button per staff member.
-
-2. **`ManagerLayout.tsx` updates**:
-   - Allow `venue_staff` role (currently rejects non-`court_manager`).
-   - For `venue_staff`, show only: Availability, Equipment, Bookings, Settings in nav.
-   - Hide: Dashboard, Venues.
-
-3. **`ManagerSettings.tsx` conditional rendering for staff role**:
-   - Hide "Payment Payouts" section.
-   - Hide "Staff Access" section.
-
-4. **`auth-context.tsx`**: Add `venue_staff` to the `AppRole` type.
-
-5. **Route guards**: `ManagerLayout` already protects all `/manager/*` routes. Update the role check to accept `venue_staff` in addition to `court_manager`. No changes needed in `App.tsx` since routes don't use `ProtectedRoute` with `requiredRole`.
-
-### Implementation Order
-1. DB migration (enum value, table, RLS, helper function)
-2. Edge function `manage-venue-staff`
-3. Staff Access UI section in `ManagerSettings.tsx`
-4. `ManagerLayout` + `auth-context` updates for `venue_staff` role
-5. Conditional hide of Payment Payouts + Staff Access for staff
-
+Technical details:
+- Files to update:
+  - `supabase/migrations/<new>.sql`
+  - `src/pages/manager/ManagerCourtFormNew.tsx`
+  - `supabase/functions/get-availability/index.ts`
+- No money/payment logic touched.
+- No auth model changes.
+- Existing routing and form schema preserved; this is a consistency + state synchronization fix.

@@ -1375,6 +1375,38 @@ export type Database = {
           },
         ]
       }
+      venue_staff: {
+        Row: {
+          added_by: string
+          created_at: string
+          id: string
+          user_id: string
+          venue_id: string
+        }
+        Insert: {
+          added_by: string
+          created_at?: string
+          id?: string
+          user_id: string
+          venue_id: string
+        }
+        Update: {
+          added_by?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_staff_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_weekly_rules: {
         Row: {
           created_at: string
@@ -1522,6 +1554,10 @@ export type Database = {
         Returns: Json
       }
       expire_stale_holds: { Args: never; Returns: number }
+      get_staff_venue_ids: {
+        Args: { check_user_id: string }
+        Returns: string[]
+      }
       get_user_credits: { Args: { p_user_id: string }; Returns: number }
       has_role: {
         Args: {
@@ -1537,6 +1573,11 @@ export type Database = {
       }
       is_group_member: {
         Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_staff_of_owner: { Args: { check_user_id: string }; Returns: boolean }
+      is_venue_staff: {
+        Args: { check_user_id: string; check_venue_id: string }
         Returns: boolean
       }
       process_referral_credit: {
@@ -1563,7 +1604,12 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "court_manager" | "organizer" | "player" | "admin"
+      app_role:
+        | "court_manager"
+        | "organizer"
+        | "player"
+        | "admin"
+        | "venue_staff"
       booking_payment_type: "single" | "split"
       ground_type: "grass" | "turf" | "sand" | "hard" | "clay" | "other"
       notification_type:
@@ -1725,7 +1771,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["court_manager", "organizer", "player", "admin"],
+      app_role: [
+        "court_manager",
+        "organizer",
+        "player",
+        "admin",
+        "venue_staff",
+      ],
       booking_payment_type: ["single", "split"],
       ground_type: ["grass", "turf", "sand", "hard", "clay", "other"],
       notification_type: [

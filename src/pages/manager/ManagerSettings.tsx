@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { StaffAccessSection } from "@/components/manager/StaffAccessSection";
 import { 
   Loader2, 
   CreditCard, 
@@ -65,7 +66,7 @@ interface PasswordData {
 }
 
 export default function ManagerSettings() {
-  const { user, signOut } = useAuth();
+  const { user, userRole, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -680,8 +681,8 @@ export default function ManagerSettings() {
           </Card>
         </Collapsible>
 
-        {/* Stripe Connect Card - Always visible */}
-        <Collapsible open={paymentOpen} onOpenChange={setPaymentOpen}>
+        {/* Stripe Connect Card - Only for court_manager */}
+        {userRole === "court_manager" && <Collapsible open={paymentOpen} onOpenChange={setPaymentOpen}>
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
@@ -807,9 +808,14 @@ export default function ManagerSettings() {
               </CardContent>
             </CollapsibleContent>
           </Card>
-        </Collapsible>
+        </Collapsible>}
 
-        {venues.length === 0 && (
+        {/* Staff Access Section - Only for court_manager */}
+        {userRole === "court_manager" && venues.length > 0 && (
+          <StaffAccessSection venueId={selectedVenueId} />
+        )}
+
+        {venues.length === 0 && userRole === "court_manager" && (
           <Card>
             <CardContent className="py-8 text-center">
               <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
