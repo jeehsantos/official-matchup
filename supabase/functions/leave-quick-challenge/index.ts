@@ -42,45 +42,54 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Check the challenge exists
-    const { data: challenge, error: challengeError } = await supabaseAdmin
-      .from("quick_challenges")
-      .select("id, created_by, price_per_player")
-      .eq("id", challengeId)
-      .single();
+    // Run challenge and player queries in parallel for better performance
+    const [challengeResult, playerResult] = await Promise.all([
+      supabaseAdmin
+        .from("quick_challenges")
+        .select("id, created_by, price_per_player, payment_type")
+        .eq("id", challengeId)
+        .single(),
+      supabaseAdmin
+        .from("quick_challenge_players")
+        .select("id, payment_status")
+        .eq("challenge_id", challengeId)
+        .eq("user_id", userId)
+        .single(),
+    ]);
 
-    if (challengeError || !challenge) {
+    if (challengeResult.error || !challengeResult.data) {
       throw new Error("Challenge not found");
     }
+
+    if (playerResult.error || !playerResult.data) {
+      throw new Error("You are not a participant in this challenge");
+    }
+
+    const challenge = challengeResult.data;
+    const playerRecord = playerResult.data;
 
     // Organizers should use the cancel challenge flow instead
     if (challenge.created_by === userId) {
       throw new Error("Organizers should use the cancel lobby action instead");
     }
 
-    // Check if user is a participant
-    const { data: playerRecord, error: playerError } = await supabaseAdmin
-      .from("quick_challenge_players")
-      .select("id, payment_status")
-      .eq("challenge_id", challengeId)
-      .eq("user_id", userId)
-      .single();
-
-    if (playerError || !playerRecord) {
-      throw new Error("You are not a participant in this challenge");
-    }
-
     let creditsAdded = 0;
 
-    // If the player has paid, convert to credits using durable payment snapshot.
-    if (playerRecord.payment_status === "paid") {
+    // Fast path: For organizer-paid sessions, skip payment lookup entirely
+    const isOrganizerPaid = challenge.payment_type === "single";
+
+    if (
+      !isOrganizerPaid &&
+      playerRecord.payment_status === "paid" &&
+      challenge.price_per_player > 0
+    ) {
+      // Check if there is a real payment snapshot for this player
       const { data: paymentSnapshot, error: paymentSnapshotError } = await supabaseAdmin
         .from("quick_challenge_payments")
-        .select("id, payment_method_type, court_amount, status, converted_to_credits_at")
+        .select("id, court_amount, status")
         .eq("challenge_id", challengeId)
         .eq("user_id", userId)
         .eq("status", "completed")
-        .order("paid_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
@@ -89,44 +98,39 @@ serve(async (req) => {
         throw new Error("Failed to load payment snapshot");
       }
 
-      if (!paymentSnapshot) {
-        throw new Error("Payment snapshot not found for this player");
-      }
+      // Only convert if a real payment exists
+      if (paymentSnapshot) {
+        const amountToCredit = Number(paymentSnapshot.court_amount || 0) / 100;
 
-      const amountToCredit = Number(paymentSnapshot.court_amount || 0) / 100;
+        if (amountToCredit > 0) {
+          // Run credit addition and payment status update in parallel
+          const [creditResult, updateResult] = await Promise.all([
+            supabaseAdmin.rpc("add_user_credits", {
+              p_user_id: userId,
+              p_amount: amountToCredit,
+              p_reason: "Quick challenge cancellation",
+              p_session_id: null,
+              p_payment_id: null,
+            }),
+            supabaseAdmin
+              .from("quick_challenge_payments")
+              .update({ status: "converted_to_credits" })
+              .eq("id", paymentSnapshot.id)
+              .eq("status", "completed"),
+          ]);
 
-      if (amountToCredit > 0) {
-        const { error: creditError } = await supabaseAdmin.rpc(
-          "add_user_credits",
-          {
-            p_user_id: userId,
-            p_amount: amountToCredit,
-            p_reason: "Quick challenge cancellation",
-            p_session_id: null,
-            p_payment_id: null,
+          if (creditResult.error) {
+            console.error("Error adding credits:", creditResult.error);
+            throw new Error("Failed to convert payment to credits");
           }
-        );
 
-        if (creditError) {
-          console.error("Error adding credits:", creditError);
-          throw new Error("Failed to convert payment to credits");
+          if (updateResult.error) {
+            console.error("Error marking payment as converted:", updateResult.error);
+            throw new Error("Failed to convert payment snapshot");
+          }
+
+          creditsAdded = amountToCredit;
         }
-
-        creditsAdded = amountToCredit;
-      }
-
-      const { error: markConvertedError } = await supabaseAdmin
-        .from("quick_challenge_payments")
-        .update({
-          status: "converted_to_credits",
-          converted_to_credits_at: new Date().toISOString(),
-        })
-        .eq("id", paymentSnapshot.id)
-        .is("converted_to_credits_at", null);
-
-      if (markConvertedError) {
-        console.error("Error marking payment as converted_to_credits:", markConvertedError);
-        throw new Error("Failed to convert payment snapshot");
       }
     }
 

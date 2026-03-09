@@ -1,0 +1,44 @@
+{
+  "nav": {
+    "home": "Início",
+    "ourStory": "Nossa História",
+    "venues": "Quadras",
+    "contact": "Contato",
+    "signIn": "Entrar",
+    "getStarted": "Começar",
+    "openMenu": "Abrir menu"
+  },
+  "bottomNav": {
+    "myGames": "Meus Jogos",
+    "explore": "Explorar",
+    "find": "Buscar",
+    "groups": "Grupos",
+    "profile": "Perfil",
+    "favourite": "Favoritos",
+    "logIn": "Entrar"
+  },
+  "footer": {
+    "tagline": "O jeito mais esperto de reservar quadras e garantir seus jogos. Junte-se a milhares de jogadores aproveitando reservas sem complicação.",
+    "location": "Auckland, Nova Zelândia",
+    "product": "Produto",
+    "company": "Empresa",
+    "browseCourts": "Ver Quadras",
+    "forPlayers": "Para Jogadores",
+    "forCourtManagers": "Para Gestores de Quadras",
+    "aboutUs": "Sobre Nós",
+    "privacy": "Privacidade",
+    "terms": "Termos",
+    "cookies": "Cookies",
+    "allRightsReserved": "Todos os direitos reservados.",
+    "subscribeThanks": "Valeu por se inscrever! Vamos te manter atualizado."
+  },
+  "notFound": {
+    "title": "404",
+    "message": "Opa! Página não encontrada",
+    "backHome": "Voltar para o Início"
+  },
+  "backToHome": "Voltar para o início",
+  "cancel": "Cancelar",
+  "send": "Enviar",
+  "loading": "Carregando..."
+}

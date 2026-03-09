@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Search, AlertTriangle, Zap, Filter } from "lucide-react";
+import { Loader2, Search, AlertTriangle, Zap, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSportCategories } from "@/hooks/useSportCategories";
 import { useSurfaceTypes } from "@/hooks/useSurfaceTypes";
@@ -55,7 +55,7 @@ export default function Discover() {
   
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { preferredSports } = useUserProfile();
+  const { preferredSports, profile } = useUserProfile();
   const [activeTab, setActiveTab] = useState<string>(
     searchParams.get("tab") === "quickgames" ? "quickgames" : "rescue"
   );
@@ -72,6 +72,9 @@ export default function Discover() {
   const [showFilters, setShowFilters] = useState(false);
   const [citySearchQuery, setCitySearchQuery] = useState("");
   const [showAllCities, setShowAllCities] = useState(false);
+  const [rescuePage, setRescuePage] = useState(1);
+  const [challengePage, setChallengePage] = useState(1);
+  const ITEMS_PER_PAGE = 18;
 
   // Fetch dynamic categories from database - NO FALLBACKS
   const { data: sportCategories = [] } = useSportCategories();
@@ -209,7 +212,14 @@ export default function Discover() {
     setSelectedCity("all");
     setCitySearchQuery("");
     setShowAllCities(false);
+    setRescuePage(1);
+    setChallengePage(1);
   };
+
+  // Reset pages when filters/search change
+  useEffect(() => { setRescuePage(1); }, [selectedSport, selectedCourtType, selectedCity, searchQuery]);
+  useEffect(() => { setChallengePage(1); }, [selectedSport, selectedCourtType, selectedCity, searchQuery]);
+
 
   const FilterPanelBody = (
     <>
@@ -437,13 +447,22 @@ export default function Discover() {
     });
   }, [rescueGames, selectedSport, selectedCourtType, selectedCity, searchQuery, normalizedPreferredSports]);
 
-  // Filter quick challenges based on search, preferred sports, and exclude joined
+  // Filter quick challenges based on search, preferred sports, gender, and exclude joined
   const filteredChallenges = useMemo(() => {
+    const userGender = (profile as any)?.gender as string | null;
+
     let filtered = quickChallenges.filter((challenge) => {
       // Hide challenges the user has already joined
       if (user && challenge.quick_challenge_players?.some((p) => p.user_id === user.id)) {
         return false;
       }
+
+      // Gender filter: if challenge has a gender preference (male/female), hide from users whose gender doesn't match
+      const genderPref = (challenge as any).gender_preference as string | undefined;
+      if (genderPref && genderPref !== "mixed" && userGender && userGender !== genderPref) {
+        return false;
+      }
+
       return true;
     });
     
@@ -472,7 +491,13 @@ export default function Discover() {
              venueName.includes(searchQuery.toLowerCase()) ||
              city.includes(searchQuery.toLowerCase());
     });
-  }, [quickChallenges, searchQuery, selectedSport, selectedCourtType, selectedCity, normalizedPreferredSports]);
+  }, [quickChallenges, searchQuery, selectedSport, selectedCourtType, selectedCity, normalizedPreferredSports, profile]);
+
+  // Paginated slices
+  const rescueTotalPages = Math.max(1, Math.ceil(filteredRescueGames.length / ITEMS_PER_PAGE));
+  const paginatedRescueGames = filteredRescueGames.slice((rescuePage - 1) * ITEMS_PER_PAGE, rescuePage * ITEMS_PER_PAGE);
+  const challengeTotalPages = Math.max(1, Math.ceil(filteredChallenges.length / ITEMS_PER_PAGE));
+  const paginatedChallenges = filteredChallenges.slice((challengePage - 1) * ITEMS_PER_PAGE, challengePage * ITEMS_PER_PAGE);
 
   if (isLoading) {
     return (
@@ -492,7 +517,7 @@ export default function Discover() {
           <div>
             <h1 className="font-display text-2xl lg:text-3xl font-bold">Find Games</h1>
             <p className="text-muted-foreground text-sm">
-              Join rescue games or quick challenges
+              Join community games or pick-up games
             </p>
           </div>
           <Button
@@ -500,8 +525,8 @@ export default function Discover() {
             className="shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
           >
             <Zap className="h-4 w-4" />
-            <span className="hidden sm:inline">Quick Game</span>
-            <span className="sm:hidden">Quick</span>
+            <span className="hidden sm:inline">Host pick-up</span>
+            <span className="sm:hidden">Host</span>
           </Button>
         </div>
 
@@ -510,9 +535,9 @@ export default function Discover() {
           <CardContent className="p-4 flex items-start gap-3">
             <Zap className="h-5 w-5 text-primary shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-sm">Quick Challenges</p>
+              <p className="font-medium text-sm">Pick-up Games</p>
               <p className="text-sm text-muted-foreground">
-                Find players for instant matches or join rescue games that need extra players!
+                Find players for instant matches or join community games that need extra players!
               </p>
             </div>
           </CardContent>
@@ -580,7 +605,7 @@ export default function Discover() {
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="rescue" className="relative gap-2">
               <AlertTriangle className="h-4 w-4" />
-              Rescue Games
+              Community Games
               {filteredRescueGames.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 bg-warning text-warning-foreground rounded-full text-xs font-bold">
                   {filteredRescueGames.length}
@@ -589,7 +614,7 @@ export default function Discover() {
             </TabsTrigger>
             <TabsTrigger value="quickgames" className="gap-2">
               <Zap className="h-4 w-4" />
-              Quick Games
+              Pick-up Games
               {filteredChallenges.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 bg-primary text-primary-foreground rounded-full text-xs font-bold">
                   {filteredChallenges.length}
@@ -604,17 +629,32 @@ export default function Discover() {
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : filteredRescueGames.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredRescueGames.map((game) => (
-                  <GameCard key={game.id} {...game} />
-                ))}
-              </div>
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {paginatedRescueGames.map((game) => (
+                    <GameCard key={game.id} {...game} />
+                  ))}
+                </div>
+                {rescueTotalPages > 1 && (
+                  <div className="flex items-center justify-center gap-3 mt-6">
+                    <Button variant="outline" size="icon" disabled={rescuePage <= 1} onClick={() => setRescuePage((p) => p - 1)}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Page {rescuePage} of {rescueTotalPages}
+                    </span>
+                    <Button variant="outline" size="icon" disabled={rescuePage >= rescueTotalPages} onClick={() => setRescuePage((p) => p + 1)}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-12 text-muted-foreground">
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                   <AlertTriangle className="h-8 w-8 opacity-50" />
                 </div>
-                <p className="font-medium">No rescue games found</p>
+                <p className="font-medium">No community games found</p>
                 <p className="text-sm mt-1">
                   {selectedSport !== "all" 
                     ? `Try selecting a different sport or clear filters`
@@ -639,9 +679,9 @@ export default function Discover() {
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : filteredChallenges.length > 0 ? (
-              <div className="space-y-6">
+              <>
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {filteredChallenges.map((challenge) => (
+                  {paginatedChallenges.map((challenge) => (
                     <QuickChallengeSummaryCard
                       key={challenge.id}
                       challenge={{
@@ -664,22 +704,35 @@ export default function Discover() {
                     />
                   ))}
                 </div>
-              </div>
+                {challengeTotalPages > 1 && (
+                  <div className="flex items-center justify-center gap-3 mt-6">
+                    <Button variant="outline" size="icon" disabled={challengePage <= 1} onClick={() => setChallengePage((p) => p - 1)}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Page {challengePage} of {challengeTotalPages}
+                    </span>
+                    <Button variant="outline" size="icon" disabled={challengePage >= challengeTotalPages} onClick={() => setChallengePage((p) => p + 1)}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-12 text-muted-foreground">
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                   <Zap className="h-8 w-8 opacity-50" />
                 </div>
-                <p className="font-medium">No quick games yet</p>
+                <p className="font-medium">No pick-up games yet</p>
                 <p className="text-sm mt-1">
-                  Be the first to create a quick challenge!
+                  Be the first to host a pick-up game!
                 </p>
                 <Button 
                   className="mt-4 gap-2"
                   onClick={() => setQuickGameModalOpen(true)}
                 >
                   <Zap className="h-4 w-4" />
-                  Create Quick Game
+                  Host pick-up
                 </Button>
               </div>
             )}

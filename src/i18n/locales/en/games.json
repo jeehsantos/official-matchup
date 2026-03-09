@@ -1,0 +1,10 @@
+{
+  "title": "My Games",
+  "subtitle": "Track your upcoming and past games",
+  "upcoming": "Upcoming",
+  "past": "Past",
+  "noUpcoming": "No upcoming games",
+  "noUpcomingDesc": "Book a court to start playing with your group",
+  "browseCourts": "Browse Courts",
+  "noPast": "No past games yet"
+}

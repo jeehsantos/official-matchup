@@ -1,88 +1,61 @@
 
+Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-## Unified Players Section with Integrated Waitlist
+What I found (already verified):
+1) Data inconsistency exists now:
+   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
+   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
+2) `ManagerCourtFormNew` root causes:
+   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
+   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
+   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
+3) Backend side effect confirmed:
+   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
 
-### What changes
+Implementation plan (execute in this order):
+1. Database integrity hardening + backfill (migration)
+   - Backfill: set `is_multi_court=true` for any court that already has children.
+   - Add DB validation trigger(s) on `courts` to enforce:
+     - child cannot reference itself
+     - child parent must be in same venue
+     - parent cannot be set `is_multi_court=false` while children exist
+     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
+   - This guarantees the bug cannot recur from any client path.
 
-Replace the current separate cards (Rescue Mode controls, Player Count, Confirmed Players list, Waiting List) with a single unified "Players" card matching the screenshot design.
+2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
+   - Remove direct `window.history.replaceState` usage.
+   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
+   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
+   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
 
-### File: `src/pages/GameDetail.tsx`
+3. Multi-court UI behavior safeguards
+   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
+   - Disable/harden turning off multi-court when children exist (with clear message).
+   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
 
-**1. Remove these separate sections** (lines ~840-1344):
-- Organizer Rescue Controls card (lines 841-880)
-- Join Rescue Session card (lines 882-909)
-- Player Count card (lines 1184-1218)
-- Confirmed Players card (lines 1220-1299)
-- Waiting List card (lines 1301-1344)
+4. Availability resilience (backend function)
+   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
+   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
 
-**2. Replace with a single unified Players card** containing:
+5. Verification I will perform (not asking you to test manually)
+   - DB checks:
+     - verify parent `57e11168...` becomes `is_multi_court=true`
+     - verify child links remain unchanged
+     - verify no rows exist with `children > 0 AND is_multi_court=false`
+   - Functional checks:
+     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
+   - UI checks:
+     - exercise add-sub-court flow and confirm:
+       - main court remains main
+       - child appears as child tab
+       - subsequent saves update correct court record
+       - no panel collapse/desync
 
-**Header row:**
-- `Players` label with `{players.length} / {session.max_players}` count
-- Rescue Mode toggle (Switch component) with tooltip on hover: "Allow external players to fill empty spots"
-- Toggle only visible to organizer when game is not past
-
-**Progress bar:**
-- Reuse `PlayerCount` logic inline (progress bar + "Need X more to confirm" message)
-
-**Confirmed section:**
-- "Confirmed ({players.length})" subheading
-- List of players with avatar, name + nationality flag, payment status badge (Pending Payment / Confirmed with green dot)
-- Each player row: avatar fallback initials, name with "(You)" tag, flag inline, status indicator on right
-
-**Empty spots indicator:**
-- Show remaining spots as a row: icon + "X Spots Available"
-
-**Waitlist section** (shown when `waitingList.length > 0`):
-- "Waitlist ({count})" subheading with "QUEUE" label on right
-- Each waitlisted player: avatar, name, "Joined Xh ago" subtitle, queue position `#N` on right
-- No payment button for waitlisted users
-
-**Edit Player Limits button:**
-- At bottom, only for organizer
-
-**3. Join logic update:**
-- When `players.length >= session.max_players` AND user is not in session/waitlist, allow joining to waitlist instead of blocking
-- Show toast: "You've been added to the waiting list"
-- `handleJoinSession` should still insert into `session_players` — the existing slice logic at line 202 already handles waitlist separation based on `max_players`
-
-**4. Waitlist user restrictions:**
-- `isInWaitingList` users see no payment button (already partially implemented)
-- Remove the disabled "Waiting List" button from the payment card; instead show a subtle badge "You're on the waitlist"
-
-**5. Import Switch and Tooltip** components (already available in project)
-
-### Waitlist promotion on leave
-
-The existing `handleLeaveSession` already removes the player. After removal and `fetchGameData()`, the slice logic (`playersWithProfiles.slice(0, max_players)`) automatically promotes the first waitlisted player to the confirmed list. The promoted player will then see the appropriate payment button on their next visit.
-
-No backend changes needed — the waitlist is purely positional based on `joined_at` ordering and `max_players` threshold.
-
-### Summary of sections in the new unified card
-
-```text
-┌─────────────────────────────────────────────┐
-│ 👥 Players  1/10       ⓘ Rescue Mode [toggle]│
-│ ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │
-│ Need 5 more players to confirm session       │
-│                                              │
-│ Confirmed (1)                                │
-│ ┌──────────────────────────────────────────┐ │
-│ │ [JT] Jeff test (You)              ●green │ │
-│ │      ⚠ Pending Payment                  │ │
-│ └──────────────────────────────────────────┘ │
-│                                              │
-│ 👥 9 Spots Available                         │
-│                                              │
-│ Waitlist (2)                        QUEUE    │
-│ ┌──────────────────────────────────────────┐ │
-│ │ [AS] Alex Smith                      #1  │ │
-│ │      Joined 1h ago                       │ │
-│ │ [MG] Maria Garcia                   #2  │ │
-│ │      Joined 3h ago                       │ │
-│ └──────────────────────────────────────────┘ │
-│                                              │
-│         [⚙ Edit Player Limits]               │
-└─────────────────────────────────────────────┘
-```
-
+Technical details:
+- Files to update:
+  - `supabase/migrations/<new>.sql`
+  - `src/pages/manager/ManagerCourtFormNew.tsx`
+  - `supabase/functions/get-availability/index.ts`
+- No money/payment logic touched.
+- No auth model changes.
+- Existing routing and form schema preserved; this is a consistency + state synchronization fix.

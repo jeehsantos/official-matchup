@@ -1,0 +1,56 @@
+{
+  "hero": {
+    "title1": "Reserve quadras mais rápido.",
+    "title2": "Jogue com tudo.",
+    "description": "quadras em segundos. O jeito mais prático de organizar seus jogos e manter o time ativo.",
+    "findAndBook": "Encontre e reserve",
+    "ctaPlay": "Comece a Jogar Grátis",
+    "ctaBrowse": "Ver Quadras",
+    "activePlayers": "Jogadores Ativos",
+    "verifiedVenues": "Quadras Verificadas",
+    "courtConfirmed": "Quadra Confirmada!",
+    "courtConfirmedDetail": "Stanley St Courts, 10h"
+  },
+  "howItWorks": {
+    "label": "Como funciona",
+    "title": "Da busca ao saque, rapidinho",
+    "subtitle": "Um fluxo em três passos que mantém jogadores e gestores em sincronia.",
+    "forPlayers": "Para Jogadores e Organizadores",
+    "forManagers": "Para Gestores de Quadras",
+    "playerStep1Title": "Descubra Quadras",
+    "playerStep1Desc": "Navegue por quadras verificadas na Nova Zelândia e encontre o lugar perfeito.",
+    "playerStep2Title": "Entre ou Crie Grupos",
+    "playerStep2Desc": "Conecte-se com jogadores regulares ou organize seus próprios jogos recorrentes.",
+    "playerStep3Title": "Reserve e Jogue",
+    "playerStep3Desc": "Garanta sua vaga e curta sessões de esporte sem dor de cabeça.",
+    "managerStep1Title": "Cadastre suas Quadras",
+    "managerStep1Desc": "Registre seu espaço e mostre suas instalações com fotos.",
+    "managerStep2Title": "Gerencie a Disponibilidade",
+    "managerStep2Desc": "Defina os horários e preços das suas quadras.",
+    "managerStep3Title": "Cresça seu Negócio",
+    "managerStep3Desc": "Alcance mais jogadores e preencha suas quadras de forma eficiente."
+  },
+  "cta": {
+    "title": "Pronto pra Encontrar seu Próximo Jogo?",
+    "description": "Junte-se a jogadores e gestores de quadras da Nova Zelândia que já descobriram o jeito mais fácil de reservar e jogar.",
+    "createAccount": "Criar Conta Grátis",
+    "contactUs": "Fale Conosco"
+  },
+  "landingFooter": {
+    "tagline": "O jeito mais esperto de reservar quadras e garantir seus jogos.",
+    "location": "Auckland, Nova Zelândia",
+    "product": "Produto",
+    "company": "Empresa",
+    "browseCourts": "Ver Quadras",
+    "forPlayers": "Para Jogadores",
+    "forCourtManagers": "Para Gestores de Quadras",
+    "communityGroups": "Grupos da Comunidade",
+    "aboutUs": "Sobre Nós",
+    "contact": "Contato",
+    "privacyPolicy": "Política de Privacidade",
+    "termsOfService": "Termos de Serviço",
+    "allRightsReserved": "© 2024 Sport Arena. Todos os direitos reservados.",
+    "about": "Sobre",
+    "browse": "Explorar"
+  }
+}

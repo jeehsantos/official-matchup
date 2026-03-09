@@ -1,0 +1,40 @@
+{
+  "badge": "Our Journey",
+  "title": "Sport Arena is built for",
+  "titleHighlight": "real players.",
+  "subtitle": "We've transformed the way local sports are organized. By replacing manual coordination with seamless automation, we let you focus on what actually matters: the game.",
+  "journey": {
+    "evolutionTitle": "The Evolution",
+    "evolutionDesc": "We noticed that the passion for sport was often hindered by complex logistics. We saw a future where organizing a game was as simple as playing one.",
+    "innovationTitle": "The Innovation",
+    "innovationDesc": "By introducing upfront commitments and automated scheduling, we removed the uncertainty of no-shows and last-minute cancellations.",
+    "impactTitle": "The Impact",
+    "impactDesc": "Today, Sport Arena is a thriving ecosystem where venues stay busy and players stay active. A community built on reliability and play."
+  },
+  "builtFor": {
+    "title": "Built for players and venues",
+    "subtitle": "Everyone wins when bookings are clear and commitments are honored.",
+    "playersTitle": "Players & Organizers",
+    "managersTitle": "Court Managers",
+    "playerHighlights": [
+      "Guaranteed spots with upfront payments",
+      "Faster group coordination and smart reminders",
+      "Automatic rescue mode for unexpected cancellations"
+    ],
+    "managerHighlights": [
+      "Predictable revenue and significantly fewer no-shows",
+      "Centralized venue availability and easy controls",
+      "Smart visibility to fill courts during off-peak hours"
+    ]
+  },
+  "heritage": {
+    "label": "Our Heritage",
+    "title": "Born in Aotearoa.",
+    "paragraph1": "Sport Arena was founded on the sidelines of local parks and community courts right here in New Zealand.",
+    "paragraph2": "We started with a simple goal: to make playing sports as accessible as possible for our local communities. While our vision is global, our roots remain firmly planted in the values of Kiwi sportsmanship—fairness, commitment, and the belief that everyone should have a chance to get on the court."
+  },
+  "ctaTitle": "Ready to Get Started?",
+  "ctaSubtitle": "Join the movement towards guaranteed, hassle-free sports bookings. Whether you're a player or a venue, we've got you covered.",
+  "createAccount": "Create Free Account",
+  "contactTeam": "Contact Our Team"
+}

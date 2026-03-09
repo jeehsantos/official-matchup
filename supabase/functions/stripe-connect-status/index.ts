@@ -12,13 +12,11 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Use anon key for auth verification
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_ANON_KEY") ?? ""
   );
 
-  // Use service role key to bypass RLS for venue query
   const supabaseAdmin = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -40,23 +38,44 @@ serve(async (req) => {
     }
     const user = userData.user;
 
-    // Use admin client to bypass RLS and get venue with stripe account id
-    const { data: venue, error: venueError } = await supabaseAdmin
-      .from("venues")
-      .select("stripe_account_id, name, owner_id")
-      .eq("id", venueId)
-      .single();
+    let stripeAccountId: string | null = null;
 
-    if (venueError || !venue) {
-      throw new Error("Venue not found");
+    if (venueId) {
+      // Venue-specific check: verify ownership first
+      const { data: venue, error: venueError } = await supabaseAdmin
+        .from("venues")
+        .select("id, name, owner_id")
+        .eq("id", venueId)
+        .single();
+
+      if (venueError || !venue) {
+        throw new Error("Venue not found");
+      }
+
+      if (venue.owner_id !== user.id) {
+        throw new Error("You don't have permission to view this venue's payment settings");
+      }
+
+      // Fetch from venue_payment_settings
+      const { data: paymentSettings } = await supabaseAdmin
+        .from("venue_payment_settings")
+        .select("stripe_account_id")
+        .eq("venue_id", venueId)
+        .maybeSingle();
+
+      stripeAccountId = paymentSettings?.stripe_account_id || null;
+    } else {
+      // User-level check (no venue yet)
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("stripe_account_id")
+        .eq("user_id", user.id)
+        .single();
+
+      stripeAccountId = profile?.stripe_account_id || null;
     }
 
-    // Verify user owns this venue
-    if (venue.owner_id !== user.id) {
-      throw new Error("You don't have permission to view this venue's payment settings");
-    }
-
-    if (!venue.stripe_account_id) {
+    if (!stripeAccountId) {
       return new Response(JSON.stringify({ 
         connected: false,
         details_submitted: false,
@@ -72,7 +91,7 @@ serve(async (req) => {
       apiVersion: "2024-12-18.acacia",
     });
 
-    const account = await stripe.accounts.retrieve(venue.stripe_account_id);
+    const account = await stripe.accounts.retrieve(stripeAccountId);
 
     console.log(`Stripe account ${account.id} status: details_submitted=${account.details_submitted}, payouts_enabled=${account.payouts_enabled}, charges_enabled=${account.charges_enabled}`);
 

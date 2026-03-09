@@ -52,7 +52,7 @@ serve(async (req) => {
     // Fetch session with group and court
     const { data: session, error: sessionError } = await supabaseAdmin
       .from("sessions")
-      .select(`*, groups (*), courts (*, venues (*))`)
+      .select(`*, groups (*), courts (*, venues (id, name, owner_id))`)
       .eq("id", sessionId)
       .single();
 
@@ -65,6 +65,14 @@ serve(async (req) => {
     if (!court || !venue) {
       throw new Error("Court or venue not found");
     }
+
+    // Fetch stripe_account_id from venue_payment_settings (security fix)
+    const { data: paymentSettings } = await supabaseAdmin
+      .from("venue_payment_settings")
+      .select("stripe_account_id")
+      .eq("venue_id", venue.id)
+      .maybeSingle();
+    const venueStripeAccountId = paymentSettings?.stripe_account_id || null;
 
     // Read payment_type from session (authoritative, NOT from frontend)
     const sessionPaymentType = session.payment_type || "single";
@@ -202,12 +210,13 @@ serve(async (req) => {
     }
 
     // --- STRIPE CARD PAYMENT ---
-    const { estimatedStripeFeeCents, serviceFeeCents, totalChargeCents } = calculateGrossUp({
+    const grossUp = calculateGrossUp({
       courtAmountCents: remainingCourtAmountCents,
       platformFeeCents,
       stripePercent,
       stripeFixedCents,
     });
+    const { serviceFeeTotalCents, stripeFeeCoverageCents, totalChargeCents, grossTotalCents } = grossUp;
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2024-12-18.acacia",
@@ -233,12 +242,12 @@ serve(async (req) => {
       },
     ];
 
-    if (serviceFeeCents > 0) {
+    if (serviceFeeTotalCents > 0) {
       lineItems.push({
         price_data: {
           currency: "nzd",
           product_data: { name: "Service Fee", description: "Platform service fee" },
-          unit_amount: serviceFeeCents,
+          unit_amount: serviceFeeTotalCents,
         },
         quantity: 1,
       });
@@ -253,18 +262,29 @@ serve(async (req) => {
       metadata: {
         session_id: sessionId,
         user_id: user.id,
-        court_amount: remainingCourtAmountCents.toString(),
-        platform_fee_target: platformFeeCents.toString(),
-        stripe_fee_estimated: estimatedStripeFeeCents.toString(),
-        service_fee_total: serviceFeeCents.toString(),
-        total_charge: totalChargeCents.toString(),
+        recipient_cents: remainingCourtAmountCents.toString(),
+        platform_fee_cents: platformFeeCents.toString(),
         stripe_percent: stripePercent.toString(),
         stripe_fixed_cents: stripeFixedCents.toString(),
+        gross_total_cents: grossTotalCents.toString(),
+        service_fee_total_cents: serviceFeeTotalCents.toString(),
+        stripe_fee_coverage_cents: stripeFeeCoverageCents.toString(),
         payment_type: sessionPaymentType,
         credits_applied: creditsToApply.toString(),
-        venue_stripe_account_id: venue.stripe_account_id || "",
+        venue_stripe_account_id: venueStripeAccountId || "",
+        destination_charge: venueStripeAccountId ? "true" : "false",
       },
     };
+
+    // Destination-charge split: platform keeps service fee, court receives recipient amount
+    if (venueStripeAccountId) {
+      sessionParams.payment_intent_data = {
+        application_fee_amount: serviceFeeTotalCents,
+        transfer_data: {
+          destination: venueStripeAccountId,
+        },
+      };
+    }
 
     const normalizedAttempt = Number.isFinite(Number(body.attempt)) && Number(body.attempt) > 0
       ? Math.trunc(Number(body.attempt))
@@ -286,16 +306,16 @@ serve(async (req) => {
         status: "pending",
         stripe_payment_intent_id: checkoutSession.payment_intent as string,
         platform_fee: platformFeeDollars,
-        service_fee: serviceFeeCents / 100,
+        service_fee: serviceFeeTotalCents / 100,
         court_amount: remainingCourtAmountCents / 100,
       }, { onConflict: "session_id,user_id" });
 
     return new Response(JSON.stringify({
       url: checkoutSession.url,
       checkoutSessionId: checkoutSession.id,
-      courtAmount: remainingCourtAmountCents / 100,
-      serviceFee: serviceFeeCents / 100,
-      total: totalChargeCents / 100,
+      court_amount: remainingCourtAmountCents / 100,
+      service_fee_total: serviceFeeTotalCents / 100,
+      total_charge: totalChargeCents / 100,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
@@ -334,10 +354,18 @@ async function handleDeferredPayment(body: any, user: any, supabaseAdmin: any) {
 
   const { data: venue, error: venueErr } = await supabaseAdmin
     .from("venues")
-    .select("id, name, stripe_account_id")
+    .select("id, name")
     .eq("id", court.venue_id)
     .single();
   if (venueErr || !venue) throw new Error("Venue not found");
+
+  // Fetch stripe_account_id from venue_payment_settings (security fix)
+  const { data: venuePaymentSettings } = await supabaseAdmin
+    .from("venue_payment_settings")
+    .select("stripe_account_id")
+    .eq("venue_id", venue.id)
+    .maybeSingle();
+  const deferredVenueStripeAccountId = venuePaymentSettings?.stripe_account_id || null;
 
   // Platform settings
   const { data: platformSettings } = await supabaseAdmin
@@ -434,12 +462,13 @@ async function handleDeferredPayment(body: any, user: any, supabaseAdmin: any) {
   }
 
   // --- STRIPE CARD PAYMENT for deferred flow ---
-  const { estimatedStripeFeeCents, serviceFeeCents, totalChargeCents } = calculateGrossUp({
+  const grossUp = calculateGrossUp({
     courtAmountCents: remainingCourtAmountCents,
     platformFeeCents,
     stripePercent,
     stripeFixedCents,
   });
+  const { serviceFeeTotalCents, stripeFeeCoverageCents, totalChargeCents, grossTotalCents } = grossUp;
 
   const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
     apiVersion: "2024-12-18.acacia",
@@ -466,12 +495,12 @@ async function handleDeferredPayment(body: any, user: any, supabaseAdmin: any) {
     },
   ];
 
-  if (serviceFeeCents > 0) {
+  if (serviceFeeTotalCents > 0) {
     lineItems.push({
       price_data: {
         currency: "nzd",
         product_data: { name: "Service Fee", description: "Platform service fee" },
-        unit_amount: serviceFeeCents,
+        unit_amount: serviceFeeTotalCents,
       },
       quantity: 1,
     });
@@ -499,15 +528,27 @@ async function handleDeferredPayment(body: any, user: any, supabaseAdmin: any) {
       court_price_dollars: fullCourtPriceDollars.toString(),
       hold_id: holdId || "",
       equipment_json: JSON.stringify(equipmentItems),
-      court_amount: remainingCourtAmountCents.toString(),
-      platform_fee_target: platformFeeCents.toString(),
-      stripe_fee_estimated: estimatedStripeFeeCents.toString(),
-      service_fee_total: serviceFeeCents.toString(),
-      total_charge: totalChargeCents.toString(),
-      credits_applied: creditsToApply.toString(),
-      venue_stripe_account_id: venue.stripe_account_id || "",
+      recipient_cents: remainingCourtAmountCents.toString(),
+      platform_fee_cents: platformFeeCents.toString(),
+      stripe_percent: stripePercent.toString(),
+      stripe_fixed_cents: stripeFixedCents.toString(),
+      gross_total_cents: grossTotalCents.toString(),
+      service_fee_total_cents: serviceFeeTotalCents.toString(),
+      stripe_fee_coverage_cents: stripeFeeCoverageCents.toString(),
+      venue_stripe_account_id: deferredVenueStripeAccountId || "",
+      destination_charge: deferredVenueStripeAccountId ? "true" : "false",
     },
   };
+
+  // Destination-charge split for deferred flow
+  if (deferredVenueStripeAccountId) {
+    sessionParams.payment_intent_data = {
+      application_fee_amount: serviceFeeTotalCents,
+      transfer_data: {
+        destination: deferredVenueStripeAccountId,
+      },
+    };
+  }
 
   const normalizedAttempt = Number.isFinite(Number(attempt)) && Number(attempt) > 0
     ? Math.trunc(Number(attempt))
@@ -520,7 +561,7 @@ async function handleDeferredPayment(body: any, user: any, supabaseAdmin: any) {
   );
 
   // NO payments upsert for deferred flow — webhook creates it
-  console.log(`Deferred checkout created: ${checkoutSession.id} | Court: ${remainingCourtAmountCents}c, Fee: ${serviceFeeCents}c, Total: ${totalChargeCents}c`);
+  console.log(`Deferred checkout created: ${checkoutSession.id} | Court: ${remainingCourtAmountCents}c, Fee: ${serviceFeeTotalCents}c, Total: ${totalChargeCents}c`);
 
   return new Response(JSON.stringify({
     url: checkoutSession.url,

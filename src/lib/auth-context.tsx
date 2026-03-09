@@ -2,14 +2,14 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-type AppRole = "court_manager" | "organizer" | "player" | "admin";
+type AppRole = "court_manager" | "organizer" | "player" | "admin" | "venue_staff";
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   userRole: AppRole | null;
   isLoading: boolean;
-  signUp: (email: string, password: string, fullName: string, role?: AppRole, referralCode?: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string, role?: AppRole, referralCode?: string) => Promise<{ error: Error | null; session?: Session | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; role?: AppRole }>;
   signOut: () => Promise<void>;
   refreshRole: () => Promise<void>;
@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [roleLoaded, setRoleLoaded] = useState(false);
+  
 
   const fetchUserRole = useCallback(async (userId: string): Promise<AppRole | null> => {
     try {
@@ -131,35 +132,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    // If signup successful and we have a user, create ONLY the selected role
+    // handle_new_user trigger creates profile + role automatically
     if (!error && data.user) {
-      // First check if role already exists (to avoid duplicates)
-      const { data: existingRole } = await supabase
-        .from("user_roles")
-        .select("id")
-        .eq("user_id", data.user.id)
-        .eq("role", role)
-        .maybeSingle();
-
-      if (!existingRole) {
-        const { error: roleError } = await supabase
-          .from("user_roles")
-          .insert({
-            user_id: data.user.id,
-            role: role,
-          });
-        
-        if (roleError) {
-          console.error("Error creating user role:", roleError);
-        } else {
-          setUserRole(role);
-        }
-      } else {
-        setUserRole(role);
-      }
+      // Set the role locally for immediate UI use
+      setUserRole(role);
     }
 
-    return { error: error as Error | null };
+    return { error: error as Error | null, session: data?.session };
   };
 
   const signIn = async (email: string, password: string) => {
@@ -179,16 +158,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    // Reset state immediately before signing out
     setUser(null);
     setSession(null);
     setUserRole(null);
-    setRoleLoaded(true);
-    
-    await supabase.auth.signOut();
-    
-    // Navigate to home page after sign out
-    window.location.href = '/';
+    await supabase.auth.signOut({ scope: "local" });
+    window.location.replace("/auth");
   };
 
   const resetPassword = async (email: string) => {

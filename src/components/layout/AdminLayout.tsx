@@ -1,6 +1,6 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Shield, Activity, Layers, Archive, Gift, LogOut, Menu } from "lucide-react";
+import { Shield, Activity, Layers, Archive, Gift, LogOut, Menu, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth-context";
@@ -13,6 +13,7 @@ interface AdminLayoutProps {
 
 const adminNavItems = [
   { label: "Dashboard", path: "/admin", icon: Shield },
+  { label: "Users", path: "/admin/users", icon: Users },
   { label: "Sports", path: "/admin/sports", icon: Activity },
   { label: "Surfaces", path: "/admin/surfaces", icon: Layers },
   { label: "Archiving", path: "/admin/archiving", icon: Archive },

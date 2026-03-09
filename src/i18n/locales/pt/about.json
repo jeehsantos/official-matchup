@@ -1,0 +1,40 @@
+{
+  "badge": "Nossa Jornada",
+  "title": "Sport Arena é feito pra",
+  "titleHighlight": "jogadores de verdade.",
+  "subtitle": "A gente transformou o jeito como esportes locais são organizados. Trocando coordenação manual por automação fluida, você foca no que realmente importa: o jogo.",
+  "journey": {
+    "evolutionTitle": "A Evolução",
+    "evolutionDesc": "A gente percebeu que a paixão pelo esporte era muitas vezes travada por logística complicada. Enxergamos um futuro onde organizar um jogo seria tão simples quanto jogar.",
+    "innovationTitle": "A Inovação",
+    "innovationDesc": "Com compromissos antecipados e agendamento automático, eliminamos a incerteza de faltas e cancelamentos de última hora.",
+    "impactTitle": "O Impacto",
+    "impactDesc": "Hoje, o Sport Arena é um ecossistema vibrante onde quadras ficam ocupadas e jogadores ficam ativos. Uma comunidade construída com base em confiança e esporte."
+  },
+  "builtFor": {
+    "title": "Feito pra jogadores e quadras",
+    "subtitle": "Todo mundo ganha quando as reservas são claras e os compromissos são honrados.",
+    "playersTitle": "Jogadores e Organizadores",
+    "managersTitle": "Gestores de Quadras",
+    "playerHighlights": [
+      "Vagas garantidas com pagamento antecipado",
+      "Coordenação de grupo mais rápida e lembretes inteligentes",
+      "Modo resgate automático pra cancelamentos inesperados"
+    ],
+    "managerHighlights": [
+      "Receita previsível e bem menos faltas",
+      "Disponibilidade centralizada e controles fáceis",
+      "Visibilidade inteligente pra lotar quadras nos horários vazios"
+    ]
+  },
+  "heritage": {
+    "label": "Nossas Raízes",
+    "title": "Nascido em Aotearoa.",
+    "paragraph1": "O Sport Arena nasceu nas margens de parques locais e quadras comunitárias aqui na Nova Zelândia.",
+    "paragraph2": "Começamos com um objetivo simples: tornar a prática de esportes o mais acessível possível pras nossas comunidades. Embora nossa visão seja global, nossas raízes estão firmes nos valores do esporte Kiwi — justiça, compromisso e a crença de que todo mundo merece ter a chance de entrar na quadra."
+  },
+  "ctaTitle": "Pronto pra Começar?",
+  "ctaSubtitle": "Junte-se ao movimento por reservas de esportes garantidas e sem complicação. Seja você jogador ou gestor de quadra, a gente te cobre.",
+  "createAccount": "Criar Conta Grátis",
+  "contactTeam": "Fale com a Equipe"
+}

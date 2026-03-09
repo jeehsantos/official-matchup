@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { MapPin, Calendar, Clock, DollarSign } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { SessionBadge } from "@/components/ui/session-badge";
+import { SessionBadge, type SessionBadgeState } from "@/components/ui/session-badge";
 import { PlayerCount } from "@/components/ui/player-count";
 import { SportIcon } from "@/components/ui/sport-icon";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,15 @@ import { format } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 
 type SessionState = "protected" | "pending" | "rescue" | "released";
-type SportType = "futsal" | "tennis" | "volleyball" | "basketball" | "turf_hockey" | "badminton" | "hockey" | "other";
+type SportType =
+  | "futsal"
+  | "tennis"
+  | "volleyball"
+  | "basketball"
+  | "turf_hockey"
+  | "badminton"
+  | "hockey"
+  | "other";
 type SportCategory = Database["public"]["Tables"]["sport_categories"]["Row"];
 
 interface GameCardProps {
@@ -21,6 +29,7 @@ interface GameCardProps {
   venueName: string;
   date: Date;
   time: string;
+  endTime?: string;
   price: number;
   currentPlayers: number;
   minPlayers: number;
@@ -41,6 +50,7 @@ export function GameCard({
   venueName,
   date,
   time,
+  endTime,
   price,
   currentPlayers,
   minPlayers,
@@ -50,11 +60,33 @@ export function GameCard({
   linkTo,
 }: GameCardProps) {
   const totalPrice = price; // Service fee added at checkout
-  // Use sport category display name if available, otherwise fallback to "Sport TBD"
+
   const sportDisplayName = sportCategory?.display_name || "Sport TBD";
-  // Show "Booked" (protected) only when paid, otherwise "Pending"
-  const badgeState = state === "protected" ? (isPaid ? "protected" : "pending") : state;
-  
+
+  const dateStr = format(date, "yyyy-MM-dd");
+  const effectiveEndTime = (endTime && endTime.length >= 5 ? endTime.slice(0, 5) : time).slice(0, 5);
+
+  let endDt = new Date(`${dateStr}T${effectiveEndTime}:00`);
+  // Handle cross-midnight sessions (end time earlier than start time)
+  if (effectiveEndTime < time) {
+    endDt = new Date(endDt.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  const isPast = endDt.getTime() <= Date.now();
+
+  // Badge rules:
+  // - Only show "Completed" when session ended AND payment is confirmed.
+  // - "Booked" (protected) only when paid, otherwise "Pending".
+  let badgeState: SessionBadgeState = (state === "protected"
+    ? isPaid
+      ? "protected"
+      : "pending"
+    : (state as SessionBadgeState));
+
+  if (isPaid && isPast && (state === "protected" || state === "rescue")) {
+    badgeState = "completed";
+  }
+
   return (
     <Link to={linkTo || `/games/${id}`}>
       <Card className="overflow-hidden hover:shadow-card-hover transition-shadow duration-200 h-full">
@@ -62,18 +94,10 @@ export function GameCard({
           {/* Header */}
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <SportIcon 
-                sport={sport} 
-                icon={sportCategory?.icon}
-                label={sportDisplayName}
-              />
+              <SportIcon sport={sport} icon={sportCategory?.icon} label={sportDisplayName} />
               <div>
-                <h3 className="font-display font-semibold text-base">
-                  {groupName}
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  {sportDisplayName}
-                </p>
+                <h3 className="font-display font-semibold text-base">{groupName}</h3>
+                <p className="text-xs text-muted-foreground">{sportDisplayName}</p>
               </div>
             </div>
             <SessionBadge state={badgeState} />
@@ -95,9 +119,7 @@ export function GameCard({
             </div>
             <div className="flex items-center gap-2 font-semibold text-foreground">
               {totalPrice === 0 ? (
-                <Badge className="bg-success text-success-foreground border-0 shadow-sm">
-                  ✓ FREE
-                </Badge>
+                <Badge className="bg-success text-success-foreground border-0 shadow-sm">✓ FREE</Badge>
               ) : (
                 <>
                   <DollarSign className="h-4 w-4 shrink-0" />
@@ -108,11 +130,7 @@ export function GameCard({
           </div>
 
           {/* Player count */}
-          <PlayerCount
-            current={currentPlayers}
-            min={minPlayers}
-            max={maxPlayers}
-          />
+          <PlayerCount current={currentPlayers} min={minPlayers} max={maxPlayers} />
 
           {/* Payment status indicator */}
           {isPaid && (

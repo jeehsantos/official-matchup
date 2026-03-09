@@ -61,8 +61,7 @@ serve(async (req) => {
         *,
         venues (
           id,
-          name,
-          stripe_account_id
+          name
         ),
         courts (
           id,
@@ -79,6 +78,17 @@ serve(async (req) => {
     if (challengeError || !challenge) {
       console.error("Challenge fetch error:", challengeError);
       throw new Error("Challenge not found");
+    }
+
+    // Fetch stripe_account_id from venue_payment_settings (security fix)
+    let venueStripeAccountId: string | null = null;
+    if (challenge.venue_id) {
+      const { data: paymentSettings } = await supabaseAdmin
+        .from("venue_payment_settings")
+        .select("stripe_account_id")
+        .eq("venue_id", challenge.venue_id)
+        .maybeSingle();
+      venueStripeAccountId = paymentSettings?.stripe_account_id || null;
     }
 
     // Verify user is a player in this challenge
@@ -99,7 +109,11 @@ serve(async (req) => {
 
     const venue = challenge.venues;
     const pricePerPlayer = challenge.price_per_player || 0;
-    const courtShareCents = Math.round(pricePerPlayer * 100);
+    // For "single" payment type, organizer pays the full court amount
+    const courtShareDollars = challenge.payment_type === "single"
+      ? pricePerPlayer * challenge.total_slots
+      : pricePerPlayer;
+    const courtShareCents = Math.round(courtShareDollars * 100);
 
     if (courtShareCents <= 0) {
       // Free challenge - mark as paid immediately (no platform fee)
@@ -137,7 +151,7 @@ serve(async (req) => {
 
       const balance = Number(creditBalance) || 0;
 
-      if (balance < pricePerPlayer) {
+      if (balance < courtShareDollars) {
         throw new Error("Insufficient credits");
       }
 
@@ -145,7 +159,7 @@ serve(async (req) => {
       const { data: useResult, error: useError } = await supabaseAdmin
         .rpc("use_user_credits", {
           p_user_id: user.id,
-          p_amount: pricePerPlayer,
+          p_amount: courtShareDollars,
           p_reason: `Quick Match payment: ${challenge.game_mode}`,
           p_session_id: null,
         });
@@ -208,6 +222,21 @@ serve(async (req) => {
 
       await checkAndUpdateChallengeStatus(supabaseAdmin, challengeId);
 
+      // Mark court slot as booked for credits payment (no webhook will fire)
+      if (challenge.court_id && challenge.scheduled_date && challenge.scheduled_time) {
+        const { error: courtUpdateError } = await supabaseAdmin
+          .from("court_availability")
+          .update({ is_booked: true, payment_status: "completed" })
+          .eq("court_id", challenge.court_id)
+          .eq("available_date", challenge.scheduled_date)
+          .eq("start_time", challenge.scheduled_time)
+          .eq("booked_by_user_id", user.id);
+
+        if (courtUpdateError) {
+          console.error("Failed to mark court slot as booked after credits payment:", courtUpdateError);
+        }
+      }
+
       // Process referral credit for credits-only payment
       try {
         await supabaseAdmin.rpc("process_referral_credit", { p_referred_user_id: user.id });
@@ -229,16 +258,13 @@ serve(async (req) => {
 
     // --- STRIPE PAYMENT FLOW ---
     // Use shared gross-up calculator with dynamic Stripe config
-    const {
-      estimatedStripeFeeCents,
-      serviceFeeCents,
-      totalChargeCents,
-    } = calculateGrossUp({
+    const grossUp = calculateGrossUp({
       courtAmountCents: courtShareCents,
       platformFeeCents: playerFeeCents,
       stripePercent,
       stripeFixedCents,
     });
+    const { serviceFeeTotalCents, stripeFeeCoverageCents, totalChargeCents, grossTotalCents } = grossUp;
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2024-12-18.acacia",
@@ -276,7 +302,7 @@ serve(async (req) => {
     ];
 
     // Add service fee as separate line item (only if > 0)
-    if (serviceFeeCents > 0) {
+    if (serviceFeeTotalCents > 0) {
       lineItems.push({
         price_data: {
           currency: "nzd",
@@ -284,7 +310,7 @@ serve(async (req) => {
             name: "Service Fee",
             description: "Service fee",
           },
-          unit_amount: serviceFeeCents,
+          unit_amount: serviceFeeTotalCents,
         },
         quantity: 1,
       });
@@ -299,20 +325,34 @@ serve(async (req) => {
       metadata: {
         challenge_id: challengeId,
         user_id: user.id,
-        court_amount: courtShareCents.toString(),
-        platform_fee_target: playerFeeCents.toString(),
-        stripe_fee_estimated: estimatedStripeFeeCents.toString(),
-        service_fee_total: serviceFeeCents.toString(),
-        total_charge: totalChargeCents.toString(),
+        recipient_cents: courtShareCents.toString(),
+        platform_fee_cents: playerFeeCents.toString(),
         stripe_percent: stripePercent.toString(),
         stripe_fixed_cents: stripeFixedCents.toString(),
+        gross_total_cents: grossTotalCents.toString(),
+        service_fee_total_cents: serviceFeeTotalCents.toString(),
+        stripe_fee_coverage_cents: stripeFeeCoverageCents.toString(),
         type: "quick_challenge",
         player_record_id: playerRecord.id,
-        venue_stripe_account_id: venue?.stripe_account_id || "",
+        venue_stripe_account_id: venueStripeAccountId || "",
+        destination_charge: venueStripeAccountId ? "true" : "false",
+        court_id: challenge.court_id || "",
+        scheduled_date: challenge.scheduled_date || "",
+        scheduled_time: challenge.scheduled_time || "",
       },
     };
 
-    console.log(`Quick challenge checkout: court=${courtShareCents}c, serviceFee=${serviceFeeCents}c, total=${totalChargeCents}c`);
+    // Destination-charge split for quick challenges
+    if (venueStripeAccountId) {
+      sessionParams.payment_intent_data = {
+        application_fee_amount: serviceFeeTotalCents,
+        transfer_data: {
+          destination: venueStripeAccountId,
+        },
+      };
+    }
+
+    console.log(`Quick challenge checkout: court=${courtShareCents}c, serviceFee=${serviceFeeTotalCents}c, total=${totalChargeCents}c`);
 
     const normalizedAttempt = Number.isFinite(Number(attempt)) && Number(attempt) > 0
       ? Math.trunc(Number(attempt))
@@ -336,9 +376,9 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       url: checkoutSession.url,
       checkoutSessionId: checkoutSession.id,
-      serviceFee: serviceFeeCents / 100,
-      courtShare: pricePerPlayer,
-      total: totalChargeCents / 100,
+      court_amount: courtShareCents / 100,
+      service_fee_total: serviceFeeTotalCents / 100,
+      total_charge: totalChargeCents / 100,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,

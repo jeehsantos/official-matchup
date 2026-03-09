@@ -16,6 +16,8 @@ export function checkProfileComplete(profile: Profile | null): ProfileCompletene
   
   const sports = profile?.preferred_sports as string[] | null;
   if (!sports || sports.length === 0) missingFields.push("Preferred Sports");
+
+  if (!(profile as any)?.gender) missingFields.push("Gender");
   
   return {
     isComplete: missingFields.length === 0,

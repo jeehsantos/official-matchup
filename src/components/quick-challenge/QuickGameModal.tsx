@@ -32,10 +32,17 @@ const gameModes = [
   { value: "5vs5", label: "5 vs 5", players: 10 },
 ];
 
+const genderOptions = [
+  { value: "mixed", label: "Mixed (Any Gender)" },
+  { value: "male", label: "Men Only" },
+  { value: "female", label: "Women Only" },
+];
+
 export function QuickGameModal({ open, onOpenChange }: QuickGameModalProps) {
   const navigate = useNavigate();
   const [selectedSport, setSelectedSport] = useState<string>("");
   const [selectedMode, setSelectedMode] = useState<string>("");
+  const [selectedGenderPref, setSelectedGenderPref] = useState<string>("mixed");
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   const { data: allSportCategories = [], isLoading: loadingSports } = useSportCategories();
@@ -72,6 +79,7 @@ export function QuickGameModal({ open, onOpenChange }: QuickGameModalProps) {
       sportLabel: selectedSportData?.label,
       gameMode: selectedMode,
       totalPlayers: selectedModeData?.players,
+      genderPreference: selectedGenderPref,
     }));
     
     // Navigate to courts page with sport filter
@@ -84,6 +92,7 @@ export function QuickGameModal({ open, onOpenChange }: QuickGameModalProps) {
   const handleClose = () => {
     setSelectedSport("");
     setSelectedMode("");
+    setSelectedGenderPref("mixed");
     setIsRedirecting(false);
     onOpenChange(false);
   };
@@ -96,7 +105,7 @@ export function QuickGameModal({ open, onOpenChange }: QuickGameModalProps) {
             <div className="p-2 rounded-lg bg-primary/10">
               <Zap className="h-5 w-5 text-primary" />
             </div>
-            Quick Game
+            Create pick-up game
           </DialogTitle>
         </DialogHeader>
 
@@ -156,6 +165,25 @@ export function QuickGameModal({ open, onOpenChange }: QuickGameModalProps) {
                         ({mode.players} players)
                       </span>
                     </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Gender Preference Dropdown */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">
+              Who Can Join
+            </label>
+            <Select value={selectedGenderPref} onValueChange={setSelectedGenderPref}>
+              <SelectTrigger className="h-12 bg-background border-border">
+                <SelectValue placeholder="Select gender preference" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border border-border shadow-lg z-50">
+                {genderOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
                   </SelectItem>
                 ))}
               </SelectContent>

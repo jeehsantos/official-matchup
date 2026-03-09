@@ -1,0 +1,16 @@
+{
+  "processing": "Processando Pagamento…",
+  "processingDesc": "Confirmando seu pagamento. Isso pode levar alguns instantes.",
+  "success": "Pagamento Confirmado!",
+  "successDesc": "Seu pagamento foi confirmado e sua reserva está garantida.",
+  "redirecting": "Redirecionando em {{count}} segundos...",
+  "continueNow": "Continuar Agora",
+  "failed": "Falha na Verificação do Pagamento",
+  "failedDesc": "Houve um problema ao verificar seu pagamento. Entre em contato com o suporte se o problema continuar.",
+  "backToGame": "Voltar pro Jogo",
+  "goHome": "Ir pro Início",
+  "cancelled": "Pagamento cancelado",
+  "cancelledDesc": "Sua reserva foi cancelada. Pagamentos serão convertidos em créditos na plataforma.",
+  "cancelledSlot": "Sua reserva não foi criada. A vaga vai ser liberada em breve.",
+  "cancelledChallenge": "O desafio rápido não foi criado e a vaga foi liberada."
+}

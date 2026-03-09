@@ -17,6 +17,11 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_ANON_KEY") ?? ""
   );
 
+  const supabaseAdmin = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  );
+
   try {
     const { venueId, origin: requestOrigin } = await req.json();
 
@@ -33,55 +38,112 @@ serve(async (req) => {
     }
     const user = userData.user;
 
-    // Verify user owns the venue
-    const { data: venue, error: venueError } = await supabaseClient
-      .from("venues")
-      .select("*")
-      .eq("id", venueId)
-      .eq("owner_id", user.id)
-      .single();
-
-    if (venueError || !venue) {
-      throw new Error("Venue not found or you don't have permission");
-    }
-
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2024-12-18.acacia",
     });
 
-    const origin = requestOrigin || "https://trlsnfxhsoqapnhjauph.lovableproject.com";
+    const origin = requestOrigin || "https://sportarenaxp.lovable.app";
+    let accountId: string | null = null;
 
-    let accountId = venue.stripe_account_id;
-
-    // Create a new Express connected account if one doesn't exist
-    if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: "express",
-        country: "NZ",
-        email: user.email,
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-        business_type: "individual",
-        business_profile: {
-          name: venue.name,
-          url: `${origin}/courts`,
-        },
-      });
-
-      accountId = account.id;
-
-      // Save the account ID to the venue using service role
-      const supabaseAdmin = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-      );
-
-      await supabaseAdmin
+    if (venueId) {
+      // Venue-based flow: verify ownership
+      const { data: venue, error: venueError } = await supabaseClient
         .from("venues")
+        .select("id, name, owner_id")
+        .eq("id", venueId)
+        .eq("owner_id", user.id)
+        .single();
+
+      if (venueError || !venue) {
+        throw new Error("Venue not found or you don't have permission");
+      }
+
+      // Check venue_payment_settings for existing Stripe account
+      const { data: paymentSettings } = await supabaseAdmin
+        .from("venue_payment_settings")
+        .select("stripe_account_id")
+        .eq("venue_id", venueId)
+        .maybeSingle();
+
+      accountId = paymentSettings?.stripe_account_id || null;
+
+      if (!accountId) {
+        // Check if user already has a Stripe account on their profile
+        const { data: profile } = await supabaseAdmin
+          .from("profiles")
+          .select("stripe_account_id")
+          .eq("user_id", user.id)
+          .single();
+
+        accountId = profile?.stripe_account_id || null;
+      }
+
+      if (!accountId) {
+        const account = await stripe.accounts.create({
+          type: "express",
+          country: "NZ",
+          email: user.email,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+          business_type: "individual",
+          business_profile: {
+            name: venue.name,
+            url: `${origin}/courts`,
+          },
+        });
+        accountId = account.id;
+      }
+
+      // Save to venue_payment_settings (upsert)
+      await supabaseAdmin
+        .from("venue_payment_settings")
+        .upsert({
+          venue_id: venueId,
+          stripe_account_id: accountId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "venue_id" });
+
+      // Also save to profile for user-level reference
+      await supabaseAdmin
+        .from("profiles")
         .update({ stripe_account_id: accountId })
-        .eq("id", venueId);
+        .eq("user_id", user.id);
+
+    } else {
+      // No venue yet: user-level Stripe onboarding
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("stripe_account_id, full_name")
+        .eq("user_id", user.id)
+        .single();
+
+      accountId = profile?.stripe_account_id || null;
+
+      if (!accountId) {
+        const account = await stripe.accounts.create({
+          type: "express",
+          country: "NZ",
+          email: user.email,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+          business_type: "individual",
+          business_profile: {
+            name: profile?.full_name || "Court Manager",
+            url: `${origin}/courts`,
+          },
+        });
+        accountId = account.id;
+      }
+
+      // Save to profile
+      await supabaseAdmin
+        .from("profiles")
+        .update({ stripe_account_id: accountId })
+        .eq("user_id", user.id);
     }
 
     // Create an account link for onboarding

@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
 import { GuestBottomNav } from "./GuestBottomNav";
 import { Header } from "./Header";
@@ -15,6 +15,7 @@ import {
   X
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 interface MobileLayoutProps {
   children: ReactNode;
@@ -42,13 +43,14 @@ export function MobileLayout({
   rightAction,
 }: MobileLayoutProps) {
   const location = useLocation();
-  const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Register push subscription for authenticated users
+  usePushSubscription(user?.id);
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/", { replace: true });
   };
 
   const isLoggedIn = !!user;
@@ -63,7 +65,7 @@ export function MobileLayout({
             <img
               src="/sportarena-logo.png"
               alt="Sport Arena logo"
-              className="h-10 w-auto mix-blend-screen"
+              className="h-8 w-auto object-contain"
             />
           </Link>
         </div>

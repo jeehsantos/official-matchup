@@ -1,0 +1,16 @@
+{
+  "processing": "Processing Payment…",
+  "processingDesc": "Confirming your payment. This may take a few moments.",
+  "success": "Payment Successful!",
+  "successDesc": "Your payment has been confirmed and your booking is secure.",
+  "redirecting": "Redirecting in {{count}} seconds...",
+  "continueNow": "Continue Now",
+  "failed": "Payment Verification Failed",
+  "failedDesc": "There was an issue verifying your payment. Please contact support if the issue persists.",
+  "backToGame": "Back to Game",
+  "goHome": "Go to Home",
+  "cancelled": "Payment cancelled",
+  "cancelledDesc": "Your booking has been cancelled. Any payments will be converted to platform credits.",
+  "cancelledSlot": "Your booking was not created. The slot will be released shortly.",
+  "cancelledChallenge": "The quick challenge was not created and the slot was released."
+}

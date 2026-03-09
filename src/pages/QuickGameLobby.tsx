@@ -74,13 +74,17 @@ interface PlayerSlotProps {
   onJoin?: () => void;
   onPay?: () => void;
   isJoining?: boolean;
+  isOrganizer?: boolean;
+  onKick?: (player: LobbyPlayer) => void;
+  paymentType?: string;
 }
 
-function PlayerSlot({ role, player, side, isCurrentUser, onJoin, onPay, isJoining }: PlayerSlotProps) {
+function PlayerSlot({ role, player, side, isCurrentUser, onJoin, onPay, isJoining, isOrganizer: isOrganizerProp, onKick, paymentType }: PlayerSlotProps) {
   const isLeft = side === "left";
   const isEmpty = !player;
   const isMe = isCurrentUser || player?.isMe;
   const isPaid = player?.paymentStatus === "paid";
+  const isOrganizerPaid = paymentType === "single" && isPaid;
 
   // Get flag URL
   const getFlagUrl = (code?: string | null) => {
@@ -189,7 +193,7 @@ function PlayerSlot({ role, player, side, isCurrentUser, onJoin, onPay, isJoinin
           <>
                 <CheckCircle2 size={10} className="text-green-500" />
                 <span className="text-[7px] md:text-[8px] font-black text-green-500 uppercase tracking-tighter">
-                  Paid
+                  {isOrganizerPaid ? "Confirmed" : "Paid"}
                 </span>
               </> :
 
@@ -204,7 +208,19 @@ function PlayerSlot({ role, player, side, isCurrentUser, onJoin, onPay, isJoinin
         }
       </div>
 
+      {/* Kick button for organizer */}
+      {isOrganizerProp && !isEmpty && !isMe && player && onKick && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onKick(player); }}
+          className="absolute top-1 right-1 z-20 p-1 rounded-full bg-destructive/10 hover:bg-destructive/20 transition-colors"
+          title="Kick player"
+        >
+          <X size={10} className="text-destructive" />
+        </button>
+      )}
+
     </div>);
+
 
 }
 
@@ -367,6 +383,8 @@ export default function QuickGameLobby() {
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [isCourtImageOpen, setIsCourtImageOpen] = useState(false);
   const [isConfirmingPresence, setIsConfirmingPresence] = useState(false);
+  const [kickTarget, setKickTarget] = useState<LobbyPlayer | null>(null);
+  const [isKicking, setIsKicking] = useState(false);
 
   // Find the challenge
   const challenge = useMemo(
@@ -570,6 +588,43 @@ export default function QuickGameLobby() {
     updateFormat.mutate({ challengeId: id, gameMode: newFormat });
   };
 
+  const confirmKickPlayer = async () => {
+    if (!id || !kickTarget || !challenge) return;
+    setIsKicking(true);
+    try {
+      // Find the user_id from the challenge players
+      const targetPlayer = (challenge as any).quick_challenge_players?.find(
+        (p: any) => p.id === kickTarget.id
+      );
+
+      if (!targetPlayer) throw new Error("Player not found");
+
+      const { data: kickData, error: kickError } = await supabase.functions.invoke("kick-challenge-player", {
+        body: {
+          challengeId: id,
+          targetUserId: targetPlayer.user_id,
+        },
+      });
+
+      if (kickError) throw kickError;
+      if (kickData?.error) throw new Error(kickData.error);
+
+      toast({
+        title: "Player kicked",
+        description: kickData?.message || `${kickTarget.name} has been removed from the lobby.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Failed to kick player",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsKicking(false);
+      setKickTarget(null);
+    }
+  };
+
   // Auth redirect — store lobby path so user returns here after login/signup
   useEffect(() => {
     if (!isLoading && !user) {
@@ -689,10 +744,11 @@ export default function QuickGameLobby() {
 
   // Format date/time
   const formattedDateTime = challenge.scheduled_date ?
-  format(
-    new Date(`${challenge.scheduled_date}T${challenge.scheduled_time || "00:00"}`),
-    "EEEE, MMMM d • h:mm a"
-  ) :
+  (() => {
+    const start = new Date(`${challenge.scheduled_date}T${challenge.scheduled_time || "00:00"}`);
+    const end = new Date(start.getTime() + 60 * 60 * 1000); // 1 hour duration
+    return `${format(start, "EEEE, MMMM d • h:mm a")} – ${format(end, "h:mm a")}`;
+  })() :
   "Date TBD";
 
   const venueAddress = [challenge.venues?.address, challenge.venues?.city].
@@ -719,9 +775,21 @@ export default function QuickGameLobby() {
               <AlertTriangle className="h-5 w-5 text-destructive" />
               Cancel this lobby?
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. All players will be removed from the lobby
-              and the booking will be cancelled. Any pending payments will not be processed.
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p>This action cannot be undone. All players will be removed from the lobby and the booking will be cancelled.</p>
+                {challenge?.payment_type === "single" && (challenge?.price_per_player ?? 0) > 0 && (
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-foreground">
+                    <p className="font-semibold flex items-center gap-2">
+                      <CreditCard className="h-4 w-4 text-primary" />
+                      Payment will be converted to credits
+                    </p>
+                    <p className="text-xs mt-1 text-muted-foreground">
+                      Your court payment will be refunded as platform credits. Service fee is non-refundable.
+                    </p>
+                  </div>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -757,7 +825,7 @@ export default function QuickGameLobby() {
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm text-muted-foreground">
                 <p>Are you sure you want to leave this quick game?</p>
-                {players.find((p) => p.isMe)?.paymentStatus === "paid" &&
+                {players.find((p) => p.isMe)?.paymentStatus === "paid" && challenge?.payment_type === "split" &&
                 <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-foreground">
                     <p className="font-semibold flex items-center gap-2">
                       <CreditCard className="h-4 w-4 text-primary" />
@@ -765,6 +833,13 @@ export default function QuickGameLobby() {
                     </p>
                     <p className="text-xs mt-1 text-muted-foreground">
                       Your court payment of <span className="font-bold text-primary">${challenge?.price_per_player?.toFixed(2) || "0.00"}</span> will be refunded as platform credits. Service fee is non-refundable.
+                    </p>
+                  </div>
+                }
+                {challenge?.payment_type === "single" &&
+                <div className="rounded-lg border border-muted/30 bg-muted/5 p-3 text-foreground">
+                    <p className="text-xs text-muted-foreground">
+                      This session was covered by the organizer. You can leave without any charges.
                     </p>
                   </div>
                 }
@@ -788,6 +863,38 @@ export default function QuickGameLobby() {
 
               "Yes, Quit Lobby"
               }
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Kick Player Confirmation Dialog */}
+      <AlertDialog open={!!kickTarget} onOpenChange={(open) => !open && setKickTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Kick {kickTarget?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This player will be removed from the lobby and banned from rejoining.
+              {kickTarget?.paymentStatus === "paid" && challenge?.payment_type === "split" && (
+                " Their payment will be converted to platform credits."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isKicking}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmKickPlayer}
+              disabled={isKicking}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isKicking ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Kicking...</>
+              ) : (
+                "Kick Player"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -929,7 +1036,10 @@ export default function QuickGameLobby() {
                     isCurrentUser={player?.isMe}
                     onJoin={() => handleJoinSlot("left", i)}
                     onPay={handlePayment}
-                    isJoining={isJoiningThis} />);
+                    isJoining={isJoiningThis}
+                    isOrganizer={isOrganizer}
+                    onKick={(p) => setKickTarget(p)}
+                    paymentType={challenge.payment_type} />);
 
 
               })}
@@ -961,7 +1071,10 @@ export default function QuickGameLobby() {
                     isCurrentUser={player?.isMe}
                     onJoin={() => handleJoinSlot("right", i)}
                     onPay={handlePayment}
-                    isJoining={isJoiningThis} />);
+                    isJoining={isJoiningThis}
+                    isOrganizer={isOrganizer}
+                    onKick={(p) => setKickTarget(p)}
+                    paymentType={challenge.payment_type} />);
 
 
               })}
@@ -1022,8 +1135,8 @@ export default function QuickGameLobby() {
 
             {/* Game Mode Badge */}
             <div className="absolute top-3 right-3 bg-primary/90 text-primary-foreground px-3 py-1.5 rounded-full">
-              <span className="text-xs font-black uppercase tracking-wide">
-                {challenge.game_mode}
+              <span className="text-xs font-black tracking-wide">
+                {challenge.game_mode.replace(/vs/gi, ' vs ')}
               </span>
             </div>
           </button>
@@ -1087,28 +1200,49 @@ export default function QuickGameLobby() {
                 Invite Friend
               </Button>
             </div>
-            <div className="flex flex-col items-center gap-1">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  Total:
-                </span>
-                <span className="text-sm font-black uppercase tracking-widest text-primary">
-                  ${challenge.price_per_player != null ?
-                  challenge.price_per_player.toFixed(2) :
-                  "0.00"}
-                </span>
+            {challenge.payment_type === "single" ? (
+              <div className="flex flex-col items-center gap-1">
+                {isOrganizer ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      You paid:
+                    </span>
+                    <span className="text-sm font-black uppercase tracking-widest text-primary">
+                      ${(challenge.price_per_player * challenge.total_slots).toFixed(2)}
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/20">
+                      <span className="text-xs font-bold text-green-500">
+                        ✓ Covered by Organizer
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">
+                      Free to join — just confirm your presence
+                    </span>
+                  </>
+                )}
               </div>
-              {challenge.price_per_player > 0 &&
-              <span className="text-[10px] text-muted-foreground">
-                  Per player
-                </span>
-              }
-            </div>
-            {challengePricePerPlayer > 0
-
-
-
-            }
+            ) : (
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    Total:
+                  </span>
+                  <span className="text-sm font-black uppercase tracking-widest text-primary">
+                    ${challenge.price_per_player != null ?
+                    challenge.price_per_player.toFixed(2) :
+                    "0.00"}
+                  </span>
+                </div>
+                {challenge.price_per_player > 0 &&
+                <span className="text-[10px] text-muted-foreground">
+                    Per player
+                  </span>
+                }
+              </div>
+            )}
           </div>
         </div>
 
@@ -1137,7 +1271,10 @@ export default function QuickGameLobby() {
                   isCurrentUser={player?.isMe}
                   onJoin={() => handleJoinSlot("right", i)}
                   onPay={handlePayment}
-                  isJoining={isJoiningThis} />);
+                  isJoining={isJoiningThis}
+                  isOrganizer={isOrganizer}
+                  onKick={(p) => setKickTarget(p)}
+                  paymentType={challenge.payment_type} />);
 
 
             })}

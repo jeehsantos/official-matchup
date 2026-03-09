@@ -1,0 +1,44 @@
+{
+  "nav": {
+    "home": "Home",
+    "ourStory": "Our Story",
+    "venues": "Venues",
+    "contact": "Contact",
+    "signIn": "Sign In",
+    "getStarted": "Get Started",
+    "openMenu": "Open menu"
+  },
+  "bottomNav": {
+    "myGames": "My Games",
+    "explore": "Explore",
+    "find": "Find",
+    "groups": "Groups",
+    "profile": "Profile",
+    "favourite": "Favourite",
+    "logIn": "Log in"
+  },
+  "footer": {
+    "tagline": "The smarter way to book courts and guarantee games. Join thousands of players across New Zealand enjoying hassle-free sports booking.",
+    "location": "Auckland, New Zealand",
+    "product": "Product",
+    "company": "Company",
+    "browseCourts": "Browse Courts",
+    "forPlayers": "For Players",
+    "forCourtManagers": "For Court Managers",
+    "aboutUs": "About Us",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "cookies": "Cookies",
+    "allRightsReserved": "All rights reserved.",
+    "subscribeThanks": "Thanks for subscribing! We'll keep you updated."
+  },
+  "notFound": {
+    "title": "404",
+    "message": "Oops! Page not found",
+    "backHome": "Return to Home"
+  },
+  "backToHome": "Back to home",
+  "cancel": "Cancel",
+  "send": "Send",
+  "loading": "Loading..."
+}

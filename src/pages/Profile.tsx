@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -64,18 +65,27 @@ export default function Profile() {
   const { theme, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
   const { toast } = useToast();
+  const { t } = useTranslation("profile");
 
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   // Fetch sports from database - NO FALLBACKS
   const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
   
   // Fetch user credits
   const { balance: credits, loading: loadingCredits } = useUserCredits();
+
+  // Profile stats
+  const [gamesPlayed, setGamesPlayed] = useState<number>(0);
+  const [groupCount, setGroupCount] = useState<number>(0);
+  const [showRate, setShowRate] = useState<number>(100);
   
   // Password change state
   const [passwordData, setPasswordData] = useState({
@@ -154,6 +164,40 @@ export default function Profile() {
     }
   };
 
+  // Fetch profile stats
+  useEffect(() => {
+    if (!user) return;
+    const fetchStats = async () => {
+      const [sessionsResult, groupsResult, confirmedResult] = await Promise.all([
+        supabase
+          .from("session_players")
+          .select("id, sessions!inner(session_date, is_cancelled)", { count: "exact" })
+          .eq("user_id", user.id)
+          .eq("sessions.is_cancelled", false)
+          .lte("sessions.session_date", new Date().toISOString().split("T")[0]),
+        supabase
+          .from("group_members")
+          .select("id", { count: "exact" })
+          .eq("user_id", user.id),
+        supabase
+          .from("session_players")
+          .select("id, sessions!inner(session_date, is_cancelled)", { count: "exact" })
+          .eq("user_id", user.id)
+          .eq("sessions.is_cancelled", false)
+          .lte("sessions.session_date", new Date().toISOString().split("T")[0])
+          .eq("is_confirmed", true),
+      ]);
+
+      const totalPast = sessionsResult.count ?? 0;
+      const confirmedPast = confirmedResult.count ?? 0;
+
+      setGamesPlayed(totalPast);
+      setGroupCount(groupsResult.count ?? 0);
+      setShowRate(totalPast > 0 ? Math.round((confirmedPast / totalPast) * 100) : 100);
+    };
+    fetchStats();
+  }, [user]);
+
   const handleSave = async () => {
     if (!user) return;
 
@@ -178,14 +222,14 @@ export default function Profile() {
 
       setOriginalData({ ...profileData });
       toast({
-        title: "Profile updated",
-        description: "Your profile has been saved successfully.",
+        title: t("profileUpdated"),
+        description: t("profileUpdatedDesc"),
       });
     } catch (error) {
       console.error("Error saving profile:", error);
       toast({
-        title: "Error",
-        description: "Failed to save profile. Please try again.",
+        title: t("profileError"),
+        description: t("profileErrorDesc"),
         variant: "destructive",
       });
     } finally {
@@ -195,7 +239,41 @@ export default function Profile() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/", { replace: true });
+  };
+
+  const handleExportData = async () => {
+    setExportingData(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("export-user-data");
+      if (error) throw error;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `sport-arena-data-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: t("dataExported"), description: t("dataExportedDesc") });
+    } catch {
+      toast({ title: t("profileError"), description: "Failed to export data. Please try again.", variant: "destructive" });
+    } finally {
+      setExportingData(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const { error } = await supabase.functions.invoke("delete-user-account");
+      if (error) throw error;
+      toast({ title: t("accountDeleted"), description: t("accountDeletedDesc") });
+      await signOut();
+    } catch {
+      toast({ title: t("profileError"), description: "Failed to delete account. Please try again.", variant: "destructive" });
+    } finally {
+      setDeletingAccount(false);
+      setShowDeleteConfirm(false);
+    }
   };
 
   // Password validation
@@ -315,9 +393,7 @@ export default function Profile() {
                   {user.email}
                 </p>
                 <div className="flex gap-2 mt-2">
-                  <Badge variant="secondary" className="text-xs">
-                    Player
-                  </Badge>
+                    <Badge variant="secondary" className="text-xs">{t("player")}</Badge>
                 </div>
               </div>
             </div>
@@ -325,16 +401,16 @@ export default function Profile() {
             {/* Stats */}
             <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-border">
               <div className="text-center">
-                <p className="font-display font-bold text-xl">12</p>
-                <p className="text-xs text-muted-foreground">Games Played</p>
+                <p className="font-display font-bold text-xl">{gamesPlayed}</p>
+                <p className="text-xs text-muted-foreground">{t("gamesPlayed")}</p>
               </div>
               <div className="text-center">
-                <p className="font-display font-bold text-xl">3</p>
-                <p className="text-xs text-muted-foreground">Groups</p>
+                <p className="font-display font-bold text-xl">{groupCount}</p>
+                <p className="text-xs text-muted-foreground">{t("groups")}</p>
               </div>
               <div className="text-center">
-                <p className="font-display font-bold text-xl">100%</p>
-                <p className="text-xs text-muted-foreground">Show Rate</p>
+                <p className="font-display font-bold text-xl">{showRate}%</p>
+                <p className="text-xs text-muted-foreground">{t("showRate")}</p>
               </div>
             </div>
           </CardContent>
@@ -360,10 +436,8 @@ export default function Profile() {
                     <User className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="font-medium text-sm">Personal Information</p>
-                    <p className="text-xs text-muted-foreground">
-                      Name, phone, and location
-                    </p>
+                    <p className="font-medium text-sm">{t("personalInfo")}</p>
+                    <p className="text-xs text-muted-foreground">{t("personalInfoDesc")}</p>
                   </div>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${
                     expandedSections.includes("personal") ? 'rotate-180' : ''
@@ -372,10 +446,10 @@ export default function Profile() {
               </CollapsibleTrigger>
               <CollapsibleContent className="px-4 pb-4 pt-2 space-y-4 border-b border-border">
                 <div className="space-y-2">
-                  <Label htmlFor="full_name">Full Name</Label>
+                  <Label htmlFor="full_name">{t("fullName")}</Label>
                   <Input
                     id="full_name"
-                    placeholder="Enter your first and last name"
+                    placeholder={t("fullNamePlaceholder")}
                     value={profileData.full_name}
                     onChange={(e) =>
                       setProfileData((prev) => ({ ...prev, full_name: e.target.value }))
@@ -384,7 +458,7 @@ export default function Profile() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">{t("email")}</Label>
                   <Input
                     id="email"
                     value={user.email || ""}
@@ -392,16 +466,16 @@ export default function Profile() {
                     className="bg-muted"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Email cannot be changed
+                    {t("emailCannotChange")}
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
+                  <Label htmlFor="phone">{t("phone")}</Label>
                   <Input
                     id="phone"
                     type="tel"
-                    placeholder="Enter your phone number"
+                    placeholder={t("phonePlaceholder")}
                     value={profileData.phone}
                     onChange={(e) =>
                       setProfileData((prev) => ({ ...prev, phone: e.target.value }))
@@ -410,7 +484,7 @@ export default function Profile() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
+                  <Label htmlFor="city">{t("city")}</Label>
                   <Select
                     value={profileData.city}
                     onValueChange={(value) =>
@@ -418,7 +492,7 @@ export default function Profile() {
                     }
                   >
                     <SelectTrigger id="city" className="w-full">
-                      <SelectValue placeholder="Select your city" />
+                      <SelectValue placeholder={t("cityPlaceholder")} />
                     </SelectTrigger>
                     <SelectContent className="bg-background border shadow-lg z-50">
                       {nzCities.map((city) => (
@@ -431,7 +505,7 @@ export default function Profile() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="nationality">Nationality</Label>
+                  <Label htmlFor="nationality">{t("nationality")}</Label>
                   <NationalityCombobox
                     value={profileData.nationality_code}
                     onValueChange={(value) =>
@@ -439,7 +513,7 @@ export default function Profile() {
                     }
                   />
                   <p className="text-xs text-muted-foreground">
-                    Your flag will be shown to other players
+                    {t("nationalityHint")}
                   </p>
                 </div>
               </CollapsibleContent>
@@ -456,10 +530,8 @@ export default function Profile() {
                     <Activity className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="font-medium text-sm">Preferred Sports</p>
-                    <p className="text-xs text-muted-foreground">
-                      Sports you enjoy playing
-                    </p>
+                    <p className="font-medium text-sm">{t("preferredSports")}</p>
+                    <p className="text-xs text-muted-foreground">{t("preferredSportsDesc")}</p>
                   </div>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${
                     expandedSections.includes("sports") ? 'rotate-180' : ''
@@ -500,7 +572,7 @@ export default function Profile() {
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground mt-3">
-                  Select sports you enjoy playing
+                  {t("selectSportsHint")}
                 </p>
               </CollapsibleContent>
             </Collapsible>
@@ -514,10 +586,8 @@ export default function Profile() {
                 <Archive className="h-5 w-5 text-muted-foreground" />
               </div>
               <div className="flex-1 text-left">
-                <p className="font-medium text-sm">Archived Sessions</p>
-                <p className="text-xs text-muted-foreground">
-                  View sessions older than 2 years
-                </p>
+                <p className="font-medium text-sm">{t("archivedSessions")}</p>
+                <p className="text-xs text-muted-foreground">{t("archivedSessionsDesc")}</p>
               </div>
               <ChevronDown className="h-5 w-5 text-muted-foreground rotate-[-90deg]" />
             </button>
@@ -533,10 +603,8 @@ export default function Profile() {
                     <Shield className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="font-medium text-sm">Privacy & Security</p>
-                    <p className="text-xs text-muted-foreground">
-                      Account security settings
-                    </p>
+                    <p className="font-medium text-sm">{t("security")}</p>
+                    <p className="text-xs text-muted-foreground">{t("securityDesc")}</p>
                   </div>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${
                     expandedSections.includes("privacy") ? 'rotate-180' : ''
@@ -547,13 +615,13 @@ export default function Profile() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Key className="h-5 w-5 text-muted-foreground" />
-                    <span className="text-sm font-medium">Change Password</span>
+                    <span className="text-sm font-medium">{t("changePassword")}</span>
                   </div>
                 </div>
                 
                 <div className="space-y-3 pl-8">
                   <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password</Label>
+                    <Label htmlFor="newPassword">{t("newPassword")}</Label>
                     <div className="relative">
                       <Input
                         id="newPassword"
@@ -588,7 +656,7 @@ export default function Profile() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Label htmlFor="confirmPassword">{t("confirmPassword")}</Label>
                     <div className="relative">
                       <Input
                         id="confirmPassword"
@@ -639,10 +707,8 @@ export default function Profile() {
                     <Settings className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="font-medium text-sm">App Settings</p>
-                    <p className="text-xs text-muted-foreground">
-                      Theme and preferences
-                    </p>
+                    <p className="font-medium text-sm">{t("preferences")}</p>
+                    <p className="text-xs text-muted-foreground">{t("preferencesDesc")}</p>
                   </div>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${
                     expandedSections.includes("settings") ? 'rotate-180' : ''
@@ -658,10 +724,8 @@ export default function Profile() {
                       <Sun className="h-5 w-5 text-muted-foreground" />
                     )}
                     <div>
-                      <p className="text-sm font-medium">Dark Mode</p>
-                      <p className="text-xs text-muted-foreground">
-                        Toggle dark theme
-                      </p>
+                      <p className="text-sm font-medium">{t("darkMode")}</p>
+                      <p className="text-xs text-muted-foreground">{theme === 'dark' ? t("darkModeEnabled") : t("darkModeDisabled")}</p>
                     </div>
                   </div>
                   <Switch
@@ -684,20 +748,92 @@ export default function Profile() {
                 className="w-full h-12"
               >
                 {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Saving...
-                  </>
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />{t("saving")}</>
                 ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Changes
-                  </>
+                  <><Save className="h-4 w-4 mr-2" />{t("saveChanges")}</>
                 )}
               </Button>
             </div>
           </div>
         )}
+
+        {/* Data Management */}
+        <Card className="card-elevated overflow-hidden">
+          <CardContent className="p-0">
+            <Collapsible
+              open={expandedSections.includes("data")}
+              onOpenChange={() => toggleSection("data")}
+            >
+              <CollapsibleTrigger asChild>
+                <button className="w-full flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+                    <Shield className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="font-medium text-sm">{t("dataManagement")}</p>
+                    <p className="text-xs text-muted-foreground">{t("dataManagementDesc")}</p>
+                  </div>
+                  <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${
+                    expandedSections.includes("data") ? 'rotate-180' : ''
+                  }`} />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="px-4 pb-4 pt-2 space-y-4">
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">{t("downloadData")}</p>
+                    <p className="text-xs text-muted-foreground mb-2">{t("downloadDataDesc")}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={exportingData}
+                      onClick={handleExportData}
+                    >
+                      {exportingData ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      {t("downloadDataBtn")}
+                    </Button>
+                  </div>
+                  <div className="border-t border-border pt-3">
+                    <p className="text-sm font-medium text-destructive">{t("deleteAccount")}</p>
+                    <p className="text-xs text-muted-foreground mb-2">{t("deleteAccountDesc")}</p>
+                    {!showDeleteConfirm ? (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setShowDeleteConfirm(true)}
+                      >
+                        {t("deleteAccountBtn")}
+                      </Button>
+                    ) : (
+                      <div className="space-y-2 p-3 border border-destructive/30 rounded-lg bg-destructive/5">
+                        <p className="text-sm font-medium text-destructive">{t("deleteConfirmTitle")}</p>
+                        <p className="text-xs text-muted-foreground">{t("deleteConfirmDesc")}</p>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={deletingAccount}
+                            onClick={handleDeleteAccount}
+                          >
+                            {deletingAccount ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            {t("deleteConfirmBtn")}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowDeleteConfirm(false)}
+                          >
+                            {t("deleteConfirmCancel")}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </CardContent>
+        </Card>
 
         {/* Sign Out */}
         <Button
@@ -706,7 +842,7 @@ export default function Profile() {
           onClick={handleSignOut}
         >
           <LogOut className="h-4 w-4 mr-2" />
-          Sign Out
+          {t("signOut")}
         </Button>
       </div>
     </MobileLayout>

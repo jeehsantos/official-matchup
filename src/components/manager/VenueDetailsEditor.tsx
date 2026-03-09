@@ -1,13 +1,12 @@
 import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Box, Plus, X, Users, Bath, Car, Wifi, Coffee,
   BriefcaseMedical, Droplets, Armchair, Lock,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 const FACILITY_OPTIONS: { label: string; icon: React.ElementType }[] = [
   { label: "Changing Room", icon: Users },
@@ -31,6 +30,7 @@ export function VenueDetailsEditor({
   amenities,
   onAmenitiesChange,
 }: VenueDetailsEditorProps) {
+  const { t } = useTranslation("manager");
   const [customFacility, setCustomFacility] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -51,7 +51,6 @@ export function VenueDetailsEditor({
     }
   };
 
-  // Merge default options with any custom amenities not in defaults
   const defaultLabels = FACILITY_OPTIONS.map((f) => f.label);
   const customAmenities = amenities.filter((a) => !defaultLabels.includes(a));
 
@@ -60,14 +59,13 @@ export function VenueDetailsEditor({
       <CardHeader className="pb-3">
         <CardTitle className="text-lg font-semibold flex items-center gap-2">
           <Box className="h-5 w-5 text-primary" />
-          Venue Facilities
+          {t("facilities.title")}
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Select what facilities your venue offers, or add custom ones.
+          {t("facilities.subtitle")}
         </p>
       </CardHeader>
       <CardContent className="space-y-4 pt-0">
-        {/* Chip-style facility toggles */}
         <div className="flex flex-wrap gap-2.5">
           {FACILITY_OPTIONS.map(({ label, icon: Icon }) => {
             const selected = amenities.includes(label);
@@ -88,7 +86,6 @@ export function VenueDetailsEditor({
             );
           })}
 
-          {/* Custom amenities as chips */}
           {customAmenities.map((label) => (
             <button
               key={label}
@@ -102,13 +99,12 @@ export function VenueDetailsEditor({
           ))}
         </div>
 
-        {/* Add custom facility */}
         <div className="flex gap-2 max-w-md">
           <Input
             ref={inputRef}
             value={customFacility}
             onChange={(e) => setCustomFacility(e.target.value)}
-            placeholder="Add custom facility..."
+            placeholder={t("facilities.addCustomPlaceholder")}
             className="flex-1"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -124,7 +120,7 @@ export function VenueDetailsEditor({
             disabled={!customFacility.trim()}
             className="text-sm"
           >
-            Add
+            {t("facilities.addBtn")}
           </Button>
         </div>
       </CardContent>

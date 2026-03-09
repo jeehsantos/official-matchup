@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Save, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 
 interface VenueConfigEditorProps {
   venueId: string;
@@ -13,6 +14,7 @@ interface VenueConfigEditorProps {
 }
 
 export function VenueConfigEditor({ venueId, onConfigUpdated }: VenueConfigEditorProps) {
+  const { t } = useTranslation("manager");
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -59,7 +61,7 @@ export function VenueConfigEditor({ venueId, onConfigUpdated }: VenueConfigEdito
 
       if (error) throw error;
 
-      toast({ title: "Booking settings saved" });
+      toast({ title: t("bookingConfig.saved") });
       onConfigUpdated?.();
     } catch (error: any) {
       toast({
@@ -87,17 +89,17 @@ export function VenueConfigEditor({ venueId, onConfigUpdated }: VenueConfigEdito
       <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2">
           <Settings className="h-5 w-5" />
-          Booking Settings
+          {t("bookingConfig.title")}
         </CardTitle>
         <CardDescription>
-          Configure time slot intervals and maximum booking duration
+          {t("bookingConfig.subtitle")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-0">
         <div>
-          <Label htmlFor="slot_interval">Slot Interval (minutes)</Label>
+          <Label htmlFor="slot_interval">{t("bookingConfig.slotInterval")}</Label>
           <p className="text-sm text-muted-foreground mb-2">
-            The smallest bookable time unit (e.g., 30 = half-hour slots)
+            {t("bookingConfig.slotIntervalDesc")}
           </p>
           <Input
             id="slot_interval"
@@ -114,9 +116,9 @@ export function VenueConfigEditor({ venueId, onConfigUpdated }: VenueConfigEdito
         </div>
 
         <div>
-          <Label htmlFor="max_booking">Maximum Booking Duration (minutes)</Label>
+          <Label htmlFor="max_booking">{t("bookingConfig.maxBooking")}</Label>
           <p className="text-sm text-muted-foreground mb-2">
-            The longest continuous booking allowed (e.g., 120 = 2 hours)
+            {t("bookingConfig.maxBookingDesc")}
           </p>
           <Input
             id="max_booking"
@@ -136,12 +138,12 @@ export function VenueConfigEditor({ venueId, onConfigUpdated }: VenueConfigEdito
           {saving ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Saving...
+              {t("weeklySchedule.saving")}
             </>
           ) : (
             <>
               <Save className="h-4 w-4 mr-2" />
-              Save Settings
+              {t("bookingConfig.saved").replace(" saved", "")}
             </>
           )}
         </Button>

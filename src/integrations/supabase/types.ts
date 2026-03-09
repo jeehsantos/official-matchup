@@ -370,6 +370,41 @@ export type Database = {
           },
         ]
       }
+      group_bans: {
+        Row: {
+          banned_by: string
+          created_at: string
+          group_id: string
+          id: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          banned_by: string
+          created_at?: string
+          group_id: string
+          id?: string
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          banned_by?: string
+          created_at?: string
+          group_id?: string
+          id?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_bans_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_invitations: {
         Row: {
           created_at: string
@@ -578,6 +613,33 @@ export type Database = {
           },
         ]
       }
+      login_attempts: {
+        Row: {
+          attempt_count: number
+          created_at: string | null
+          email: string
+          id: string
+          last_attempt_at: string | null
+          locked_until: string | null
+        }
+        Insert: {
+          attempt_count?: number
+          created_at?: string | null
+          email: string
+          id?: string
+          last_attempt_at?: string | null
+          locked_until?: string | null
+        }
+        Update: {
+          attempt_count?: number
+          created_at?: string | null
+          email?: string
+          id?: string
+          last_attempt_at?: string | null
+          locked_until?: string | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -721,11 +783,13 @@ export type Database = {
           city: string | null
           created_at: string
           full_name: string | null
+          gender: string | null
           id: string
           nationality_code: string | null
           phone: string | null
           preferred_sports: string[] | null
           referral_code: string | null
+          stripe_account_id: string | null
           updated_at: string
           user_id: string
         }
@@ -734,11 +798,13 @@ export type Database = {
           city?: string | null
           created_at?: string
           full_name?: string | null
+          gender?: string | null
           id?: string
           nationality_code?: string | null
           phone?: string | null
           preferred_sports?: string[] | null
           referral_code?: string | null
+          stripe_account_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -747,15 +813,82 @@ export type Database = {
           city?: string | null
           created_at?: string
           full_name?: string | null
+          gender?: string | null
           id?: string
           nationality_code?: string | null
           phone?: string | null
           preferred_sports?: string[] | null
           referral_code?: string | null
+          stripe_account_id?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      quick_challenge_bans: {
+        Row: {
+          banned_by: string
+          challenge_id: string
+          created_at: string
+          id: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          banned_by: string
+          challenge_id: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          banned_by?: string
+          challenge_id?: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_challenge_bans_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "quick_challenges"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quick_challenge_messages: {
         Row: {
@@ -898,6 +1031,7 @@ export type Database = {
           created_at: string
           created_by: string
           game_mode: string
+          gender_preference: string
           id: string
           payment_type: string
           price_per_player: number
@@ -914,6 +1048,7 @@ export type Database = {
           created_at?: string
           created_by: string
           game_mode: string
+          gender_preference?: string
           id?: string
           payment_type?: string
           price_per_player?: number
@@ -930,6 +1065,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           game_mode?: string
+          gender_preference?: string
           id?: string
           payment_type?: string
           price_per_player?: number
@@ -1309,6 +1445,67 @@ export type Database = {
           },
         ]
       }
+      venue_payment_settings: {
+        Row: {
+          created_at: string
+          stripe_account_id: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          stripe_account_id: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          stripe_account_id?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_payment_settings_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_staff: {
+        Row: {
+          added_by: string
+          created_at: string
+          id: string
+          user_id: string
+          venue_id: string
+        }
+        Insert: {
+          added_by: string
+          created_at?: string
+          id?: string
+          user_id: string
+          venue_id: string
+        }
+        Update: {
+          added_by?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_staff_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_weekly_rules: {
         Row: {
           created_at: string
@@ -1354,6 +1551,7 @@ export type Database = {
         Row: {
           address: string
           amenities: string[] | null
+          banner_url: string | null
           city: string
           country: string | null
           created_at: string
@@ -1369,13 +1567,14 @@ export type Database = {
           phone: string | null
           photo_url: string | null
           slot_interval_minutes: number
-          stripe_account_id: string | null
+          slug: string | null
           suburb: string | null
           updated_at: string
         }
         Insert: {
           address: string
           amenities?: string[] | null
+          banner_url?: string | null
           city: string
           country?: string | null
           created_at?: string
@@ -1391,13 +1590,14 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           slot_interval_minutes?: number
-          stripe_account_id?: string | null
+          slug?: string | null
           suburb?: string | null
           updated_at?: string
         }
         Update: {
           address?: string
           amenities?: string[] | null
+          banner_url?: string | null
           city?: string
           country?: string | null
           created_at?: string
@@ -1413,7 +1613,7 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           slot_interval_minutes?: number
-          stripe_account_id?: string | null
+          slug?: string | null
           suburb?: string | null
           updated_at?: string
         }
@@ -1443,6 +1643,8 @@ export type Database = {
         Args: { session_id: string }
         Returns: boolean
       }
+      check_login_attempt: { Args: { p_email: string }; Returns: Json }
+      clear_login_attempts: { Args: { p_email: string }; Returns: undefined }
       convert_hold_to_booking: { Args: { p_hold_id: string }; Returns: Json }
       create_booking_hold: {
         Args: {
@@ -1454,6 +1656,11 @@ export type Database = {
         Returns: Json
       }
       expire_stale_holds: { Args: never; Returns: number }
+      get_group_invitation: { Args: { p_invite_code: string }; Returns: Json }
+      get_staff_venue_ids: {
+        Args: { check_user_id: string }
+        Returns: string[]
+      }
       get_user_credits: { Args: { p_user_id: string }; Returns: number }
       has_role: {
         Args: {
@@ -1463,12 +1670,33 @@ export type Database = {
         Returns: boolean
       }
       has_valid_invitation: { Args: { _group_id: string }; Returns: boolean }
+      increment_invitation_use: {
+        Args: { p_invite_code: string }
+        Returns: undefined
+      }
       is_challenge_participant: {
         Args: { _challenge_id: string; _user_id: string }
         Returns: boolean
       }
+      is_group_ban_manager: {
+        Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_group_member: {
         Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_staff_of_owner: { Args: { check_user_id: string }; Returns: boolean }
+      is_user_banned_from_challenge: {
+        Args: { _challenge_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_user_banned_from_group: {
+        Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_venue_staff: {
+        Args: { check_user_id: string; check_venue_id: string }
         Returns: boolean
       }
       process_referral_credit: {
@@ -1479,6 +1707,7 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: Json
       }
+      record_failed_login: { Args: { p_email: string }; Returns: Json }
       release_booking_hold: {
         Args: { p_hold_id: string; p_user_id: string }
         Returns: boolean
@@ -1494,7 +1723,12 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "court_manager" | "organizer" | "player" | "admin"
+      app_role:
+        | "court_manager"
+        | "organizer"
+        | "player"
+        | "admin"
+        | "venue_staff"
       booking_payment_type: "single" | "split"
       ground_type: "grass" | "turf" | "sand" | "hard" | "clay" | "other"
       notification_type:
@@ -1656,7 +1890,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["court_manager", "organizer", "player", "admin"],
+      app_role: [
+        "court_manager",
+        "organizer",
+        "player",
+        "admin",
+        "venue_staff",
+      ],
       booking_payment_type: ["single", "split"],
       ground_type: ["grass", "turf", "sand", "hard", "clay", "other"],
       notification_type: [

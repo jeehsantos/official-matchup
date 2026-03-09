@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, getDay } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import { BookingWizard } from "@/components/booking/BookingWizard";
+import { BookingProcessingOverlay } from "@/components/booking/BookingProcessingOverlay";
 import { QuickChallengeWizard } from "@/components/booking/QuickChallengeWizard";
 import { ProfileCompletionAlert } from "@/components/booking/ProfileCompletionAlert";
 import { EquipmentSelector, type SelectedEquipment } from "@/components/booking/EquipmentSelector";
@@ -130,6 +131,7 @@ export default function CourtDetail() {
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
   const [booking, setBooking] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState("");
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showQuickChallengeWizard, setShowQuickChallengeWizard] = useState(false);
   const [showProfileAlert, setShowProfileAlert] = useState(false);
@@ -147,6 +149,7 @@ export default function CourtDetail() {
     sportLabel: string;
     gameMode: string;
     totalPlayers: number;
+    genderPreference?: string;
   } | null>(null);
   
   // Load quick game config from sessionStorage when in quick game mode
@@ -796,6 +799,7 @@ export default function CourtDetail() {
 
     setShowGroupModal(false);
     setBooking(true);
+    setProcessingMessage("Creating your booking...");
 
     const totalDuration = getTotalDuration();
     const startTime = getStartTime();
@@ -826,6 +830,7 @@ export default function CourtDetail() {
         const totalPrice = Number(bookingData?.total_charge ?? 0);
         const bookingDetails = bookingData.booking_details;
 
+        setProcessingMessage("Redirecting to payment...");
         toast({
           title: isNewGroup ? "Group created!" : "Booking reserved!",
           description: "Redirecting to payment...",
@@ -863,6 +868,7 @@ export default function CourtDetail() {
       });
     } finally {
       setBooking(false);
+      setProcessingMessage("");
     }
   };
 
@@ -878,6 +884,7 @@ export default function CourtDetail() {
 
     setShowQuickChallengeWizard(false);
     setBooking(true);
+    setProcessingMessage("Creating your challenge...");
 
     const totalDuration = getTotalDuration();
     const startTime = getStartTime();
@@ -897,6 +904,7 @@ export default function CourtDetail() {
           totalPlayers: quickGameConfig.totalPlayers,
           paymentType,
           equipment,
+          genderPreference: quickGameConfig.genderPreference || "mixed",
         },
       });
 
@@ -905,8 +913,12 @@ export default function CourtDetail() {
       const challengeId = challengeData?.challenge_id as string | undefined;
       if (!challengeId) throw new Error("Challenge created without id");
 
-      if (court.payment_timing === "at_booking") {
+      const requiresAtBookingPayment =
+        challengeData?.requires_payment_at_booking === true || effectivePaymentTiming === "at_booking";
+
+      if (requiresAtBookingPayment) {
         try {
+          setProcessingMessage("Setting up payment...");
           const { data: paymentData, error: paymentError } = await supabase.functions.invoke("create-quick-challenge-payment", {
             body: {
               challengeId,
@@ -930,6 +942,7 @@ export default function CourtDetail() {
           }
 
           if (paymentData?.url) {
+            setProcessingMessage("Redirecting to checkout...");
             const isInIframe = window.self !== window.top;
             if (isInIframe) {
               const opened = window.open(paymentData.url, "_blank", "noopener,noreferrer");
@@ -988,6 +1001,7 @@ export default function CourtDetail() {
       });
     } finally {
       setBooking(false);
+      setProcessingMessage("");
     }
   };
 
@@ -1416,10 +1430,6 @@ export default function CourtDetail() {
             {/* Court Header */}
             <div className="px-4 lg:px-0">
               <div className="flex items-start gap-3 mb-3">
-                <Badge className="capitalize shrink-0">
-                  <SportIcon sport={(getSelectedCourt()?.allowed_sports?.[0] || court.allowed_sports?.[0] || "other")} className="h-3 w-3 mr-1" />
-                  {(getSelectedCourt()?.allowed_sports || court.allowed_sports)?.join(", ") || "Other"}
-                </Badge>
                 <Badge variant="outline" className="shrink-0">
                   {court.is_indoor ? "Indoor" : "Outdoor"}
                 </Badge>
@@ -1504,8 +1514,8 @@ export default function CourtDetail() {
             <div className="px-4 lg:px-0">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Court Selector - Responsive Glassmorphism styled dropdown */}
-                <div className="relative group bg-[#111a27]/60 backdrop-blur-2xl border border-[#00f2ea]/20 p-3 sm:p-4 rounded-2xl shadow-2xl transition-all hover:border-[#00f2ea]/50 col-span-3 sm:col-span-1">
-                  <label className="block text-[10px] uppercase text-gray-400 font-bold tracking-widest mb-1 opacity-70">
+                <div className="relative group bg-card/80 dark:bg-[#111a27]/60 backdrop-blur-2xl border border-primary/20 p-3 sm:p-4 rounded-2xl shadow-lg transition-all hover:border-primary/50 hover:shadow-primary/10 hover:shadow-xl col-span-3 sm:col-span-1">
+                  <label className="block text-[10px] uppercase text-muted-foreground font-bold tracking-widest mb-1 opacity-70">
                     Select Court
                   </label>
                   <div className="flex items-center justify-between min-w-0">
@@ -1515,45 +1525,44 @@ export default function CourtDetail() {
                           value={selectedCourtId || ""}
                           onChange={(e) => {
                             setSelectedCourtId(e.target.value);
-                            // Reset slots and image index when court changes
                             setSelectedSlots([]);
                             setCurrentImageIndex(0);
                           }}
-                          className="bg-transparent text-[#00f2ea] font-bold sm:font-extrabold text-sm sm:text-lg outline-none cursor-pointer w-full appearance-none pr-6 truncate min-w-0"
+                          className="bg-transparent text-primary font-bold sm:font-extrabold text-sm sm:text-lg outline-none cursor-pointer w-full appearance-none pr-6 truncate min-w-0"
                         >
                           {venueCourts.map((c) => (
-                            <option key={c.id} value={c.id} className="bg-[#0a0f18] text-white text-sm">
+                            <option key={c.id} value={c.id} className="bg-card text-foreground text-sm">
                               {c.name}
                             </option>
                           ))}
                         </select>
-                        <div className="pointer-events-none absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-[#00f2ea] text-xs sm:text-sm">▼</div>
+                        <div className="pointer-events-none absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-primary text-xs sm:text-sm">▼</div>
                       </>
                     ) : (
-                      <span className="text-[#00f2ea] font-bold sm:font-extrabold text-sm sm:text-lg truncate">{court.name}</span>
+                      <span className="text-primary font-bold sm:font-extrabold text-sm sm:text-lg truncate">{court.name}</span>
                     )}
                   </div>
-                  <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest">court name</div>
+                  <div className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest">court name</div>
                 </div>
                 
                 {/* Price - Dynamic based on selected court */}
-                <div className="bg-[#111a27]/60 backdrop-blur-2xl border border-[#00f2ea]/20 rounded-2xl p-4 text-center transition-all hover:border-[#00f2ea]/50">
-                  <DollarSign className="h-5 w-5 mx-auto mb-2 text-[#00f2ea]" />
-                  <div className="font-extrabold text-lg text-white">
+                <div className="bg-card/80 dark:bg-[#111a27]/60 backdrop-blur-2xl border border-primary/20 rounded-2xl p-4 text-center transition-all hover:border-primary/50 hover:shadow-primary/10 hover:shadow-xl shadow-lg">
+                  <DollarSign className="h-5 w-5 mx-auto mb-2 text-primary" />
+                  <div className="font-extrabold text-lg text-foreground">
                     ${getSelectedCourt()?.hourly_rate || court.hourly_rate}
                   </div>
-                  <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest">per hour</div>
+                  <div className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest">per hour</div>
                 </div>
                 
                 {/* Surface - Dynamic based on selected court */}
-                <div className="bg-[#111a27]/60 backdrop-blur-2xl border border-[#00f2ea]/20 rounded-2xl p-4 text-center transition-all hover:border-[#00f2ea]/50">
-                  <div className="h-5 w-5 mx-auto mb-2 text-[#00f2ea] flex items-center justify-center text-lg">
+                <div className="bg-card/80 dark:bg-[#111a27]/60 backdrop-blur-2xl border border-primary/20 rounded-2xl p-4 text-center transition-all hover:border-primary/50 hover:shadow-primary/10 hover:shadow-xl shadow-lg">
+                  <div className="h-5 w-5 mx-auto mb-2 text-primary flex items-center justify-center text-lg">
                     {court.is_indoor ? "🏢" : "🌳"}
                   </div>
-                  <div className="font-extrabold text-lg text-white capitalize">
+                  <div className="font-extrabold text-lg text-foreground capitalize">
                     {getSelectedCourt()?.ground_type || court.ground_type || "turf"}
                   </div>
-                  <div className="text-[10px] uppercase text-gray-400 font-bold tracking-widest">surface</div>
+                  <div className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest">surface</div>
                 </div>
               </div>
             </div>
@@ -1984,15 +1993,15 @@ export default function CourtDetail() {
                 <>
                   <button
                     onClick={prevImage}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-lg"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 hover:bg-background flex items-center justify-center shadow-lg"
                   >
-                    <ChevronLeft className="h-6 w-6 text-gray-800" />
+                    <ChevronLeft className="h-6 w-6 text-foreground" />
                   </button>
                   <button
                     onClick={nextImage}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-lg"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 hover:bg-background flex items-center justify-center shadow-lg"
                   >
-                    <ChevronRight className="h-6 w-6 text-gray-800" />
+                    <ChevronRight className="h-6 w-6 text-foreground" />
                   </button>
                 </>
               )}
@@ -2130,12 +2139,13 @@ export default function CourtDetail() {
             open={showCreditsModal}
             onOpenChange={setShowCreditsModal}
             userCredits={credits}
-            sessionCost={court.hourly_rate + selectedEquipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0)}
+            sessionCost={(court.hourly_rate * (getTotalDuration() / 60)) + selectedEquipment.reduce((sum, item) => sum + item.quantity * item.pricePerUnit, 0)}
             onSelectPaymentMethod={handleSelectPaymentMethod}
             isLoading={booking}
           />
         )}
 
+        <BookingProcessingOverlay visible={booking && !!processingMessage} message={processingMessage} />
       </div>
     </Layout>
   );

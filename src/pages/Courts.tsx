@@ -101,7 +101,7 @@ export default function Courts() {
     return ["all", ...surfaceTypes.map(s => s.name)];
   }, [surfaceTypes]);
 
-  // Build sport filter options from user's preferred sports only
+  // Build sport filter options — guests see all categories, logged-in users see preferred sports only
   const sportFilterOptions = useMemo(() => {
     // In quick game mode, only show the selected sport
     if (isQuickGameMode && quickGameSport) {
@@ -112,6 +112,20 @@ export default function Courts() {
       return [{ value: quickGameSport, label: quickGameSport, emoji: "🎯" }];
     }
 
+    // Guest user: show all sport categories
+    if (!user) {
+      const allOptions = sportCategories.map((cat) => ({
+        value: cat.name,
+        label: cat.display_name,
+        emoji: cat.icon || "🎯",
+      }));
+      return [
+        { value: "all", label: "All Sports", emoji: "🎯" },
+        ...allOptions,
+      ];
+    }
+
+    // Logged-in user: filter by preferred sports
     const preferredSportSet = new Set(preferredSports);
     const preferredOptions = sportCategories
       .filter((cat) => preferredSportSet.has(cat.name))
@@ -134,7 +148,7 @@ export default function Courts() {
 
     // Fallback: no preferred sports (shouldn't happen with profile gate)
     return [{ value: "all", label: "All Sports", emoji: "🎯" }];
-  }, [sportCategories, preferredSports, isQuickGameMode, quickGameSport]);
+  }, [sportCategories, preferredSports, isQuickGameMode, quickGameSport, user]);
 
   // Auto-select default sport filter (quick game mode overrides)
   useEffect(() => {
@@ -282,42 +296,38 @@ export default function Courts() {
 
   const Layout = user ? MobileLayout : PublicLayout;
 
-  // Quick Game Mode Banner
-  const QuickGameBanner = () => {
-    if (!isQuickGameMode || !quickGameConfig) return null;
-    
-    return (
-      <div className="bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30 rounded-lg p-3 sm:p-4 mb-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-              <Zap className="h-5 w-5 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-semibold text-sm sm:text-base truncate">Quick Challenge Mode</h3>
-              <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                {quickGameConfig.sportName} • {quickGameConfig.gameMode} ({quickGameConfig.totalPlayers} players)
-              </p>
-            </div>
+  // Quick Game Mode Banner - inline JSX helper (not a component to avoid unstable refs)
+  const quickGameBannerJsx = isQuickGameMode && quickGameConfig ? (
+    <div className="bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30 rounded-lg p-3 sm:p-4 mb-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+            <Zap className="h-5 w-5 text-primary" />
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleExitQuickGame}
-            className="shrink-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-sm sm:text-base truncate">Quick Challenge Mode</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
+              {quickGameConfig.sportName} • {quickGameConfig.gameMode} ({quickGameConfig.totalPlayers} players)
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Select a court and time slot to create your quick challenge session
-        </p>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleExitQuickGame}
+          className="shrink-0"
+        >
+          <X className="h-4 w-4" />
+        </Button>
       </div>
-    );
-  };
+      <p className="text-xs text-muted-foreground mt-2">
+        Select a court and time slot to create your quick challenge session
+      </p>
+    </div>
+  ) : null;
 
-  // Desktop Filter bar component with dialog filters
-  const FilterBar = () => (
+  // Desktop Filter bar - inline JSX (not a component)
+  const filterBarJsx = (
     <div className="space-y-4">
       {/* Search Bar */}
       <div className="relative">
@@ -449,8 +459,8 @@ export default function Courts() {
     </div>
   );
 
-  // Loading skeleton
-  const LoadingSkeleton = () => (
+  // Loading skeleton - inline JSX
+  const loadingSkeletonJsx = (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
       {[1, 2, 3, 4, 5, 6].map((i) => (
         <div key={i} className="animate-pulse">
@@ -463,8 +473,8 @@ export default function Courts() {
     </div>
   );
 
-  // Empty state
-  const EmptyState = () => (
+  // Empty state - inline JSX
+  const emptyStateJsx = (
     <div className="text-center py-12">
       <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
       <h3 className="font-semibold text-lg mb-2">No Courts Found</h3>
@@ -494,7 +504,7 @@ export default function Courts() {
           {/* Quick Game Banner for mobile */}
           {isQuickGameMode && quickGameConfig && (
             <div className="absolute top-20 left-4 right-4 z-[500] pointer-events-auto">
-              <QuickGameBanner />
+              {quickGameBannerJsx}
             </div>
           )}
 
@@ -578,7 +588,7 @@ export default function Courts() {
         >
           <div className="p-4 lg:p-6 space-y-4">
             {/* Quick Game Banner */}
-            <QuickGameBanner />
+            {quickGameBannerJsx}
             
             {/* Header */}
             <div id="browse-courts" className="scroll-mt-24 flex items-center justify-between">
@@ -592,13 +602,13 @@ export default function Courts() {
               </div>
             </div>
 
-            <FilterBar />
+            {filterBarJsx}
 
             {/* Courts Grid */}
             {loading ? (
-              <LoadingSkeleton />
+              loadingSkeletonJsx
             ) : filteredCourts.length === 0 ? (
-              <EmptyState />
+              emptyStateJsx
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -609,12 +619,6 @@ export default function Courts() {
                         onHover={setHighlightedCourtId}
                         isHighlighted={court.id === highlightedCourtId}
                       />
-                      {/* Multi-court badge */}
-                      {(court as any).is_multi_court && (
-                        <Badge className="absolute top-2 left-2 bg-accent text-accent-foreground">
-                          Multi-Court
-                        </Badge>
-                      )}
                     </div>
                   ))}
                 </div>

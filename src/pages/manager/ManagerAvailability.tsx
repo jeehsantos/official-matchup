@@ -3,13 +3,7 @@ import { ManagerLayout } from "@/components/layout/ManagerLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { SportIcon } from "@/components/ui/sport-icon";
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Loader2, Calendar as CalendarIcon, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +13,10 @@ import { WeeklyScheduleEditor } from "@/components/manager/WeeklyScheduleEditor"
 import { DateOverridesEditor } from "@/components/manager/DateOverridesEditor";
 import { AvailabilityPreview } from "@/components/manager/AvailabilityPreview";
 import { VenueConfigEditor } from "@/components/manager/VenueConfigEditor";
+import { useManagerStripeReady } from "@/hooks/useStripeConnectStatus";
+import { StripeSetupAlert } from "@/components/manager/StripeSetupAlert";
+import { useManagerVenues } from "@/hooks/useManagerVenues";
+import { useTranslation } from "react-i18next";
 
 type Court = Database["public"]["Tables"]["courts"]["Row"];
 type Venue = Database["public"]["Tables"]["venues"]["Row"];
@@ -27,7 +25,6 @@ interface CourtWithVenue extends Court {
   venues: Venue;
 }
 
-// Group courts by venue for hierarchical display
 interface GroupedCourts {
   [venueId: string]: {
     venue: Venue;
@@ -36,72 +33,49 @@ interface GroupedCourts {
 }
 
 export default function ManagerAvailability() {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
+  const { t } = useTranslation("manager");
   const [courts, setCourts] = useState<CourtWithVenue[]>([]);
   const [selectedCourt, setSelectedCourt] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+  const [courtsLoading, setCourtsLoading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const { data: stripeStatus, isLoading: stripeLoading } = useManagerStripeReady();
+  const { data: venues = [], isLoading: venuesLoading } = useManagerVenues();
+  const isStaff = userRole === "venue_staff";
 
   useEffect(() => {
-    if (user) {
-      fetchCourts();
+    if (venues.length > 0) {
+      fetchCourts(venues.map(v => v.id));
+    } else if (!venuesLoading) {
+      setCourts([]);
     }
-  }, [user]);
+  }, [venues, venuesLoading]);
 
-  const fetchCourts = async () => {
+  const fetchCourts = async (venueIds: string[]) => {
+    setCourtsLoading(true);
     try {
-      const { data: venues } = await supabase
-        .from("venues")
-        .select("id")
-        .eq("owner_id", user?.id);
-
-      if (venues && venues.length > 0) {
-        const venueIds = venues.map(v => v.id);
-        
-        const { data: courtsData } = await supabase
-          .from("courts")
-          .select(`*, venues (*)`)
-          .in("venue_id", venueIds)
-          .eq("is_active", true);
-
-        setCourts(courtsData as CourtWithVenue[] || []);
-        if (courtsData && courtsData.length > 0) {
-          setSelectedCourt(courtsData[0].id);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching courts:", error);
-    } finally {
-      setLoading(false);
-    }
+      const { data: courtsData } = await supabase.from("courts").select(`*, venues (*)`).in("venue_id", venueIds).eq("is_active", true);
+      setCourts(courtsData as CourtWithVenue[] || []);
+      if (courtsData && courtsData.length > 0) setSelectedCourt(courtsData[0].id);
+    } catch (error) { console.error("Error fetching courts:", error); } finally { setCourtsLoading(false); }
   };
 
   const selectedCourtData = courts.find(c => c.id === selectedCourt);
   const venueId = selectedCourtData?.venue_id;
 
-  // Group courts by venue for hierarchical dropdown
   const groupedCourts = useMemo<GroupedCourts>(() => {
     return courts.reduce((acc, court) => {
-      const venueId = court.venue_id;
-      if (!acc[venueId]) {
-        acc[venueId] = {
-          venue: court.venues,
-          courts: [],
-        };
-      }
-      // Sort: parent courts first, then sub-courts
-      if (court.parent_court_id) {
-        acc[venueId].courts.push(court);
-      } else {
-        acc[venueId].courts.unshift(court);
-      }
+      const vid = court.venue_id;
+      if (!acc[vid]) acc[vid] = { venue: court.venues, courts: [] };
+      if (court.parent_court_id) acc[vid].courts.push(court);
+      else acc[vid].courts.unshift(court);
       return acc;
     }, {} as GroupedCourts);
   }, [courts]);
 
   const handleRefresh = () => setRefreshTrigger(prev => prev + 1);
 
-  if (loading) {
+  if (venuesLoading || courtsLoading) {
     return (
       <ManagerLayout>
         <div className="flex items-center justify-center py-12">
@@ -115,16 +89,20 @@ export default function ManagerAvailability() {
     <ManagerLayout>
       <div className="manager-availability-mobile p-4 md:p-6 space-y-5 md:space-y-6">
         <div>
-          <h1 className="font-display text-2xl font-bold">Availability</h1>
-          <p className="text-muted-foreground">Configure your venue's opening hours and exceptions</p>
+          <h1 className="font-display text-2xl font-bold">{t("availability.title")}</h1>
+          <p className="text-muted-foreground">{t("availability.subtitle")}</p>
         </div>
+
+        {!isStaff && !stripeLoading && !stripeStatus?.isReady && (
+          <StripeSetupAlert hasVenues={stripeStatus?.hasVenues ?? false} />
+        )}
 
         {courts.length === 0 ? (
           <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">
             <CardContent className="py-12 text-center">
               <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="font-semibold text-lg mb-2">No courts available</h3>
-              <p className="text-muted-foreground">Add courts first to configure availability.</p>
+              <h3 className="font-semibold text-lg mb-2">{t("availability.noCourtsAvailable")}</h3>
+              <p className="text-muted-foreground">{t("availability.addCourtsFirst")}</p>
             </CardContent>
           </Card>
         ) : (
@@ -132,36 +110,28 @@ export default function ManagerAvailability() {
             <Card className="border-border/40 md:border-border bg-transparent md:bg-card shadow-none md:shadow-sm">
               <CardContent className="pt-5 md:pt-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Select Venue & Court
-                  </label>
+                  <label className="text-sm font-medium text-muted-foreground">{t("availability.selectVenueCourt")}</label>
                   <Select value={selectedCourt} onValueChange={setSelectedCourt}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a venue and court" />
+                      <SelectValue placeholder={t("availability.selectPlaceholder")} />
                     </SelectTrigger>
                     <SelectContent className="max-h-[300px]">
-                      {Object.entries(groupedCourts).map(([venueId, { venue, courts: venueCourts }]) => (
-                        <SelectGroup key={venueId}>
+                      {Object.entries(groupedCourts).map(([vid, { venue, courts: venueCourts }]) => (
+                        <SelectGroup key={vid}>
                           <SelectLabel className="flex items-center gap-2 font-semibold text-foreground py-2 px-2 bg-muted/50">
                             <Building2 className="h-4 w-4 text-primary" />
                             <span>{venue.name}</span>
                             <span className="text-xs text-muted-foreground font-normal ml-auto">
-                              {venueCourts.length} court{venueCourts.length !== 1 ? 's' : ''}
+                              {venueCourts.length} {venueCourts.length !== 1 ? t("availability.courts") : t("availability.court")}
                             </span>
                           </SelectLabel>
                           {venueCourts.map((court) => (
-                            <SelectItem 
-                              key={court.id} 
-                              value={court.id}
-                              className="pl-6"
-                            >
+                            <SelectItem key={court.id} value={court.id} className="pl-6">
                               <div className="flex items-center gap-2">
                                 <SportIcon sport={court.allowed_sports?.[0] || "other"} className="h-4 w-4" />
                                 <span>{court.name}</span>
                                 {court.parent_court_id && (
-                                  <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                                    sub-court
-                                  </span>
+                                  <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{t("availability.subCourt")}</span>
                                 )}
                               </div>
                             </SelectItem>

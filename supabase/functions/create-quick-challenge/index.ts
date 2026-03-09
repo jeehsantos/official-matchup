@@ -60,6 +60,7 @@ serve(async (req) => {
       totalPlayers,
       paymentType,
       equipment = [],
+      genderPreference = "mixed",
     } = await req.json();
 
     if (!sportCategoryId || !gameMode || !venueId || !courtId || !scheduledDate || !scheduledTime || !durationMinutes || !totalPlayers || !paymentType) {
@@ -69,7 +70,7 @@ serve(async (req) => {
     const [courtResult, platformResult] = await Promise.all([
       supabaseAdmin
         .from("courts")
-        .select("id, hourly_rate, payment_timing")
+        .select("id, hourly_rate, payment_timing, payment_hours_before")
         .eq("id", courtId)
         .single(),
       supabaseAdmin
@@ -85,19 +86,49 @@ serve(async (req) => {
     const bookingStartMin = timeToMinutes(scheduledTime);
     const endTime = minutesToTime(bookingStartMin + durationMinutes);
 
-    // Check for ANY overlapping rows (booked or not) to avoid unique constraint violations
+    // Check for overlapping BOOKED rows to prevent double-booking.
+    // Rows with is_booked=false from the SAME user (orphaned pending_payment) are excluded —
+    // they will be replaced by the new booking attempt.
     const { data: overlaps, error: overlapError } = await supabaseAdmin
       .from("court_availability")
-      .select("id, start_time, end_time, is_booked")
+      .select("id, start_time, end_time, is_booked, booked_by_user_id")
       .eq("court_id", courtId)
       .eq("available_date", scheduledDate);
     if (overlapError) throw overlapError;
 
-    const hasOverlap = (overlaps || []).some((booking) => {
-      const existingStart = timeToMinutes(booking.start_time);
-      const existingEnd = timeToMinutes(booking.end_time);
-      return bookingStartMin < existingEnd && bookingStartMin + durationMinutes > existingStart;
+    const hasOverlap = (overlaps || []).some((row) => {
+      const existingStart = timeToMinutes(row.start_time);
+      const existingEnd = timeToMinutes(row.end_time);
+      const timesOverlap = bookingStartMin < existingEnd && bookingStartMin + durationMinutes > existingStart;
+      if (!timesOverlap) return false;
+      // If the slot is booked, it's a real conflict
+      if (row.is_booked) return true;
+      // If unbooked but belongs to a DIFFERENT user, it's their pending checkout — conflict
+      if (row.booked_by_user_id && row.booked_by_user_id !== user.id) return true;
+      // Unbooked row from same user = orphaned pending_payment, not a conflict
+      return false;
     });
+
+    // Clean up orphaned unbooked rows that would cause unique constraint violations
+    if (!hasOverlap) {
+      const orphanedIds = (overlaps || [])
+        .filter((row) => {
+          const existingStart = timeToMinutes(row.start_time);
+          const existingEnd = timeToMinutes(row.end_time);
+          const timesOverlap = bookingStartMin < existingEnd && bookingStartMin + durationMinutes > existingStart;
+          // Clean any unbooked row that overlaps — same user, null user, or abandoned
+          return timesOverlap && !row.is_booked;
+        })
+        .map((row) => row.id);
+
+      if (orphanedIds.length > 0) {
+        await supabaseAdmin
+          .from("court_availability")
+          .delete()
+          .in("id", orphanedIds);
+      }
+    }
+
     if (hasOverlap) throw new Error("SLOT_UNAVAILABLE");
 
     const selectedEquipment = equipment as EquipmentSelection[];
@@ -107,12 +138,15 @@ serve(async (req) => {
     const courtAmountWithEquipment = courtAmount + equipmentTotal;
     const serviceFee = Number(platformResult.data?.player_fee ?? 0);
 
+    // Quick Challenges ALWAYS require upfront payment — ignore court's before_session setting.
+    // The webhook will mark the slot as booked once payment is confirmed.
     const splitPricePerPlayer = Math.ceil((courtAmountWithEquipment / totalPlayers) * 100) / 100;
-    const effectivePaymentType = courtResult.data.payment_timing === "at_booking" ? "single" : paymentType;
-    const pricePerPlayer = effectivePaymentType === "split"
-      ? splitPricePerPlayer + serviceFee
-      : courtAmountWithEquipment;
-    const initialStatus = courtResult.data.payment_timing === "at_booking" ? "pending_payment" : "open";
+    const effectivePaymentType = "single"; // organizer always pays upfront for quick challenges
+    // price_per_player ALWAYS stores the per-player split value for display consistency
+    // and redistribution when format changes. The payment function calculates the actual
+    // charge based on payment_type.
+    const pricePerPlayer = splitPricePerPlayer;
+    const initialStatus = courtAmountWithEquipment > 0 ? "pending_payment" : "open";
 
     const { data: challenge, error: challengeError } = await supabaseAdmin
       .from("quick_challenges")
@@ -128,6 +162,7 @@ serve(async (req) => {
         status: initialStatus,
         payment_type: effectivePaymentType,
         created_by: user.id,
+        gender_preference: genderPreference,
       })
       .select("id")
       .single();
@@ -140,7 +175,7 @@ serve(async (req) => {
         available_date: scheduledDate,
         start_time: scheduledTime,
         end_time: endTime,
-        is_booked: courtResult.data.payment_timing !== "at_booking",
+        is_booked: false,
         booked_by_user_id: user.id,
         payment_status: "pending",
       })
@@ -181,6 +216,8 @@ serve(async (req) => {
         funding_required: courtAmountWithEquipment,
         funding_current: 0,
         price_per_player: pricePerPlayer,
+        effective_payment_timing: "at_booking",
+        requires_payment_at_booking: true,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );

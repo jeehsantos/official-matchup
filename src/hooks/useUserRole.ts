@@ -48,23 +48,6 @@ export function useUserRole() {
   const isPlayer = hasRole("player");
   const isAdmin = hasRole("admin");
 
-  const addRole = async (role: AppRole) => {
-    if (!user) return { error: new Error("Not authenticated") };
-
-    try {
-      const { error } = await supabase
-        .from("user_roles")
-        .insert({ user_id: user.id, role });
-
-      if (error) throw error;
-      
-      setRoles(prev => [...prev, role]);
-      return { error: null };
-    } catch (error) {
-      return { error: error as Error };
-    }
-  };
-
   return {
     roles,
     isLoading: authLoading || isLoading,
@@ -73,7 +56,6 @@ export function useUserRole() {
     isOrganizer,
     isPlayer,
     isAdmin,
-    addRole,
     refetch: fetchRoles,
   };
 }

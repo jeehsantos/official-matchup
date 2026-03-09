@@ -8,7 +8,10 @@ import {
   Shield,
   Archive,
   Gift,
-  DollarSign
+  DollarSign,
+  BarChart3,
+  Globe,
+  Users
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AdminLayout } from "@/components/layout/AdminLayout";
@@ -17,6 +20,12 @@ function AdminDashboardContent() {
   const navigate = useNavigate();
 
   const menuItems = [
+    {
+      title: "User Management",
+      description: "Manage users, activate accounts, and change roles",
+      icon: Users,
+      href: "/admin/users",
+    },
     {
       title: "Sport Categories",
       description: "Manage available sport types for courts and groups",
@@ -46,6 +55,18 @@ function AdminDashboardContent() {
       description: "Configure commission fees for players and managers",
       icon: DollarSign,
       href: "/admin/fees",
+    },
+    {
+      title: "Financial Dashboard",
+      description: "View revenue, court payables, and platform position",
+      icon: BarChart3,
+      href: "/admin/finance",
+    },
+    {
+      title: "Venue Pages",
+      description: "Manage public venue page slugs and shareable URLs",
+      icon: Globe,
+      href: "/admin/venues",
     },
   ];
 
