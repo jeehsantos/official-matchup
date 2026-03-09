@@ -1704,6 +1704,7 @@ export type Database = {
         Returns: boolean
       }
       purge_old_booking_holds: { Args: never; Returns: number }
+      purge_old_cancelled_records: { Args: never; Returns: Json }
       recalculate_and_maybe_confirm_session: {
         Args: { p_session_id: string }
         Returns: Json
