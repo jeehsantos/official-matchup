@@ -1,98 +1,61 @@
 
-## Security Remediation Review - Regression Issues Found
+Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-After reviewing the security changes, I identified **4 critical regressions** that need immediate fixes:
+What I found (already verified):
+1) Data inconsistency exists now:
+   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
+   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
+2) `ManagerCourtFormNew` root causes:
+   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
+   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
+   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
+3) Backend side effect confirmed:
+   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
 
----
+Implementation plan (execute in this order):
+1. Database integrity hardening + backfill (migration)
+   - Backfill: set `is_multi_court=true` for any court that already has children.
+   - Add DB validation trigger(s) on `courts` to enforce:
+     - child cannot reference itself
+     - child parent must be in same venue
+     - parent cannot be set `is_multi_court=false` while children exist
+     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
+   - This guarantees the bug cannot recur from any client path.
 
-### Issue 1: JoinGroup.tsx - BROKEN (Critical)
-**Location:** `src/pages/JoinGroup.tsx` lines 49-54, 120-131
+2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
+   - Remove direct `window.history.replaceState` usage.
+   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
+   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
+   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
 
-**Problem:** The page still directly queries the `group_invitations` table, but we dropped the public SELECT/UPDATE RLS policies. This will cause the join flow to fail completely.
+3. Multi-court UI behavior safeguards
+   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
+   - Disable/harden turning off multi-court when children exist (with clear message).
+   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
 
-**Fix:**
-- Replace direct table query with the `get_group_invitation` RPC (lines 49-54)
-- Replace direct UPDATE with `increment_invitation_use` RPC (lines 120-131)
+4. Availability resilience (backend function)
+   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
+   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
 
----
+5. Verification I will perform (not asking you to test manually)
+   - DB checks:
+     - verify parent `57e11168...` becomes `is_multi_court=true`
+     - verify child links remain unchanged
+     - verify no rows exist with `children > 0 AND is_multi_court=false`
+   - Functional checks:
+     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
+   - UI checks:
+     - exercise add-sub-court flow and confirm:
+       - main court remains main
+       - child appears as child tab
+       - subsequent saves update correct court record
+       - no panel collapse/desync
 
-### Issue 2: GroupDetail.tsx - BROKEN Logic
-**Location:** `src/pages/GroupDetail.tsx` lines 188-197
-
-**Problem:** Code attempts to call `get_group_invitation` RPC with an empty string `p_invite_code: ""`, which is invalid and will always return `INVITE_NOT_FOUND`.
-
-**Fix:**
-- Remove the broken RPC call
-- Organizers should query their own invitations directly via the organizer-specific INSERT permission (they need to generate new invites, not fetch old ones through this path)
-
----
-
-### Issue 3: send-contact-email Edge Function - MISSING RATE LIMITING
-**Location:** `supabase/functions/send-contact-email/index.ts`
-
-**Problem:** The security fix for contact form abuse prevention was NOT implemented. The function has no protection against spam attacks.
-
-**Fix:**
-- Add IP-based in-memory rate limiting (3 requests per 5 minutes per IP)
-- Add input validation with length limits
-
----
-
-### Issue 4: useQuickChallenges.ts - Unnecessary Data Fetch
-**Location:** `src/hooks/useQuickChallenges.ts` lines 85-86
-
-**Problem:** Still fetches `stripe_session_id` which is now protected by Column-Level Security. While it won't error (returns NULL), it's cleaner to remove from the select.
-
-**Fix:**
-- Remove `stripe_session_id` from the select statement
-
----
-
-## Implementation Summary
-
-| File | Issue | Severity | Fix |
-|------|-------|----------|-----|
-| `JoinGroup.tsx` | Direct DB access fails | 🔴 Critical | Use RPCs |
-| `GroupDetail.tsx` | Invalid RPC call | 🟠 High | Remove broken code |
-| `send-contact-email/index.ts` | No rate limiting | 🔴 Critical | Add rate limiter |
-| `useQuickChallenges.ts` | Redundant field | 🟢 Low | Clean up select |
-
----
-
-## Technical Details
-
-### JoinGroup.tsx Changes
-```typescript
-// Replace direct query with RPC
-const { data: result } = await supabase.rpc("get_group_invitation", { 
-  p_invite_code: code 
-});
-if (!result?.success) {
-  setError(result?.error === 'INVITE_NOT_FOUND' ? t("inviteInvalidOrExpired") : ...);
-  return;
-}
-const invitation = result.invitation;
-const groupData = result.group;
-
-// Replace direct UPDATE with RPC
-await supabase.rpc("increment_invitation_use", { p_invite_code: code });
-```
-
-### Rate Limiting for Contact Form
-```typescript
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT = 3;
-const RATE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const record = rateLimitMap.get(ip);
-  if (!record || record.resetAt < now) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
-    return true;
-  }
-  if (record.count >= RATE_LIMIT) return false;
-  record.count++;
-  return true;
-}
-```
+Technical details:
+- Files to update:
+  - `supabase/migrations/<new>.sql`
+  - `src/pages/manager/ManagerCourtFormNew.tsx`
+  - `supabase/functions/get-availability/index.ts`
+- No money/payment logic touched.
+- No auth model changes.
+- Existing routing and form schema preserved; this is a consistency + state synchronization fix.

@@ -11,7 +11,7 @@ interface QuickChallengePlayer {
   team: "left" | "right";
   slot_position: number;
   payment_status: "pending" | "paid" | "refunded";
-  stripe_session_id: string | null;
+  stripe_session_id?: string | null;
   joined_at: string;
   paid_at: string | null;
   profiles?: {
@@ -83,7 +83,6 @@ export function useQuickChallenges(filters?: {
             team,
             slot_position,
             payment_status,
-            stripe_session_id,
             joined_at,
             paid_at
           )

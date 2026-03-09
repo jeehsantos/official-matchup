@@ -8,10 +8,19 @@ import { Button } from "@/components/ui/button";
 import { SportIcon, getSportLabel } from "@/components/ui/sport-icon";
 import { Loader2, Users, Calendar, MapPin, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import type { Database } from "@/integrations/supabase/types";
 import { useTranslation } from "react-i18next";
 
-type Group = Database["public"]["Tables"]["groups"]["Row"];
+interface GroupData {
+  id: string;
+  name: string;
+  description: string | null;
+  sport_type: string;
+  city: string;
+  default_day_of_week: number;
+  default_start_time: string;
+  min_players: number;
+  max_players: number;
+}
 
 export default function JoinGroup() {
   const { code } = useParams<{ code: string }>();
@@ -21,7 +30,7 @@ export default function JoinGroup() {
   
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
-  const [group, setGroup] = useState<Group | null>(null);
+  const [group, setGroup] = useState<GroupData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [alreadyMember, setAlreadyMember] = useState(false);
   const [joined, setJoined] = useState(false);
@@ -46,31 +55,22 @@ export default function JoinGroup() {
     setError(null);
     
     try {
-      const { data: invitation, error: inviteError } = await supabase
-        .from("group_invitations")
-        .select("*, groups(*)")
-        .eq("invite_code", code)
-        .eq("is_active", true)
-        .single();
+      // Use secure RPC instead of direct table access
+      const { data: result, error: rpcError } = await supabase.rpc("get_group_invitation", {
+        p_invite_code: code,
+      });
 
-      if (inviteError || !invitation) {
+      const rpcResult = result as Record<string, unknown> | null;
+
+      if (rpcError || !rpcResult?.success) {
         setError(t("inviteInvalidOrExpired"));
         return;
       }
 
-      if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) {
-        setError(t("inviteExpired"));
-        return;
-      }
-
-      if (invitation.max_uses && invitation.use_count >= invitation.max_uses) {
-        setError(t("inviteMaxUses"));
-        return;
-      }
-
-      const groupData = invitation.groups as unknown as Group;
+      const groupData = rpcResult.group as GroupData;
       setGroup(groupData);
 
+      // Check if already a member
       const { data: existingMember } = await supabase
         .from("group_members")
         .select("id")
@@ -117,18 +117,8 @@ export default function JoinGroup() {
 
       if (joinError) throw joinError;
 
-      const { data: invitation } = await supabase
-        .from("group_invitations")
-        .select("use_count")
-        .eq("invite_code", code)
-        .single();
-
-      if (invitation) {
-        await supabase
-          .from("group_invitations")
-          .update({ use_count: (invitation.use_count || 0) + 1 })
-          .eq("invite_code", code);
-      }
+      // Increment invite use count via secure RPC
+      await supabase.rpc("increment_invitation_use", { p_invite_code: code });
 
       setJoined(true);
       toast.success(t("successfullyJoined") + " " + group.name + "!");

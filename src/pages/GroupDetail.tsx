@@ -184,17 +184,8 @@ export default function GroupDetail() {
 
       setSessions(sessionsWithCounts);
 
-      // Fetch existing invite link if organizer (use RPC for secure access)
-      if (groupData.organizer_id === user.id && !groupData.is_public) {
-        // Query for existing active invitation via RPC approach
-        // Since organizers INSERT directly, we can check via the secure function
-        const { data: inviteData } = await supabase
-          .rpc("get_group_invitation", { p_invite_code: "" })
-          .maybeSingle();
-        
-        // Fallback: organizers can still create new invitations directly
-        // The link will be set when they generate one
-      }
+      // Organizers can generate new invite links via the generateInviteLink function
+      // No need to fetch existing invites here - the link state is set when generated
     } catch (error) {
       console.error("Error fetching group:", error);
       navigate("/groups");
