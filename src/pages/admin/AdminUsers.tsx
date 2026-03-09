@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Edit, CheckCircle, ShieldAlert } from "lucide-react";
+import { Search, Edit, CheckCircle, ShieldAlert, Ban } from "lucide-react";
 import { format } from "date-fns";
 import { 
   Dialog, 
@@ -31,7 +31,18 @@ interface UserData {
   last_sign_in_at: string | null;
   full_name: string;
   role: AppRole;
+  banned_until: string | null;
 }
+
+const isUserBanned = (user: UserData) => {
+  return user.banned_until && new Date(user.banned_until) > new Date();
+};
+
+const getUserStatus = (user: UserData): { label: string; variant: "default" | "secondary" | "destructive" } => {
+  if (isUserBanned(user)) return { label: "Disabled", variant: "destructive" };
+  if (user.email_confirmed_at) return { label: "Active", variant: "default" };
+  return { label: "Unconfirmed", variant: "secondary" };
+};
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<UserData[]>([]);
@@ -89,14 +100,36 @@ export default function AdminUsers() {
 
       toast({
         title: "User activated",
-        description: "The user's email has been confirmed.",
+        description: "The user has been activated and can now sign in.",
       });
       
-      // Update local state instead of refetching
-      setUsers(users.map(u => u.id === userId ? { ...u, email_confirmed_at: new Date().toISOString() } : u));
+      setUsers(users.map(u => u.id === userId ? { ...u, email_confirmed_at: new Date().toISOString(), banned_until: null } : u));
     } catch (error: any) {
       toast({
         title: "Failed to activate user",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeactivate = async (userId: string) => {
+    try {
+      const { error } = await supabase.functions.invoke("manage-users", {
+        body: { action: "deactivate", userId },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "User disabled",
+        description: "The user has been disabled and can no longer sign in.",
+      });
+      
+      setUsers(users.map(u => u.id === userId ? { ...u, banned_until: new Date(Date.now() + 876000 * 3600000).toISOString() } : u));
+    } catch (error: any) {
+      toast({
+        title: "Failed to disable user",
         description: error.message,
         variant: "destructive",
       });
@@ -204,15 +237,14 @@ export default function AdminUsers() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {user.email_confirmed_at ? (
-                              <Badge variant="default">
-                                Active
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary">
-                                Unconfirmed
-                              </Badge>
-                            )}
+                            {(() => {
+                              const status = getUserStatus(user);
+                              return (
+                                <Badge variant={status.variant}>
+                                  {status.label}
+                                </Badge>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <span className="text-sm">
@@ -221,15 +253,27 @@ export default function AdminUsers() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              {!user.email_confirmed_at && (
+                              {(!user.email_confirmed_at || isUserBanned(user)) && (
                                 <Button 
                                   variant="outline" 
                                   size="sm"
                                   onClick={() => handleActivate(user.id)}
-                                  title="Manually verify email"
+                                  title="Activate user (confirm email + unban)"
                                 >
                                   <CheckCircle className="h-4 w-4 mr-1" />
                                   Activate
+                                </Button>
+                              )}
+                              {user.email_confirmed_at && !isUserBanned(user) && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="text-destructive border-destructive/50 hover:bg-destructive/10"
+                                  onClick={() => handleDeactivate(user.id)}
+                                  title="Disable user (prevent sign-in)"
+                                >
+                                  <Ban className="h-4 w-4 mr-1" />
+                                  Disable
                                 </Button>
                               )}
                               <Button 

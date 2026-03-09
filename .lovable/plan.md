@@ -1,34 +1,61 @@
 
+Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-## Plan: Add Disable/Activate Toggle for Admin User Management
+What I found (already verified):
+1) Data inconsistency exists now:
+   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
+   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
+2) `ManagerCourtFormNew` root causes:
+   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
+   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
+   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
+3) Backend side effect confirmed:
+   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
 
-### What exists today
-- The `activate` action in `manage-users` already confirms a user's email via `supabaseAdmin.auth.admin.updateUserById(userId, { email_confirm: true })`.
-- The frontend shows an "Activate" button only for unconfirmed users, but has no way to **disable** (ban) an active user.
+Implementation plan (execute in this order):
+1. Database integrity hardening + backfill (migration)
+   - Backfill: set `is_multi_court=true` for any court that already has children.
+   - Add DB validation trigger(s) on `courts` to enforce:
+     - child cannot reference itself
+     - child parent must be in same venue
+     - parent cannot be set `is_multi_court=false` while children exist
+     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
+   - This guarantees the bug cannot recur from any client path.
 
-### Changes
+2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
+   - Remove direct `window.history.replaceState` usage.
+   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
+   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
+   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
 
-**1. Edge function: `supabase/functions/manage-users/index.ts`**
-- Add a new `deactivate` action that bans the user via `supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: 'none' })` — actually, use `banned_until` to set a far-future ban. Specifically:
-  - `deactivate`: `supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: '876000h' })` (100 years)
-  - Update `activate` to also unban: add `ban_duration: 'none'` alongside `email_confirm: true`
-- Add the user's `banned_until` field to the `list` response so the frontend knows the status.
-- Prevent admin from deactivating themselves.
+3. Multi-court UI behavior safeguards
+   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
+   - Disable/harden turning off multi-court when children exist (with clear message).
+   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
 
-**2. Frontend: `src/pages/admin/AdminUsers.tsx`**
-- Update `UserData` interface to include `banned_until: string | null`.
-- Replace the simple "Active/Unconfirmed" badge with three states:
-  - **Disabled** (red) — `banned_until` is set and in the future
-  - **Active** — email confirmed and not banned
-  - **Unconfirmed** — email not confirmed
-- Show an "Activate" button for unconfirmed OR disabled users, and a "Disable" button for active users.
-- `handleActivate` calls `activate` action (confirms email + unbans).
-- New `handleDeactivate` calls `deactivate` action (bans user).
-- Update local state accordingly after each action.
+4. Availability resilience (backend function)
+   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
+   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
 
-### Security
-- All actions go through the edge function which validates admin role server-side.
-- Admin cannot disable themselves (server-side check).
-- No new RLS policies or tables needed.
-- No confidential data exposed beyond what's already returned (email, name, role, status).
+5. Verification I will perform (not asking you to test manually)
+   - DB checks:
+     - verify parent `57e11168...` becomes `is_multi_court=true`
+     - verify child links remain unchanged
+     - verify no rows exist with `children > 0 AND is_multi_court=false`
+   - Functional checks:
+     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
+   - UI checks:
+     - exercise add-sub-court flow and confirm:
+       - main court remains main
+       - child appears as child tab
+       - subsequent saves update correct court record
+       - no panel collapse/desync
 
+Technical details:
+- Files to update:
+  - `supabase/migrations/<new>.sql`
+  - `src/pages/manager/ManagerCourtFormNew.tsx`
+  - `supabase/functions/get-availability/index.ts`
+- No money/payment logic touched.
+- No auth model changes.
+- Existing routing and form schema preserved; this is a consistency + state synchronization fix.
