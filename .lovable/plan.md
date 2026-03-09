@@ -1,61 +1,64 @@
 
-Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
+## Plan: Admin User Management Page
 
-What I found (already verified):
-1) Data inconsistency exists now:
-   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
-   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
-2) `ManagerCourtFormNew` root causes:
-   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
-   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
-   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
-3) Backend side effect confirmed:
-   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
+### What needs to be built
 
-Implementation plan (execute in this order):
-1. Database integrity hardening + backfill (migration)
-   - Backfill: set `is_multi_court=true` for any court that already has children.
-   - Add DB validation trigger(s) on `courts` to enforce:
-     - child cannot reference itself
-     - child parent must be in same venue
-     - parent cannot be set `is_multi_court=false` while children exist
-     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
-   - This guarantees the bug cannot recur from any client path.
+A new admin page at `/admin/users` that lets the admin:
+1. View all registered users (email, name, role, email confirmed status, joined date)
+2. Activate/confirm a user's email without requiring real email verification
+3. Edit basic user info (full name, role)
 
-2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
-   - Remove direct `window.history.replaceState` usage.
-   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
-   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
-   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
+### Why an Edge Function is required
 
-3. Multi-court UI behavior safeguards
-   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
-   - Disable/harden turning off multi-court when children exist (with clear message).
-   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
+The `auth.users` table (where `email_confirmed_at` lives) is NOT accessible via the standard client SDK with RLS. It requires the `service_role` key, which must only be used server-side in an Edge Function. This matches the existing pattern used in `manage-venue-staff/index.ts`.
 
-4. Availability resilience (backend function)
-   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
-   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
+### Files to create/modify
 
-5. Verification I will perform (not asking you to test manually)
-   - DB checks:
-     - verify parent `57e11168...` becomes `is_multi_court=true`
-     - verify child links remain unchanged
-     - verify no rows exist with `children > 0 AND is_multi_court=false`
-   - Functional checks:
-     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
-   - UI checks:
-     - exercise add-sub-court flow and confirm:
-       - main court remains main
-       - child appears as child tab
-       - subsequent saves update correct court record
-       - no panel collapse/desync
+**1. New Edge Function: `supabase/functions/manage-users/index.ts`**
 
-Technical details:
-- Files to update:
-  - `supabase/migrations/<new>.sql`
-  - `src/pages/manager/ManagerCourtFormNew.tsx`
-  - `supabase/functions/get-availability/index.ts`
-- No money/payment logic touched.
-- No auth model changes.
-- Existing routing and form schema preserved; this is a consistency + state synchronization fix.
+Handles three actions, all admin-only (verified server-side via `has_role` check):
+- `list` — fetches all users from `auth.admin.listUsers()`, joins with `profiles` and `user_roles` tables
+- `activate` — sets `email_confirmed_at` on a user via `auth.admin.updateUserById()`
+- `update` — updates `full_name` in `profiles` and `role` in `user_roles`
+
+**2. New Page: `src/pages/admin/AdminUsers.tsx`**
+
+UI features:
+- Table with columns: Name, Email, Role, Email Confirmed (badge), Joined Date, Actions
+- Search/filter by name or email
+- "Activate" button (shown only when email is NOT confirmed) — calls `activate` action
+- "Edit" button — opens a dialog to edit full name and role
+- Pagination (50 users per page)
+
+**3. Update `src/components/layout/AdminLayout.tsx`**
+
+Add "Users" nav item with `Users` icon at `/admin/users`.
+
+**4. Update `src/pages/admin/AdminDashboard.tsx`**
+
+Add "User Management" card to the dashboard grid.
+
+**5. Update `src/App.tsx`**
+
+Add route: `<Route path="/admin/users" element={<AdminUsers />} />`
+
+**6. Update `supabase/config.toml`**
+
+Add `verify_jwt = false` for the new `manage-users` function.
+
+### Security
+
+- The edge function validates the caller's JWT and checks `has_role(caller_id, 'admin')` via a DB query before performing any operation
+- `service_role` key is never exposed to the frontend
+- No user can activate or edit others unless they are an admin
+
+### Data flow
+
+```text
+Admin UI
+  → supabase.functions.invoke("manage-users", { action: "list"|"activate"|"update", ... })
+  → Edge Function validates JWT + checks admin role
+  → Uses service_role to call auth.admin API
+  → Returns sanitized user list / success response
+  → UI re-renders table
+```
