@@ -241,6 +241,41 @@ export default function Profile() {
     await signOut();
   };
 
+  const handleExportData = async () => {
+    setExportingData(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("export-user-data");
+      if (error) throw error;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `sport-arena-data-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: t("dataExported"), description: t("dataExportedDesc") });
+    } catch {
+      toast({ title: t("profileError"), description: "Failed to export data. Please try again.", variant: "destructive" });
+    } finally {
+      setExportingData(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const { error } = await supabase.functions.invoke("delete-user-account");
+      if (error) throw error;
+      toast({ title: t("accountDeleted"), description: t("accountDeletedDesc") });
+      await signOut();
+    } catch {
+      toast({ title: t("profileError"), description: "Failed to delete account. Please try again.", variant: "destructive" });
+    } finally {
+      setDeletingAccount(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   // Password validation
   const validatePassword = (password: string): string[] => {
     const errors: string[] = [];
