@@ -306,7 +306,8 @@ export default function ManagerBookings() {
   };
 
   const getStatusBadge = (booking: Booking) => {
-    const isPast = new Date(`${booking.available_date}T${booking.end_time}`) < new Date();
+    const isPast = new Date(`${booking.available_date}T${booking.end_time}`).getTime() <= Date.now();
+
     if (booking.isSessionCancelled) {
       return (
         <Badge variant="destructive" className="gap-1">
@@ -314,20 +315,29 @@ export default function ManagerBookings() {
         </Badge>
       );
     }
-    if (isPast) {
+
+    if (isPast && booking.payment_status === "completed") {
       return (
-        <Badge variant="default" className="gap-1 bg-blue-600">
+        <Badge
+          variant="default"
+          className="gap-1 bg-primary/15 text-primary border border-primary/30 hover:bg-primary/15"
+        >
           <CheckCircle className="h-3 w-3" /> {t("bookings.completed")}
         </Badge>
       );
     }
+
     if (booking.payment_status === "completed") {
       return (
-        <Badge variant="default" className="gap-1 bg-green-600">
+        <Badge
+          variant="default"
+          className="gap-1 bg-success/15 text-success border border-success/30 hover:bg-success/15"
+        >
           <CheckCircle className="h-3 w-3" /> {t("bookings.paid")}
         </Badge>
       );
     }
+
     return (
       <Badge variant="secondary" className="gap-1">
         <AlertCircle className="h-3 w-3" /> {t("bookings.pending")}
