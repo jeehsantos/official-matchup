@@ -6,13 +6,14 @@ interface PublicLayoutProps {
   children: ReactNode;
   showBack?: boolean;
   showFooter?: boolean;
+  showNavbar?: boolean;
 }
 
-export function PublicLayout({ children, showFooter = true }: PublicLayoutProps) {
+export function PublicLayout({ children, showFooter = true, showNavbar = true }: PublicLayoutProps) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <GuestNavbar />
-      <main className="flex-1 pt-20">{children}</main>
+      {showNavbar && <GuestNavbar />}
+      <main className={`flex-1 ${showNavbar ? "pt-20" : ""}`}>{children}</main>
       {showFooter && <Footer />}
     </div>
   );
