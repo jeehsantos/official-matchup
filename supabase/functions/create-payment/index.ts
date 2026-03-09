@@ -354,10 +354,18 @@ async function handleDeferredPayment(body: any, user: any, supabaseAdmin: any) {
 
   const { data: venue, error: venueErr } = await supabaseAdmin
     .from("venues")
-    .select("id, name, stripe_account_id")
+    .select("id, name")
     .eq("id", court.venue_id)
     .single();
   if (venueErr || !venue) throw new Error("Venue not found");
+
+  // Fetch stripe_account_id from venue_payment_settings (security fix)
+  const { data: venuePaymentSettings } = await supabaseAdmin
+    .from("venue_payment_settings")
+    .select("stripe_account_id")
+    .eq("venue_id", venue.id)
+    .maybeSingle();
+  const deferredVenueStripeAccountId = venuePaymentSettings?.stripe_account_id || null;
 
   // Platform settings
   const { data: platformSettings } = await supabaseAdmin
