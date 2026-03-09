@@ -1445,6 +1445,35 @@ export type Database = {
           },
         ]
       }
+      venue_payment_settings: {
+        Row: {
+          created_at: string
+          stripe_account_id: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          stripe_account_id: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          stripe_account_id?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_payment_settings_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_staff: {
         Row: {
           added_by: string
@@ -1539,7 +1568,6 @@ export type Database = {
           photo_url: string | null
           slot_interval_minutes: number
           slug: string | null
-          stripe_account_id: string | null
           suburb: string | null
           updated_at: string
         }
@@ -1563,7 +1591,6 @@ export type Database = {
           photo_url?: string | null
           slot_interval_minutes?: number
           slug?: string | null
-          stripe_account_id?: string | null
           suburb?: string | null
           updated_at?: string
         }
@@ -1587,7 +1614,6 @@ export type Database = {
           photo_url?: string | null
           slot_interval_minutes?: number
           slug?: string | null
-          stripe_account_id?: string | null
           suburb?: string | null
           updated_at?: string
         }
@@ -1630,6 +1656,7 @@ export type Database = {
         Returns: Json
       }
       expire_stale_holds: { Args: never; Returns: number }
+      get_group_invitation: { Args: { p_invite_code: string }; Returns: Json }
       get_staff_venue_ids: {
         Args: { check_user_id: string }
         Returns: string[]
@@ -1643,6 +1670,10 @@ export type Database = {
         Returns: boolean
       }
       has_valid_invitation: { Args: { _group_id: string }; Returns: boolean }
+      increment_invitation_use: {
+        Args: { p_invite_code: string }
+        Returns: undefined
+      }
       is_challenge_participant: {
         Args: { _challenge_id: string; _user_id: string }
         Returns: boolean
