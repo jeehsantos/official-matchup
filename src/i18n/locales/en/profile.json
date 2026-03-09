@@ -60,5 +60,21 @@
   "archivedSessionsDesc": "View past cancelled sessions",
   "viewArchived": "View Archived Sessions",
   "signOut": "Sign Out",
-  "signOutDesc": "Sign out of your account"
+  "signOutDesc": "Sign out of your account",
+  "dataManagement": "Data & Privacy",
+  "dataManagementDesc": "Export or delete your data",
+  "downloadData": "Download My Data",
+  "downloadDataDesc": "Export all your personal data as a JSON file (profile, bookings, payments, credits, groups).",
+  "downloadDataBtn": "Download My Data",
+  "dataExported": "Data exported",
+  "dataExportedDesc": "Your data file has been downloaded.",
+  "deleteAccount": "Delete My Account",
+  "deleteAccountDesc": "Permanently delete your account. Financial records are kept in anonymised form as required by law.",
+  "deleteAccountBtn": "Delete Account",
+  "deleteConfirmTitle": "Are you sure?",
+  "deleteConfirmDesc": "This action cannot be undone. Your profile, group memberships, and personal data will be permanently removed.",
+  "deleteConfirmBtn": "Yes, delete my account",
+  "deleteConfirmCancel": "Cancel",
+  "accountDeleted": "Account deleted",
+  "accountDeletedDesc": "Your account has been successfully deleted."
 }
