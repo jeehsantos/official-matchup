@@ -97,9 +97,9 @@ export function Footer() {
         <div className="container mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Sport Arena. {t("footer.allRightsReserved")}</p>
           <div className="flex items-center gap-6 text-sm text-muted-foreground">
-            <a href="#" className="hover:text-foreground transition-colors">{t("footer.privacy")}</a>
-            <a href="#" className="hover:text-foreground transition-colors">{t("footer.terms")}</a>
-            <a href="#" className="hover:text-foreground transition-colors">{t("footer.cookies")}</a>
+            <Link to="/privacy" className="hover:text-foreground transition-colors">{t("footer.privacy")}</Link>
+            <Link to="/terms" className="hover:text-foreground transition-colors">{t("footer.terms")}</Link>
+            <Link to="/cookies" className="hover:text-foreground transition-colors">{t("footer.cookies")}</Link>
           </div>
         </div>
       </div>

@@ -140,6 +140,10 @@ export default function Contact() {
                     <Textarea id="message" {...register("message")} placeholder={t("messagePlaceholder")} rows={5} className="mt-1" />
                     {errors.message && <p className="text-sm text-destructive mt-1">{errors.message.message}</p>}
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    We collect your name and email to respond to your inquiry. See our{" "}
+                    <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link> for details.
+                  </p>
                   <Button type="submit" className="w-full" disabled={isSubmitting}>
                     {isSubmitting ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t("sending")}</>) : t("sendBtn")}
                   </Button>

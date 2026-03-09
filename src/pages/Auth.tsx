@@ -379,6 +379,11 @@ export default function Auth() {
                           <FormMessage />
                         </FormItem>
                       )} />
+                      <p className="text-xs text-muted-foreground text-center">
+                        By creating an account, you agree to our{" "}
+                        <Link to="/terms" className="text-primary hover:underline">Terms of Service</Link> and{" "}
+                        <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
+                      </p>
                       <Button type="submit" className="w-full btn-athletic" disabled={isSubmitting || isGoogleLoading}>
                         {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t("createAccount")}
                       </Button>
