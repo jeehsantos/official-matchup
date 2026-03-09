@@ -234,7 +234,6 @@ serve(async (req) => {
           venues (
             id,
             owner_id,
-            stripe_account_id,
             name
           )
         )
@@ -248,7 +247,17 @@ serve(async (req) => {
     }
 
     const venue = (session.courts as any)?.venues;
-    const connectedAccountId = venue?.stripe_account_id;
+
+    // Fetch stripe_account_id from venue_payment_settings (security fix)
+    let connectedAccountId: string | null = null;
+    if (venue?.id) {
+      const { data: paymentSettings } = await supabaseAdmin
+        .from("venue_payment_settings")
+        .select("stripe_account_id")
+        .eq("venue_id", venue.id)
+        .maybeSingle();
+      connectedAccountId = paymentSettings?.stripe_account_id || null;
+    }
 
     if (!connectedAccountId) {
       console.log("No Stripe Connect account for venue:", venue?.id);
