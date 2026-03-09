@@ -103,7 +103,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
             <img
               src="/sportarena-logo.png"
               alt="Sport Arena logo"
-              className="h-14 w-auto max-w-[180px] object-contain" />
+              className="h-10 w-auto object-contain" />
           </Link>
           <div className="flex items-center gap-2">
             <Button
@@ -135,7 +135,7 @@ export function ManagerLayout({ children }: ManagerLayoutProps) {
               <img
                 src="/sportarena-logo.png"
                 alt="Sport Arena logo"
-                className="h-20 w-auto max-w-[200px] object-contain" />
+                className="h-14 w-auto object-contain" />
               <div></div>
             </Link>
           </div>

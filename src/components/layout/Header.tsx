@@ -31,7 +31,7 @@ export function Header({ title, showBack = false, rightAction }: HeaderProps) {
               <img
                 src="/sportarena-logo.png"
                 alt="Sport Arena logo"
-                className="h-10 w-auto dark:brightness-0 dark:invert"
+                className="h-8 w-auto object-contain"
               />
             </div>
           )}

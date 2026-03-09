@@ -255,7 +255,7 @@ export default function Auth() {
         ) : (
           <Card className="w-full max-w-md">
             <CardHeader className="text-center">
-              <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-16 w-auto mx-auto mb-2" />
+              <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-14 w-auto mx-auto mb-2 object-contain" />
               <CardTitle className="font-display">{t("welcome")}</CardTitle>
               <CardDescription>{t("subtitle")}</CardDescription>
             </CardHeader>

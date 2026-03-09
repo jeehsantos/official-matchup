@@ -40,7 +40,7 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center mb-4" aria-label="Sport Arena home">
-              <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-24 w-auto dark:brightness-0 dark:invert" />
+              <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-12 w-auto object-contain" />
             </Link>
             <p className="text-muted-foreground mb-6 max-w-sm">{t("footer.tagline")}</p>
             <div className="space-y-3 text-sm text-muted-foreground">
