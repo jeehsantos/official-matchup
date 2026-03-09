@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useTranslation } from "react-i18next";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ManagerLayout } from "@/components/layout/ManagerLayout";
@@ -72,6 +73,7 @@ interface VenueCourt {
 }
 
 export default function ManagerCourtFormNew() {
+  const { t } = useTranslation("manager");
   const { id } = useParams<{ id: string }>();
   const isEditing = id && id !== "new";
   const navigate = useNavigate();
@@ -317,8 +319,8 @@ export default function ManagerCourtFormNew() {
     });
 
     toast({
-      title: "Add New Sub-Court",
-      description: "Fill in the details and click Save to create the sub-court."
+      title: t("courtForm.addCourt"),
+      description: t("courtForm.addNewCourt")
     });
   };
 
@@ -355,7 +357,7 @@ export default function ManagerCourtFormNew() {
         setIsAddingNewSubCourt(false);
         setSelectedTabCourtId(newCourt.id);
         // Load the newly created court into the form
-        toast({ title: "Sub-court created successfully" });
+        toast({ title: t("courtForm.subCourtCreated") });
         return;
       }
 
@@ -398,7 +400,7 @@ export default function ManagerCourtFormNew() {
 
         if (courtError) throw courtError;
         await refetchCourts();
-        toast({ title: "Court updated successfully" });
+        toast({ title: t("courtForm.courtUpdated") });
       } else {
         const { data: newVenueData, error: venueError } = await supabase
           .from("venues")
@@ -437,7 +439,7 @@ export default function ManagerCourtFormNew() {
           } as any]);
 
         if (courtError) throw courtError;
-        toast({ title: "Court created successfully" });
+        toast({ title: t("courtForm.courtCreated") });
         navigate("/manager/courts");
       }
     } catch (error: any) {
@@ -470,7 +472,7 @@ export default function ManagerCourtFormNew() {
         await refetchCourts();
         setSelectedTabCourtId(parentCourt.id);
         loadCourtDataIntoForm(parentCourt);
-        toast({ title: "Sub-court deleted successfully" });
+        toast({ title: t("courtForm.subCourtDeleted") });
         return;
       }
 
