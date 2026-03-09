@@ -101,7 +101,7 @@ export default function Landing() {
             </div>
 
             <div className="relative hidden lg:block">
-              <div className="relative aspect-[5/4] xl:aspect-[4/3] min-[1600px]:aspect-square min-[1920px]:aspect-[4/5] max-h-[calc(100dvh-12rem)] min-[1600px]:max-h-none overflow-hidden rounded-[3rem] border-8 border-card shadow-2xl">
+              <div className="relative aspect-[16/9] xl:aspect-[4/3] min-[1600px]:aspect-square min-[1920px]:aspect-[4/5] overflow-hidden rounded-[3rem] border-8 border-card shadow-2xl">
                 <img src="/homeCourt.png" alt="Sport court" className="h-full w-full object-cover" />
                 <div className="absolute bottom-8 left-6 z-20 w-56 min-[1600px]:w-64 rounded-xl border border-border bg-card p-4 min-[1600px]:p-5 shadow-xl">
                   <div className="flex items-center gap-3">
