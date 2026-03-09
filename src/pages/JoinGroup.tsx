@@ -60,17 +60,14 @@ export default function JoinGroup() {
         p_invite_code: code,
       });
 
-      if (rpcError || !result?.success) {
-        const errorCode = result?.error;
-        if (errorCode === "INVITE_NOT_FOUND") {
-          setError(t("inviteInvalidOrExpired"));
-        } else {
-          setError(t("inviteInvalidOrExpired"));
-        }
+      const rpcResult = result as Record<string, unknown> | null;
+
+      if (rpcError || !rpcResult?.success) {
+        setError(t("inviteInvalidOrExpired"));
         return;
       }
 
-      const groupData = result.group as GroupData;
+      const groupData = rpcResult.group as GroupData;
       setGroup(groupData);
 
       // Check if already a member
