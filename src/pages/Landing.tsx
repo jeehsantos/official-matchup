@@ -52,7 +52,7 @@ export default function Landing() {
       <GuestNavbar />
 
       <main className="pt-20">
-        <section className="min-h-[calc(100dvh-5rem)] flex items-center overflow-hidden bg-gradient-to-br from-blue-50 to-sky-100 dark:from-background dark:to-muted px-6 py-8 sm:py-10 lg:py-12">
+        <section className="min-h-[calc(100dvh-5rem)] flex items-center overflow-hidden bg-gradient-to-br from-blue-50 to-sky-100 dark:from-background dark:to-muted px-6 py-10 lg:py-8 xl:py-10 min-[1600px]:py-16">
           <div className="mx-auto grid max-w-7xl min-[1600px]:max-w-[1500px] min-[1920px]:max-w-[1700px] items-center gap-6 lg:grid-cols-2 lg:gap-8 xl:gap-10 min-[1600px]:gap-16 w-full">
             <div>
               <h1 className="mb-4 text-4xl font-extrabold leading-tight sm:mb-6 sm:text-5xl lg:text-6xl min-[1600px]:text-7xl min-[1920px]:text-8xl">
@@ -101,7 +101,7 @@ export default function Landing() {
             </div>
 
             <div className="relative hidden lg:block">
-              <div className="relative aspect-[5/4] xl:aspect-[4/3] min-[1600px]:aspect-square min-[1920px]:aspect-[4/5] max-h-[calc(100dvh-12rem)] min-[1600px]:max-h-none overflow-hidden rounded-[3rem] border-8 border-card shadow-2xl">
+              <div className="relative aspect-[16/9] xl:aspect-[4/3] min-[1600px]:aspect-square min-[1920px]:aspect-[4/5] overflow-hidden rounded-[3rem] border-8 border-card shadow-2xl">
                 <img src="/homeCourt.png" alt="Sport court" className="h-full w-full object-cover" />
                 <div className="absolute bottom-8 left-6 z-20 w-56 min-[1600px]:w-64 rounded-xl border border-border bg-card p-4 min-[1600px]:p-5 shadow-xl">
                   <div className="flex items-center gap-3">
