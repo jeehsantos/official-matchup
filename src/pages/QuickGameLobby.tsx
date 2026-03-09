@@ -193,7 +193,7 @@ function PlayerSlot({ role, player, side, isCurrentUser, onJoin, onPay, isJoinin
           <>
                 <CheckCircle2 size={10} className="text-green-500" />
                 <span className="text-[7px] md:text-[8px] font-black text-green-500 uppercase tracking-tighter">
-                  Paid
+                  {isOrganizerPaid ? "Confirmed" : "Paid"}
                 </span>
               </> :
 
