@@ -160,7 +160,7 @@ export default function Auth() {
       toast({
         variant: "destructive",
         title: t("loginFailed"),
-        description: error.message === "Invalid login credentials" ? `${t("incorrectCredentials")}${attemptsMsg}` : error.message,
+        description: error.message === "Invalid login credentials" ? `${t("incorrectCredentials")}${attemptsMsg}` : error.message === "Email not confirmed" ? t("emailNotConfirmed") : error.message,
       });
     } else if (role) {
       try { await supabase.rpc("clear_login_attempts", { p_email: data.email }); } catch (e) { console.error("Failed to clear login attempts:", e); }
@@ -175,7 +175,7 @@ export default function Auth() {
   const handleSignUp = async (data: SignUpFormData) => {
     setIsSubmitting(true);
     const referralCode = localStorage.getItem("referralCode") || undefined;
-    const { error } = await signUp(data.email, data.password, data.fullName, data.role, referralCode);
+    const { error, session } = await signUp(data.email, data.password, data.fullName, data.role, referralCode);
     setIsSubmitting(false);
 
     if (error) {
@@ -184,6 +184,11 @@ export default function Auth() {
         title: t("signUpFailed"),
         description: error.message.includes("already registered") ? t("alreadyRegistered") : error.message,
       });
+    } else if (!session) {
+      if (referralCode) localStorage.removeItem("referralCode");
+      toast({ title: t("checkEmail"), description: t("confirmationLinkSent") });
+      signUpForm.reset();
+      setActiveTab("login");
     } else {
       if (referralCode) localStorage.removeItem("referralCode");
       toast({ title: t("accountCreated"), description: t("welcomeMessage") });

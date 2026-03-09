@@ -9,7 +9,7 @@ interface AuthContextType {
   session: Session | null;
   userRole: AppRole | null;
   isLoading: boolean;
-  signUp: (email: string, password: string, fullName: string, role?: AppRole, referralCode?: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string, role?: AppRole, referralCode?: string) => Promise<{ error: Error | null; session?: Session | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; role?: AppRole }>;
   signOut: () => Promise<void>;
   refreshRole: () => Promise<void>;
@@ -138,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserRole(role);
     }
 
-    return { error: error as Error | null };
+    return { error: error as Error | null, session: data?.session };
   };
 
   const signIn = async (email: string, password: string) => {
