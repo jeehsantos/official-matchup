@@ -104,11 +104,6 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "Forbidden: Not authorized" }), { status: 403, headers: corsHeaders });
       }
     }
-      if (payment.status === "refunded" || payment.status === "cancelled") {
-        throw new Error(`Cannot transfer payment - it has been ${payment.status}`);
-      }
-      throw new Error(`Payment status is ${payment.status}, expected 'completed'`);
-    }
 
     // Check if already transferred
     if (payment.transferred_at) {
