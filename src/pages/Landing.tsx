@@ -52,7 +52,7 @@ export default function Landing() {
       <GuestNavbar />
 
       <main className="pt-20">
-        <section className="min-h-[calc(100dvh-5rem)] flex items-center overflow-hidden bg-gradient-to-br from-blue-50 to-sky-100 dark:from-background dark:to-muted px-6 py-8 sm:py-10 lg:py-12">
+        <section className="min-h-[calc(100dvh-5rem)] flex items-center overflow-hidden bg-gradient-to-br from-blue-50 to-sky-100 dark:from-background dark:to-muted px-6 py-10 lg:py-8 xl:py-10 min-[1600px]:py-16">
           <div className="mx-auto grid max-w-7xl min-[1600px]:max-w-[1500px] min-[1920px]:max-w-[1700px] items-center gap-6 lg:grid-cols-2 lg:gap-8 xl:gap-10 min-[1600px]:gap-16 w-full">
             <div>
               <h1 className="mb-4 text-4xl font-extrabold leading-tight sm:mb-6 sm:text-5xl lg:text-6xl min-[1600px]:text-7xl min-[1920px]:text-8xl">
