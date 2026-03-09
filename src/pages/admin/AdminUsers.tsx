@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Edit, CheckCircle, ShieldAlert } from "lucide-react";
+import { Search, Edit, CheckCircle, ShieldAlert, Ban } from "lucide-react";
 import { format } from "date-fns";
 import { 
   Dialog, 
@@ -31,7 +31,18 @@ interface UserData {
   last_sign_in_at: string | null;
   full_name: string;
   role: AppRole;
+  banned_until: string | null;
 }
+
+const isUserBanned = (user: UserData) => {
+  return user.banned_until && new Date(user.banned_until) > new Date();
+};
+
+const getUserStatus = (user: UserData): { label: string; variant: "default" | "secondary" | "destructive" } => {
+  if (isUserBanned(user)) return { label: "Disabled", variant: "destructive" };
+  if (user.email_confirmed_at) return { label: "Active", variant: "default" };
+  return { label: "Unconfirmed", variant: "secondary" };
+};
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<UserData[]>([]);

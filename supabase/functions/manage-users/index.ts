@@ -25,13 +25,11 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // Validate caller using service role client (supports ES256 tokens)
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     if (authError || !user) {
       throw new Error('Unauthorized');
     }
 
-    // Check if caller is admin
     const { data: isAdmin, error: roleError } = await supabaseAdmin.rpc('has_role', {
       _user_id: user.id,
       _role: 'admin'
@@ -91,7 +89,8 @@ serve(async (req) => {
             created_at: u.created_at,
             last_sign_in_at: u.last_sign_in_at,
             full_name: profile?.full_name || '',
-            role: role?.role || 'player'
+            role: role?.role || 'player',
+            banned_until: u.banned_until || null
           };
         });
 
@@ -106,7 +105,28 @@ serve(async (req) => {
         if (!userId) throw new Error('Missing userId');
 
         const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-          email_confirm: true
+          email_confirm: true,
+          ban_duration: 'none'
+        });
+        if (error) throw error;
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      case 'deactivate': {
+        const { userId } = payload;
+        if (!userId) throw new Error('Missing userId');
+
+        // Prevent admin from disabling themselves
+        if (userId === user.id) {
+          throw new Error('Cannot deactivate your own account');
+        }
+
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+          ban_duration: '876000h'
         });
         if (error) throw error;
 
