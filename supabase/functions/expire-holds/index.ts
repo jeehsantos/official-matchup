@@ -46,11 +46,22 @@ serve(async (req) => {
       console.log(`Purged ${purgedCount} old terminal holds`);
     }
 
+    // Purge old cancelled quick challenges and orphaned court availability (>14 days)
+    const { data: cancelledPurge, error: cancelledError } = await supabase.rpc("purge_old_cancelled_records");
+
+    if (cancelledError) {
+      console.error("Error purging cancelled records:", cancelledError);
+    } else {
+      console.log(`Purged cancelled records:`, cancelledPurge);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         expired_count: data,
         purged_count: purgedCount ?? 0,
+        purged_challenges: cancelledPurge?.purged_challenges ?? 0,
+        purged_slots: cancelledPurge?.purged_slots ?? 0,
         timestamp: new Date().toISOString(),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
