@@ -53,17 +53,17 @@ export default function Landing() {
 
       <main className="pt-20">
         <section className="min-h-[calc(100dvh-5rem)] flex items-center overflow-hidden bg-gradient-to-br from-blue-50 to-sky-100 dark:from-background dark:to-muted px-6 py-8 sm:py-10 lg:py-12">
-          <div className="mx-auto grid max-w-7xl items-center gap-8 lg:grid-cols-2 lg:gap-10 xl:gap-12 w-full">
+          <div className="mx-auto grid max-w-7xl min-[1600px]:max-w-[1500px] min-[1920px]:max-w-[1700px] items-center gap-6 lg:grid-cols-2 lg:gap-8 xl:gap-10 min-[1600px]:gap-16 w-full">
             <div>
-              <h1 className="mb-4 text-4xl font-extrabold leading-tight sm:mb-6 sm:text-5xl lg:text-6xl">
+              <h1 className="mb-4 text-4xl font-extrabold leading-tight sm:mb-6 sm:text-5xl lg:text-6xl min-[1600px]:text-7xl min-[1920px]:text-8xl">
                 {t("hero.title1")} <br />
                 <span className="text-primary">{t("hero.title2")}</span>
               </h1>
 
-              <p className="mb-6 max-w-lg text-lg leading-relaxed text-muted-foreground lg:mb-8 xl:mb-10">
+              <p className="mb-6 max-w-lg min-[1600px]:max-w-2xl min-[1920px]:max-w-3xl text-lg min-[1600px]:text-xl min-[1920px]:text-2xl leading-relaxed text-muted-foreground lg:mb-8 xl:mb-10 min-[1600px]:mb-12">
                 {t("hero.findAndBook")}
                 <span
-                  className="relative mx-1 inline-flex h-8 items-end overflow-hidden align-bottom text-primary transition-[width] duration-500 ease-out"
+                  className="relative mx-1 inline-flex h-8 min-[1600px]:h-9 min-[1920px]:h-10 items-end overflow-hidden align-bottom text-primary transition-[width] duration-500 ease-out"
                   style={{ width: `${activeWordWidth}px` }}
                 >
                   <span ref={activeWordMeasureRef} key={activeWord} className="animate-word-slide inline-block whitespace-nowrap font-bold">
@@ -75,42 +75,42 @@ export default function Landing() {
 
               <div className="relative z-40 flex max-w-2xl flex-col gap-3 sm:flex-row">
                 <Link to="/auth?tab=signup" className="sm:flex-1">
-                  <Button className="h-14 w-full justify-center rounded-xl bg-primary px-8 text-xl font-semibold text-primary-foreground shadow-md shadow-primary/35 transition-all duration-300 hover:bg-primary/90">
+                  <Button className="h-14 w-full justify-center rounded-xl bg-primary px-8 text-xl font-semibold text-primary-foreground shadow-md shadow-primary/35 transition-all duration-300 hover:bg-primary/90 min-[1600px]:h-16 min-[1600px]:text-2xl">
                     {t("hero.ctaPlay")}
-                    <span className="ml-3 text-2xl leading-none">›</span>
+                    <span className="ml-3 text-2xl min-[1600px]:text-3xl leading-none">›</span>
                   </Button>
                 </Link>
                 <Link to="/courts" className="sm:flex-1">
-                  <Button variant="outline" className="h-14 w-full justify-center rounded-xl border-border bg-card px-8 text-xl font-medium text-foreground hover:bg-muted">
-                    <MapPin className="mr-3 h-5 w-5" />
+                  <Button variant="outline" className="h-14 w-full justify-center rounded-xl border-border bg-card px-8 text-xl font-medium text-foreground hover:bg-muted min-[1600px]:h-16 min-[1600px]:text-2xl">
+                    <MapPin className="mr-3 h-5 w-5 min-[1600px]:h-6 min-[1600px]:w-6" />
                     {t("hero.ctaBrowse")}
                   </Button>
                 </Link>
               </div>
 
-              <div className="mt-8 flex gap-8 lg:mt-10 xl:mt-12">
+              <div className="mt-8 flex gap-8 lg:mt-10 xl:mt-12 min-[1600px]:mt-16">
                 <div>
-                  <div className="text-2xl font-bold">52K+</div>
-                  <div className="text-xs uppercase tracking-wider text-muted-foreground">{t("hero.activePlayers")}</div>
+                  <div className="text-2xl font-bold min-[1600px]:text-3xl">52K+</div>
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground min-[1600px]:text-sm">{t("hero.activePlayers")}</div>
                 </div>
                 <div className="border-l border-border pl-8">
-                  <div className="text-2xl font-bold">150+</div>
-                  <div className="text-xs uppercase tracking-wider text-muted-foreground">{t("hero.verifiedVenues")}</div>
+                  <div className="text-2xl font-bold min-[1600px]:text-3xl">150+</div>
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground min-[1600px]:text-sm">{t("hero.verifiedVenues")}</div>
                 </div>
               </div>
             </div>
 
             <div className="relative hidden lg:block">
-              <div className="relative aspect-[4/5] overflow-hidden rounded-[3rem] border-8 border-card shadow-2xl lg:aspect-[3/4] xl:aspect-[4/5]">
+              <div className="relative aspect-[5/4] xl:aspect-[4/3] min-[1600px]:aspect-square min-[1920px]:aspect-[4/5] max-h-[calc(100dvh-12rem)] min-[1600px]:max-h-none overflow-hidden rounded-[3rem] border-8 border-card shadow-2xl">
                 <img src="/homeCourt.png" alt="Sport court" className="h-full w-full object-cover" />
-                <div className="absolute bottom-8 left-6 z-20 w-56 rounded-xl border border-border bg-card p-4 shadow-xl">
+                <div className="absolute bottom-8 left-6 z-20 w-56 min-[1600px]:w-64 rounded-xl border border-border bg-card p-4 min-[1600px]:p-5 shadow-xl">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
-                      <CheckCircle2 className="h-5 w-5" />
+                    <div className="flex h-8 w-8 min-[1600px]:h-10 min-[1600px]:w-10 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
+                      <CheckCircle2 className="h-5 w-5 min-[1600px]:h-6 min-[1600px]:w-6" />
                     </div>
                     <div>
-                      <p className="text-[13px] font-bold leading-tight">{t("hero.courtConfirmed")}</p>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">{t("hero.courtConfirmedDetail")}</p>
+                      <p className="text-[13px] min-[1600px]:text-[15px] font-bold leading-tight">{t("hero.courtConfirmed")}</p>
+                      <p className="mt-0.5 text-[11px] min-[1600px]:text-[13px] text-muted-foreground">{t("hero.courtConfirmedDetail")}</p>
                     </div>
                   </div>
                 </div>
