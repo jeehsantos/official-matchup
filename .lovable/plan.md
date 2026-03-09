@@ -1,61 +1,14 @@
 
-Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
+## Responsive Landing Page Strategy
 
-What I found (already verified):
-1) Data inconsistency exists now:
-   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
-   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
-2) `ManagerCourtFormNew` root causes:
-   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
-   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
-   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
-3) Backend side effect confirmed:
-   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
+To ensure the landing page looks incredible on large 32" monitors while remaining perfectly visible and well-proportioned on standard 1366x768 laptops, I will adjust the layout to be dynamically responsive to both width and height constraints.
 
-Implementation plan (execute in this order):
-1. Database integrity hardening + backfill (migration)
-   - Backfill: set `is_multi_court=true` for any court that already has children.
-   - Add DB validation trigger(s) on `courts` to enforce:
-     - child cannot reference itself
-     - child parent must be in same venue
-     - parent cannot be set `is_multi_court=false` while children exist
-     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
-   - This guarantees the bug cannot recur from any client path.
+### 1. Laptop Layout Optimization (~1366x768 / ~1536x864)
+- **Aspect Ratio Shift**: On standard laptop widths (`lg` and `xl` breakpoints), I will change the hero image from a tall portrait format (`aspect-[4/5]`) to a wider format (`aspect-[5/4]` and `aspect-[4/3]`). This immediately reduces the vertical space consumed by the right column.
+- **Viewport Height Capping**: I will add `max-h-[calc(100dvh-8rem)]` and `object-cover` styling to the image container, ensuring its height strictly respects the visible viewport, preventing the two-column grid from overflowing downwards.
+- **Refined Spacing**: I will slightly tighten the vertical spacing (margins and gaps) on the `lg` and `xl` breakpoints so the text column fits cleanly within a 768px height alongside the adjusted image.
 
-2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
-   - Remove direct `window.history.replaceState` usage.
-   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
-   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
-   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
-
-3. Multi-court UI behavior safeguards
-   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
-   - Disable/harden turning off multi-court when children exist (with clear message).
-   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
-
-4. Availability resilience (backend function)
-   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
-   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
-
-5. Verification I will perform (not asking you to test manually)
-   - DB checks:
-     - verify parent `57e11168...` becomes `is_multi_court=true`
-     - verify child links remain unchanged
-     - verify no rows exist with `children > 0 AND is_multi_court=false`
-   - Functional checks:
-     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
-   - UI checks:
-     - exercise add-sub-court flow and confirm:
-       - main court remains main
-       - child appears as child tab
-       - subsequent saves update correct court record
-       - no panel collapse/desync
-
-Technical details:
-- Files to update:
-  - `supabase/migrations/<new>.sql`
-  - `src/pages/manager/ManagerCourtFormNew.tsx`
-  - `supabase/functions/get-availability/index.ts`
-- No money/payment logic touched.
-- No auth model changes.
-- Existing routing and form schema preserved; this is a consistency + state synchronization fix.
+### 2. Ultra-Wide Monitor Support (32"+ / 1440p / 4K)
+- **Container Expansion**: I will scale the current maximum width constraint (`max-w-7xl`) outwards for extremely wide screens, using `min-[1600px]:max-w-[1500px]` and `min-[1920px]:max-w-[1700px]` to make better use of the available lateral space.
+- **Typography & Element Scaling**: I will scale the primary headline up to `2xl:text-7xl` and `min-[1920px]:text-8xl`, while increasing the subtext and button sizes accordingly. This ensures the text remains prominent and balanced against the expanded width, rather than looking tiny in the middle of a massive display.
+- **Tall Image Restitution**: For these massive screens, the image will revert back to a beautiful portrait or square aspect ratio (`2xl:aspect-square`, `min-[1600px]:aspect-[4/5]`) since vertical space is no longer an issue.
