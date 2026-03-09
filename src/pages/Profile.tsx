@@ -72,6 +72,9 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   // Fetch sports from database - NO FALLBACKS
   const { data: sportCategories = [], isLoading: loadingSports } = useSportCategories();
@@ -236,6 +239,41 @@ export default function Profile() {
 
   const handleSignOut = async () => {
     await signOut();
+  };
+
+  const handleExportData = async () => {
+    setExportingData(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("export-user-data");
+      if (error) throw error;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `sport-arena-data-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: t("dataExported"), description: t("dataExportedDesc") });
+    } catch {
+      toast({ title: t("profileError"), description: "Failed to export data. Please try again.", variant: "destructive" });
+    } finally {
+      setExportingData(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const { error } = await supabase.functions.invoke("delete-user-account");
+      if (error) throw error;
+      toast({ title: t("accountDeleted"), description: t("accountDeletedDesc") });
+      await signOut();
+    } catch {
+      toast({ title: t("profileError"), description: "Failed to delete account. Please try again.", variant: "destructive" });
+    } finally {
+      setDeletingAccount(false);
+      setShowDeleteConfirm(false);
+    }
   };
 
   // Password validation
@@ -718,6 +756,84 @@ export default function Profile() {
             </div>
           </div>
         )}
+
+        {/* Data Management */}
+        <Card className="card-elevated overflow-hidden">
+          <CardContent className="p-0">
+            <Collapsible
+              open={expandedSections.includes("data")}
+              onOpenChange={() => toggleSection("data")}
+            >
+              <CollapsibleTrigger asChild>
+                <button className="w-full flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+                    <Shield className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="font-medium text-sm">{t("dataManagement")}</p>
+                    <p className="text-xs text-muted-foreground">{t("dataManagementDesc")}</p>
+                  </div>
+                  <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${
+                    expandedSections.includes("data") ? 'rotate-180' : ''
+                  }`} />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="px-4 pb-4 pt-2 space-y-4">
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">{t("downloadData")}</p>
+                    <p className="text-xs text-muted-foreground mb-2">{t("downloadDataDesc")}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={exportingData}
+                      onClick={handleExportData}
+                    >
+                      {exportingData ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      {t("downloadDataBtn")}
+                    </Button>
+                  </div>
+                  <div className="border-t border-border pt-3">
+                    <p className="text-sm font-medium text-destructive">{t("deleteAccount")}</p>
+                    <p className="text-xs text-muted-foreground mb-2">{t("deleteAccountDesc")}</p>
+                    {!showDeleteConfirm ? (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setShowDeleteConfirm(true)}
+                      >
+                        {t("deleteAccountBtn")}
+                      </Button>
+                    ) : (
+                      <div className="space-y-2 p-3 border border-destructive/30 rounded-lg bg-destructive/5">
+                        <p className="text-sm font-medium text-destructive">{t("deleteConfirmTitle")}</p>
+                        <p className="text-xs text-muted-foreground">{t("deleteConfirmDesc")}</p>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={deletingAccount}
+                            onClick={handleDeleteAccount}
+                          >
+                            {deletingAccount ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            {t("deleteConfirmBtn")}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowDeleteConfirm(false)}
+                          >
+                            {t("deleteConfirmCancel")}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </CardContent>
+        </Card>
 
         {/* Sign Out */}
         <Button

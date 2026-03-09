@@ -223,8 +223,8 @@ export default function Landing() {
               <ul className="space-y-4 text-sm font-medium text-foreground/70">
                 <li><Link to="/about#lets-talk-courts" className="transition hover:text-primary">{t("landingFooter.aboutUs")}</Link></li>
                 <li><Link to="/contact#lets-talk-courts" className="transition hover:text-primary">{t("landingFooter.contact")}</Link></li>
-                <li><Link to="/about#privacy" className="transition hover:text-primary">{t("landingFooter.privacyPolicy")}</Link></li>
-                <li><Link to="/about#terms" className="transition hover:text-primary">{t("landingFooter.termsOfService")}</Link></li>
+                <li><Link to="/privacy" className="transition hover:text-primary">{t("landingFooter.privacyPolicy")}</Link></li>
+                <li><Link to="/terms" className="transition hover:text-primary">{t("landingFooter.termsOfService")}</Link></li>
               </ul>
             </div>
           </div>

@@ -1,88 +1,61 @@
 
+Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-## NZ Privacy Act 2020 Compliance Review
+What I found (already verified):
+1) Data inconsistency exists now:
+   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
+   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
+2) `ManagerCourtFormNew` root causes:
+   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
+   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
+   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
+3) Backend side effect confirmed:
+   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
 
-The NZ Privacy Act 2020 has **13 Information Privacy Principles (IPPs)**. After reviewing the codebase against these principles, here are the gaps and required fixes:
+Implementation plan (execute in this order):
+1. Database integrity hardening + backfill (migration)
+   - Backfill: set `is_multi_court=true` for any court that already has children.
+   - Add DB validation trigger(s) on `courts` to enforce:
+     - child cannot reference itself
+     - child parent must be in same venue
+     - parent cannot be set `is_multi_court=false` while children exist
+     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
+   - This guarantees the bug cannot recur from any client path.
 
----
+2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
+   - Remove direct `window.history.replaceState` usage.
+   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
+   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
+   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
 
-### Current Compliance Status
+3. Multi-court UI behavior safeguards
+   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
+   - Disable/harden turning off multi-court when children exist (with clear message).
+   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
 
-| IPP | Principle | Status | Issue |
-|-----|-----------|--------|-------|
-| 1 | Purpose of collection | Missing | No privacy policy explaining why data is collected |
-| 2 | Source of information | OK | Data collected directly from users |
-| 3 | Collection from subject | Missing | No notice at point of collection (signup/contact) |
-| 4 | Manner of collection | OK | Standard web forms, not intrusive |
-| 5 | Storage & security | Partial | Good RLS/encryption, but no breach notification process |
-| 6 | Access to own data | Missing | Users cannot export/download their personal data |
-| 7 | Correction of data | Partial | Profile editing exists, but no formal correction request process |
-| 8 | Accuracy before use | OK | Data used as provided |
-| 9 | Retention | Missing | No data retention policy, no account deletion |
-| 10 | Use limitation | Missing | No stated limits on how data is used |
-| 11 | Disclosure limitation | Partial | RLS protects data, but no policy stating disclosure rules |
-| 12 | Unique identifiers | OK | UUIDs used, no government IDs stored |
-| 13 | Cross-border disclosure | Missing | No disclosure that data may be stored overseas (Supabase infrastructure) |
+4. Availability resilience (backend function)
+   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
+   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
 
----
+5. Verification I will perform (not asking you to test manually)
+   - DB checks:
+     - verify parent `57e11168...` becomes `is_multi_court=true`
+     - verify child links remain unchanged
+     - verify no rows exist with `children > 0 AND is_multi_court=false`
+   - Functional checks:
+     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
+   - UI checks:
+     - exercise add-sub-court flow and confirm:
+       - main court remains main
+       - child appears as child tab
+       - subsequent saves update correct court record
+       - no panel collapse/desync
 
-### Required Changes
-
-#### 1. Privacy Policy Page (IPPs 1, 3, 5, 9, 10, 11, 13)
-Create a full `/privacy` page covering:
-- What personal data is collected (name, email, phone, city, nationality, gender, payment info)
-- Why it's collected (account, bookings, groups, payments)
-- How it's stored and secured
-- Data retention periods
-- Cross-border data disclosure (cloud infrastructure)
-- Third-party sharing (Stripe for payments)
-- User rights under the Privacy Act 2020
-
-#### 2. Terms of Service Page (IPPs 1, 10)
-Create a `/terms` page covering:
-- Acceptable use
-- Service fee policy
-- Credits and refund policy
-- Account termination
-
-#### 3. Cookie Policy Page
-Create a `/cookies` page explaining sidebar state cookie usage.
-
-#### 4. Fix Footer Links
-Update `Footer.tsx` — the Privacy, Terms, and Cookies links currently point to `#` (dead links). Route them to the new pages.
-
-#### 5. Fix Landing Footer Links
-Update `Landing.tsx` — privacy/terms links point to `#privacy` and `#terms` anchors on the About page, which don't exist.
-
-#### 6. Signup Consent Notice (IPP 3)
-Add a consent statement at signup: "By creating an account, you agree to our Terms of Service and Privacy Policy" with links to both pages.
-
-#### 7. Account Data Export (IPP 6)
-Add a "Download My Data" button to the Profile page that calls a backend function to export user's personal data (profile, bookings, payments, credits, groups) as JSON.
-
-#### 8. Account Deletion (IPP 9)
-Add a "Delete My Account" option in the Profile page that:
-- Calls a backend function to anonymize/delete user data
-- Removes profile, group memberships, and personal information
-- Preserves financial records in anonymized form (legal requirement)
-
-#### 9. Contact Form Privacy Notice (IPP 3)
-Add a brief notice on the Contact page: "We collect your name and email to respond to your inquiry. See our Privacy Policy for details."
-
----
-
-### Technical Implementation
-
-| Change | Files |
-|--------|-------|
-| Privacy Policy page | New `src/pages/Privacy.tsx`, route in `App.tsx` |
-| Terms of Service page | New `src/pages/Terms.tsx`, route in `App.tsx` |
-| Cookie Policy page | New `src/pages/Cookies.tsx`, route in `App.tsx` |
-| Footer links fix | `src/components/layout/Footer.tsx` |
-| Landing links fix | `src/pages/Landing.tsx` |
-| Signup consent | `src/pages/Auth.tsx` |
-| Contact notice | `src/pages/Contact.tsx` |
-| Data export | New edge function `export-user-data`, Profile page button |
-| Account deletion | New edge function `delete-user-account`, Profile page button |
-| Translation files | `en/common.json`, new `en/privacy.json`, `en/terms.json` |
-
+Technical details:
+- Files to update:
+  - `supabase/migrations/<new>.sql`
+  - `src/pages/manager/ManagerCourtFormNew.tsx`
+  - `supabase/functions/get-availability/index.ts`
+- No money/payment logic touched.
+- No auth model changes.
+- Existing routing and form schema preserved; this is a consistency + state synchronization fix.
