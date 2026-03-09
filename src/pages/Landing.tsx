@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, MapPin, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { useSportCategories } from "@/hooks/useSportCategories";
 import { GuestNavbar } from "@/components/layout/GuestNavbar";
 import { useTranslation } from "react-i18next";
 
-export default function Landing() {
+const Landing = forwardRef<HTMLDivElement>((_props, ref) => {
   const { data: sportCategories = [] } = useSportCategories();
   const [wordIndex, setWordIndex] = useState(0);
   const activeWordMeasureRef = useRef<HTMLSpanElement | null>(null);
@@ -241,4 +241,8 @@ export default function Landing() {
       </footer>
     </div>
   );
-}
+});
+
+Landing.displayName = "Landing";
+
+export default Landing;

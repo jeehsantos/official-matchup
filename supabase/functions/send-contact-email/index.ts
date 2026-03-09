@@ -29,6 +29,15 @@ const MAX_EMAIL_LENGTH = 255;
 const MAX_SUBJECT_LENGTH = 200;
 const MAX_MESSAGE_LENGTH = 5000;
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -143,19 +152,19 @@ serve(async (req) => {
                   <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
                     <tr>
                       <td style="padding: 8px 12px; font-weight: bold; color: #555; width: 100px;">From:</td>
-                      <td style="padding: 8px 12px;">${trimmedName}</td>
+                      <td style="padding: 8px 12px;">${escapeHtml(trimmedName)}</td>
                     </tr>
                     <tr>
                       <td style="padding: 8px 12px; font-weight: bold; color: #555;">Email:</td>
-                      <td style="padding: 8px 12px;"><a href="mailto:${trimmedEmail}">${trimmedEmail}</a></td>
+                      <td style="padding: 8px 12px;"><a href="mailto:${escapeHtml(trimmedEmail)}">${escapeHtml(trimmedEmail)}</a></td>
                     </tr>
                     <tr>
                       <td style="padding: 8px 12px; font-weight: bold; color: #555;">Subject:</td>
-                      <td style="padding: 8px 12px;">${trimmedSubject}</td>
+                      <td style="padding: 8px 12px;">${escapeHtml(trimmedSubject)}</td>
                     </tr>
                   </table>
                   <div style="margin-top: 20px; padding: 16px; background: #f9fafb; border-radius: 8px; border-left: 4px solid #2563eb;">
-                    <p style="color: #333; white-space: pre-wrap; margin: 0;">${trimmedMessage}</p>
+                    <p style="color: #333; white-space: pre-wrap; margin: 0;">${escapeHtml(trimmedMessage)}</p>
                   </div>
                   <p style="margin-top: 20px; font-size: 12px; color: #999;">
                     This message was sent via the Sport Arena contact form.

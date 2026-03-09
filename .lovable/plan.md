@@ -1,103 +1,61 @@
 
+Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-## Security Review and Fix Plan
+What I found (already verified):
+1) Data inconsistency exists now:
+   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
+   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
+2) `ManagerCourtFormNew` root causes:
+   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
+   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
+   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
+3) Backend side effect confirmed:
+   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
 
-After reviewing console logs, security scan results, and the codebase, here are the issues found and the fixes required:
+Implementation plan (execute in this order):
+1. Database integrity hardening + backfill (migration)
+   - Backfill: set `is_multi_court=true` for any court that already has children.
+   - Add DB validation trigger(s) on `courts` to enforce:
+     - child cannot reference itself
+     - child parent must be in same venue
+     - parent cannot be set `is_multi_court=false` while children exist
+     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
+   - This guarantees the bug cannot recur from any client path.
 
----
+2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
+   - Remove direct `window.history.replaceState` usage.
+   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
+   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
+   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
 
-### Issue 1: Cron Functions Callable Without Authentication (Medium)
+3. Multi-court UI behavior safeguards
+   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
+   - Disable/harden turning off multi-court when children exist (with clear message).
+   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
 
-**Problem:** `cancel-expired-bookings` and `expire-holds` have no authentication checks. Anyone with the public anon key can trigger session cancellations and hold expiration at will.
+4. Availability resilience (backend function)
+   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
+   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
 
-**Fix:** Add a shared `CRON_SECRET` header check to both functions. Request the user to set the secret, then update both functions to validate `x-cron-secret` header before proceeding.
+5. Verification I will perform (not asking you to test manually)
+   - DB checks:
+     - verify parent `57e11168...` becomes `is_multi_court=true`
+     - verify child links remain unchanged
+     - verify no rows exist with `children > 0 AND is_multi_court=false`
+   - Functional checks:
+     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
+   - UI checks:
+     - exercise add-sub-court flow and confirm:
+       - main court remains main
+       - child appears as child tab
+       - subsequent saves update correct court record
+       - no panel collapse/desync
 
-**Files:** `supabase/functions/cancel-expired-bookings/index.ts`, `supabase/functions/expire-holds/index.ts`
-
----
-
-### Issue 2: XSS in Contact Email Template (Medium)
-
-**Problem:** `send-contact-email` interpolates user-submitted `name`, `email`, `subject`, and `message` directly into an HTML email template without escaping. An attacker could inject malicious HTML/JS into the email body.
-
-**Fix:** Add an HTML entity escaping function and apply it to all user-provided values before interpolation into the HTML template.
-
-**File:** `supabase/functions/send-contact-email/index.ts`
-
----
-
-### Issue 3: `addRole` Client Function Exposes Role Self-Assignment (Low)
-
-**Problem:** `useUserRole.ts` exports an `addRole` function that calls `supabase.from("user_roles").insert(...)` directly. While RLS now blocks `court_manager`, the function is unnecessary and could be misused if RLS is ever relaxed.
-
-**Fix:** Remove the `addRole` function entirely. Role assignment only happens via the `handle_new_user` trigger (signup) or admin service-role operations.
-
-**File:** `src/hooks/useUserRole.ts`
-
----
-
-### Issue 4: `contact_messages` Table Has No RLS Policies (Low)
-
-**Problem:** RLS is enabled but no policies exist. While inserts go through the service-role edge function (correct), having zero policies means the scanner flags it and there's no explicit admin access.
-
-**Fix:** Add an admin-only SELECT policy so admins can read contact messages, completing the security posture.
-
-**Migration SQL:**
-```sql
-CREATE POLICY "Admins can view contact messages"
-ON public.contact_messages FOR SELECT
-TO authenticated
-USING (public.has_role(auth.uid(), 'admin'));
-```
-
----
-
-### Issue 5: `login_attempts` Table Has No RLS Policies (Low)
-
-**Problem:** Same as contact_messages - RLS enabled, no policies. The `SECURITY DEFINER` functions bypass RLS correctly, but the scanner flags it.
-
-**Fix:** Add an admin-only SELECT policy for completeness.
-
-**Migration SQL:**
-```sql
-CREATE POLICY "Admins can view login attempts"
-ON public.login_attempts FOR SELECT
-TO authenticated
-USING (public.has_role(auth.uid(), 'admin'));
-```
-
----
-
-### Issue 6: React forwardRef Console Warnings (Low)
-
-**Problem:** Three warnings: "Function components cannot be given refs" for `Index`, `Landing`, and `GuestNavbar`. These are caused by React Router's internal ref handling on page components.
-
-**Fix:** Wrap `Index`, `Landing`, and `GuestNavbar` with `React.forwardRef` to suppress the warnings cleanly.
-
-**Files:** `src/pages/Index.tsx`, `src/pages/Landing.tsx`, `src/components/layout/GuestNavbar.tsx`
-
----
-
-### Issue 7: Stale Security Scanner Findings
-
-The following findings are **already fixed** from previous security work but the scanner cache is stale:
-- `trigger_admin_self_assign` - Already fixed (verified `handle_new_user` has whitelist)
-- `group_invitations_unauthorized_group_access` - Already fixed (RPC `get_group_invitation`)
-- `quick_challenge_players_payment_data_public` - Already fixed (CLS on `stripe_session_id`)
-- `user_roles_self_assign` - Already fixed (RLS blocks `court_manager`)
-
-These will be marked as resolved/acknowledged where possible.
-
----
-
-### Summary
-
-| Issue | Severity | Fix |
-|-------|----------|-----|
-| Cron functions no auth | Medium | Add CRON_SECRET check |
-| XSS in email template | Medium | HTML-escape user input |
-| `addRole` client exposure | Low | Remove function |
-| `contact_messages` no policies | Low | Add admin SELECT policy |
-| `login_attempts` no policies | Low | Add admin SELECT policy |
-| forwardRef warnings | Low | Wrap with forwardRef |
-
+Technical details:
+- Files to update:
+  - `supabase/migrations/<new>.sql`
+  - `src/pages/manager/ManagerCourtFormNew.tsx`
+  - `supabase/functions/get-availability/index.ts`
+- No money/payment logic touched.
+- No auth model changes.
+- Existing routing and form schema preserved; this is a consistency + state synchronization fix.

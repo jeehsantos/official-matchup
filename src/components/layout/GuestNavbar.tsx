@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ interface GuestNavbarProps {
   className?: string;
 }
 
-export function GuestNavbar({ className }: GuestNavbarProps) {
+export const GuestNavbar = forwardRef<HTMLElement, GuestNavbarProps>(({ className }, ref) => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useTranslation("common");
@@ -23,7 +23,7 @@ export function GuestNavbar({ className }: GuestNavbarProps) {
   ];
 
   return (
-    <header className={cn("fixed top-0 left-0 right-0 z-50 border-b border-border/70 bg-background/75 backdrop-blur-md", className)}>
+    <header ref={ref} className={cn("fixed top-0 left-0 right-0 z-50 border-b border-border/70 bg-background/75 backdrop-blur-md", className)}>
       <div className="mx-auto flex h-20 w-full items-center px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-20">
         <Link to="/" className="flex items-center lg:flex-1" aria-label="Sport Arena home">
           <img src="/sportarena-logo.png" alt="Sport Arena logo" className="h-36 w-auto object-contain sm:h-36 dark:brightness-0 dark:invert" />
@@ -101,4 +101,6 @@ export function GuestNavbar({ className }: GuestNavbarProps) {
       </div>
     </header>
   );
-}
+});
+
+GuestNavbar.displayName = "GuestNavbar";
