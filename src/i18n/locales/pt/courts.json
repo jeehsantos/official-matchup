@@ -18,5 +18,11 @@
   "quickChallengeMode": "Modo Desafio Rápido",
   "selectCourtForChallenge": "Selecione uma quadra e horário pra criar seu desafio rápido",
   "hourlyRate": "por hora",
-  "perHour": "/h"
+  "perHour": "/h",
+  "venues": "Espaços",
+  "noVenuesFound": "Nenhum espaço disponível ainda",
+  "noVenuesFoundDesc": "Volte em breve para novos espaços.",
+  "noCourtsAddedYet": "Nenhuma quadra disponível neste espaço.",
+  "indoor": "Coberto",
+  "outdoor": "Aberto"
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { ManagerLayout } from "@/components/layout/ManagerLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,6 +62,7 @@ interface VenueWithCourts {
 }
 
 export default function ManagerCourtsNew() {
+  const { t } = useTranslation("manager");
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: stripeStatus, isLoading: stripeLoading } = useManagerStripeReady();
@@ -85,7 +87,7 @@ export default function ManagerCourtsNew() {
   const saveVenueName = async (venueId: string) => {
     const trimmed = editingVenueName.trim();
     if (!trimmed) {
-      toast({ title: "Venue name cannot be empty", variant: "destructive" });
+      toast({ title: t("courts.venueNameEmpty"), variant: "destructive" });
       return;
     }
     setSavingVenueName(true);
@@ -102,7 +104,7 @@ export default function ManagerCourtsNew() {
             : g
         )
       );
-      toast({ title: "Venue name updated" });
+      toast({ title: t("courts.venueNameUpdated") });
       setEditingVenueId(null);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -169,8 +171,8 @@ export default function ManagerCourtsNew() {
 
       if (count && count > 0) {
         toast({
-          title: "Cannot delete court",
-          description: "This court has active bookings. Please cancel all bookings first.",
+          title: t("courts.cannotDelete"),
+          description: t("courts.cannotDeleteDesc"),
           variant: "destructive",
         });
         setDeleteTarget(null);
@@ -184,7 +186,7 @@ export default function ManagerCourtsNew() {
 
       if (error) throw error;
 
-      toast({ title: "Court deleted successfully" });
+      toast({ title: t("courts.courtDeleted") });
       setVenueGroups(prev =>
         prev.map(g => ({
           ...g,
@@ -209,14 +211,14 @@ export default function ManagerCourtsNew() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-display text-2xl font-bold">My Venues</h1>
-            <p className="text-sm text-muted-foreground">Manage your sports venues and courts in one place.</p>
+            <h1 className="font-display text-2xl font-bold">{t("courts.title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("courts.subtitle")}</p>
           </div>
           <Link to="/manager/courts/new">
             <Button className="gap-2" disabled={!stripeStatus?.isReady}>
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add New Venue</span>
-              <span className="sm:hidden">Add</span>
+              <span className="hidden sm:inline">{t("courts.addNewVenue")}</span>
+              <span className="sm:hidden">{t("courts.add")}</span>
             </Button>
           </Link>
         </div>
@@ -235,12 +237,12 @@ export default function ManagerCourtsNew() {
           <Card>
             <CardContent className="py-12 text-center">
               <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="font-semibold text-lg mb-2">No venues yet</h3>
+              <h3 className="font-semibold text-lg mb-2">{t("courts.noVenuesYet")}</h3>
               <p className="text-muted-foreground mb-4">
-                Add your first venue to start receiving bookings.
+                {t("courts.noVenuesDesc")}
               </p>
               <Link to="/manager/courts/new">
-                <Button>Add Your First Venue</Button>
+                <Button>{t("courts.addFirstVenue")}</Button>
               </Link>
             </CardContent>
           </Card>
@@ -311,7 +313,7 @@ export default function ManagerCourtsNew() {
                     <Link to={`/manager/courts/new?venue_id=${venue.id}`}>
                       <Button variant="outline" size="sm" className="gap-1.5" disabled={!stripeStatus?.isReady}>
                         <Plus className="h-3.5 w-3.5" />
-                        Add Court
+                        {t("courts.addCourt")}
                       </Button>
                     </Link>
                   </div>
@@ -319,7 +321,7 @@ export default function ManagerCourtsNew() {
                   {/* Courts Grid */}
                   {courts.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground text-sm border border-dashed rounded-lg">
-                      No courts added yet. Add your first court to this venue.
+                      {t("courts.noCourtsAddedYet")}
                     </div>
                   ) : (
                     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -343,10 +345,10 @@ export default function ManagerCourtsNew() {
                                 variant={court.is_active ? "default" : "destructive"}
                                 className="text-[11px] px-2 py-0.5"
                               >
-                                {court.is_active ? "Active" : "Maintenance"}
+                                {court.is_active ? t("courts.active") : t("courts.maintenance")}
                               </Badge>
                               <Badge variant="outline" className="bg-background/80 text-[11px] px-2 py-0.5">
-                                {court.is_indoor ? "Indoor" : "Outdoor"}
+                                {court.is_indoor ? t("courts.indoor") : t("courts.outdoor")}
                               </Badge>
                             </div>
                           </div>
@@ -363,11 +365,11 @@ export default function ManagerCourtsNew() {
                             <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-1 text-muted-foreground">
                                 <Users className="h-3 w-3" />
-                                {court.capacity} players max
+                                {court.capacity} {t("courts.playersMax")}
                               </div>
                               <div className="flex items-center gap-0.5 font-semibold text-primary">
                                 <DollarSign className="h-3 w-3" />
-                                {court.hourly_rate.toFixed(2)}<span className="text-muted-foreground font-normal">/hr</span>
+                                {court.hourly_rate.toFixed(2)}<span className="text-muted-foreground font-normal">{t("courts.perHour")}</span>
                               </div>
                             </div>
 
@@ -376,7 +378,7 @@ export default function ManagerCourtsNew() {
                               <Link to={`/manager/courts/${court.id}/edit`} className="flex-1">
                                 <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs h-8">
                                   <Edit className="h-3 w-3" />
-                                  Edit Court
+                                  {t("courts.editCourt")}
                                 </Button>
                               </Link>
                               <Button
@@ -403,13 +405,13 @@ export default function ManagerCourtsNew() {
         <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete "{deleteTarget?.name}"?</AlertDialogTitle>
+              <AlertDialogTitle>{t("courts.deleteTitle")} "{deleteTarget?.name}"?</AlertDialogTitle>
               <AlertDialogDescription>
-                This action cannot be undone. The court and all its data will be permanently removed.
+                {t("courts.deleteDesc")}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleteLoading}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel disabled={deleteLoading}>{t("courts.cancel")}</AlertDialogCancel>
               <AlertDialogAction
                 disabled={deleteLoading}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -419,7 +421,7 @@ export default function ManagerCourtsNew() {
                 }}
               >
                 {deleteLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Delete
+                {t("courts.deleteTitle")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

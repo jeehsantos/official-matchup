@@ -1,5 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,6 +49,7 @@ function VenueMap({ lat, lng, name }: { lat: number; lng: number; name: string }
 }
 
 export default function VenueLanding() {
+  const { t } = useTranslation(["discover", "courts", "common", "manager"]);
   const { slug } = useParams<{ slug: string }>();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -88,10 +90,10 @@ export default function VenueLanding() {
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      toast({ title: "Link copied to clipboard!" });
+      toast({ title: t("groups:linkCopied", "Link copied to clipboard!") });
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast({ title: "Failed to copy link", variant: "destructive" });
+      toast({ title: t("common:error", "Failed to copy link"), variant: "destructive" });
     }
   };
 
@@ -115,12 +117,12 @@ export default function VenueLanding() {
     return (
       <PublicLayout>
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <h1 className="font-display text-3xl font-bold mb-2">Venue Not Found</h1>
+          <h1 className="font-display text-3xl font-bold mb-2">{t("discover:venueNotFound", "Venue Not Found")}</h1>
           <p className="text-muted-foreground mb-6">
-            This venue page doesn't exist or is no longer active.
+            {t("discover:venueNotFoundDesc", "This venue page doesn't exist or is no longer active.")}
           </p>
           <Button asChild>
-            <Link to="/courts">Browse Courts</Link>
+            <Link to="/courts">{t("games:browseCourts", "Browse Courts")}</Link>
           </Button>
         </div>
       </PublicLayout>
@@ -133,7 +135,7 @@ export default function VenueLanding() {
       <div className="max-w-6xl mx-auto px-4 pt-4">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1.5 text-muted-foreground bg-transparent hover:bg-transparent hover:font-semibold hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {t("common:back", "Back")}
         </Button>
       </div>
 
@@ -177,7 +179,7 @@ export default function VenueLanding() {
             {/* Description */}
             {venue.description && (
               <div>
-                <h2 className="font-display text-xl font-semibold mb-3">About</h2>
+                <h2 className="font-display text-xl font-semibold mb-3">{t("common:about", "About")}</h2>
                 <p className="text-muted-foreground leading-relaxed">{venue.description}</p>
               </div>
             )}
@@ -185,7 +187,7 @@ export default function VenueLanding() {
             {/* Amenities */}
             {venue.amenities && venue.amenities.length > 0 && (
               <div>
-                <h2 className="font-display text-xl font-semibold mb-3">Amenities</h2>
+                <h2 className="font-display text-xl font-semibold mb-3">{t("manager:venueForm.amenities", "Amenities") || "Amenities"}</h2>
                 <div className="flex flex-wrap gap-2">
                   {venue.amenities.map((a: string) => (
                     <Badge key={a} variant="secondary" className="capitalize">
@@ -199,7 +201,7 @@ export default function VenueLanding() {
             {/* Courts */}
             <div>
               <h2 className="font-display text-xl font-semibold mb-4">
-                Courts {courts && `(${courts.length})`}
+                {t("manager:courts.title", "Courts") || "Courts"} {courts && `(${courts.length})`}
               </h2>
               {courtsLoading ? (
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -232,7 +234,7 @@ export default function VenueLanding() {
                           </span>
                           {court.is_indoor && (
                             <Badge variant="outline" className="text-xs">
-                              Indoor
+                              {t("courts:indoor", "Indoor") || "Indoor"}
                             </Badge>
                           )}
                         </div>
@@ -247,7 +249,7 @@ export default function VenueLanding() {
                         )}
                         <Button asChild size="sm" className="w-full mt-2">
                           <Link to={`/courts/${court.id}`}>
-                            Book Now <ExternalLink className="h-3.5 w-3.5 ml-1" />
+                            {t("discover:bookNow", "Book Now") || "Book Now"} <ExternalLink className="h-3.5 w-3.5 ml-1" />
                           </Link>
                         </Button>
                       </CardContent>
@@ -255,7 +257,7 @@ export default function VenueLanding() {
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground">No courts available at this venue.</p>
+                <p className="text-muted-foreground">{t("courts:noCourtsAddedYet", "No courts available at this venue.")}</p>
               )}
             </div>
           </div>
@@ -269,13 +271,13 @@ export default function VenueLanding() {
               ) : (
                 <Share2 className="h-4 w-4 mr-2" />
               )}
-              {copied ? "Copied!" : "Share this venue"}
+              {copied ? t("groups:linkCopied", "Copied!") : t("discover:shareVenue", "Share this venue") || "Share this venue"}
             </Button>
 
             {/* Contact */}
             <Card>
               <CardContent className="p-5 space-y-4">
-                <h3 className="font-semibold">Contact</h3>
+                <h3 className="font-semibold">{t("contact:title", "Contact") || "Contact"}</h3>
                 {venue.address && (
                   <div className="flex items-start gap-3 text-sm">
                     <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
@@ -308,7 +310,7 @@ export default function VenueLanding() {
                 )}
                 {!venue.phone && !venue.email && (
                   <p className="text-xs text-muted-foreground italic">
-                    No contact details available yet.
+                    {t("discover:noContactDetails", "No contact details available yet.") || "No contact details available yet."}
                   </p>
                 )}
               </CardContent>

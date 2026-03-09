@@ -35,5 +35,12 @@
   "alreadyMember": "Já é Membro",
   "alreadyMemberDesc": "Você já é membro de",
   "invitedToJoin": "Você foi convidado pra entrar nesse grupo",
-  "joining": "Entrando..."
+  "joining": "Entrando...",
+  "browseVenuesDesc": "Navegue pelos nossos espaços parceiros e reserve quadras diretamente.",
+  "viewVenue": "Ver espaço",
+  "venueNotFound": "Espaço não encontrado",
+  "venueNotFoundDesc": "Esta página do espaço não existe ou não está mais ativa.",
+  "bookNow": "Reservar Agora",
+  "shareVenue": "Compartilhar esse espaço",
+  "noContactDetails": "Nenhum detalhe de contato disponível ainda."
 }

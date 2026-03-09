@@ -18,5 +18,11 @@
   "quickChallengeMode": "Quick Challenge Mode",
   "selectCourtForChallenge": "Select a court and time slot to create your quick challenge session",
   "hourlyRate": "per hour",
-  "perHour": "/hr"
+  "perHour": "/hr",
+  "venues": "Venues",
+  "noVenuesFound": "No venues available yet",
+  "noVenuesFoundDesc": "Check back soon for new venue listings.",
+  "noCourtsAddedYet": "No courts available at this venue.",
+  "indoor": "Indoor",
+  "outdoor": "Outdoor"
 }

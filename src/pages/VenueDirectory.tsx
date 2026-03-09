@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PublicLayout } from "@/components/layout/PublicLayout";
@@ -12,6 +13,7 @@ import { MapPin, ArrowRight, ArrowLeft, ChevronLeft, ChevronRight } from "lucide
 const VENUES_PER_PAGE = 19;
 
 export default function VenueDirectory() {
+  const { t } = useTranslation(["discover", "courts", "common"]);
   const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -40,12 +42,12 @@ export default function VenueDirectory() {
       <div className="max-w-5xl mx-auto px-4 py-10">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1.5 text-muted-foreground bg-transparent hover:bg-transparent hover:font-semibold hover:text-foreground mb-4">
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {t("common:back", "Back")}
         </Button>
         <div className="mb-8">
-          <h1 className="font-display text-3xl md:text-4xl font-bold">Venues</h1>
+          <h1 className="font-display text-3xl md:text-4xl font-bold">{t("courts:venues", "Venues")}</h1>
           <p className="text-muted-foreground mt-2">
-            Browse our partner venues and book courts directly.
+            {t("discover:browseVenuesDesc", "Browse our partner venues and book courts directly.")}
           </p>
         </div>
 
@@ -103,7 +105,7 @@ export default function VenueDirectory() {
                         </div>
                       )}
                       <div className="flex items-center gap-1 text-sm text-primary font-medium pt-1">
-                        View venue <ArrowRight className="h-3.5 w-3.5" />
+                        {t("discover:viewVenue", "View venue")} <ArrowRight className="h-3.5 w-3.5" />
                       </div>
                     </CardContent>
                   </Card>
@@ -120,10 +122,10 @@ export default function VenueDirectory() {
                   onClick={() => { setCurrentPage((p) => p - 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                 >
                   <ChevronLeft className="h-4 w-4 mr-1" />
-                  Previous
+                  {t("discover:prev", "Previous")}
                 </Button>
                 <span className="text-sm text-muted-foreground px-3">
-                  Page {currentPage} of {totalPages}
+                  {t("discover:page", { current: currentPage, total: totalPages, defaultValue: `Page ${currentPage} of ${totalPages}` })}
                 </span>
                 <Button
                   variant="outline"
@@ -131,7 +133,7 @@ export default function VenueDirectory() {
                   disabled={currentPage === totalPages}
                   onClick={() => { setCurrentPage((p) => p + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                 >
-                  Next
+                  {t("discover:next", "Next")}
                   <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
@@ -140,8 +142,8 @@ export default function VenueDirectory() {
         ) : (
           <div className="text-center py-16">
             <MapPin className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
-            <h2 className="font-semibold text-lg mb-1">No venues available yet</h2>
-            <p className="text-muted-foreground">Check back soon for new venue listings.</p>
+            <h2 className="font-semibold text-lg mb-1">{t("courts:noVenuesFound", "No venues available yet")}</h2>
+            <p className="text-muted-foreground">{t("courts:noVenuesFoundDesc", "Check back soon for new venue listings.")}</p>
           </div>
         )}
       </div>

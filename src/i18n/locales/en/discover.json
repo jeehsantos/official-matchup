@@ -35,5 +35,12 @@
   "alreadyMember": "Already a Member",
   "alreadyMemberDesc": "You're already a member of",
   "invitedToJoin": "You've been invited to join this group",
-  "joining": "Joining..."
+  "joining": "Joining...",
+  "browseVenuesDesc": "Browse our partner venues and book courts directly.",
+  "viewVenue": "View venue",
+  "venueNotFound": "Venue Not Found",
+  "venueNotFoundDesc": "This venue page doesn't exist or is no longer active.",
+  "bookNow": "Book Now",
+  "shareVenue": "Share this venue",
+  "noContactDetails": "No contact details available yet."
 }
