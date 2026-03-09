@@ -535,17 +535,17 @@ async function handleDeferredPayment(body: any, user: any, supabaseAdmin: any) {
       gross_total_cents: grossTotalCents.toString(),
       service_fee_total_cents: serviceFeeTotalCents.toString(),
       stripe_fee_coverage_cents: stripeFeeCoverageCents.toString(),
-      venue_stripe_account_id: venue.stripe_account_id || "",
-      destination_charge: venue.stripe_account_id ? "true" : "false",
+      venue_stripe_account_id: deferredVenueStripeAccountId || "",
+      destination_charge: deferredVenueStripeAccountId ? "true" : "false",
     },
   };
 
   // Destination-charge split for deferred flow
-  if (venue.stripe_account_id) {
+  if (deferredVenueStripeAccountId) {
     sessionParams.payment_intent_data = {
       application_fee_amount: serviceFeeTotalCents,
       transfer_data: {
-        destination: venue.stripe_account_id,
+        destination: deferredVenueStripeAccountId,
       },
     };
   }
