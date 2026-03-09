@@ -22,6 +22,7 @@ import { PaymentMethodDialog } from "@/components/payment/PaymentMethodDialog";
 import { PaymentDeadlineWarning } from "@/components/booking/PaymentDeadlineWarning";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { usePlatformSettings } from "@/hooks/usePlatformSettings";
+import { useManagerStripeReady } from "@/hooks/useStripeConnectStatus";
 import { getSportCategory } from "@/lib/sport-category-utils";
 
 import {
@@ -114,6 +115,8 @@ export default function GameDetail() {
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
   
+  // Check Stripe status for court managers
+  const { data: stripeStatus } = useManagerStripeReady();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -951,7 +954,7 @@ const getGoogleMapsUrl = (address: string): string => {
             </Card>
 
             {/* Stripe Connect Warning for Court Manager */}
-            {isCourtManager && court?.venues && !court.venues.stripe_account_id && (
+            {isCourtManager && stripeStatus && !stripeStatus.isReady && (
               <Card className="border-destructive/50 bg-destructive/5">
                 <CardContent className="p-4 lg:p-6">
                   <div className="flex items-start gap-3">

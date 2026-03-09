@@ -86,7 +86,7 @@ export function useManagerStripeReady() {
     queryFn: async (): Promise<{
       isReady: boolean;
       hasVenues: boolean;
-      venues: Array<{ id: string; name: string; stripe_account_id: string | null }>;
+      venues: Array<{ id: string; name: string }>;
     }> => {
       if (!user) return { isReady: false, hasVenues: false, venues: [] };
 
@@ -97,18 +97,16 @@ export function useManagerStripeReady() {
 
       const { data: venues, error } = await supabase
         .from("venues")
-        .select("id, name, stripe_account_id")
+        .select("id, name")
         .eq("owner_id", user.id);
 
       if (error) throw error;
 
       const hasVenues = !!venues && venues.length > 0;
 
-      // Check venues with stripe accounts first
+      // Check stripe status via edge function (which reads from venue_payment_settings)
       if (hasVenues) {
-        const venuesWithStripe = venues.filter(v => v.stripe_account_id);
-        
-        for (const venue of venuesWithStripe) {
+        for (const venue of venues) {
           try {
             const { data } = await supabase.functions.invoke("stripe-connect-status", {
               body: { venueId: venue.id },

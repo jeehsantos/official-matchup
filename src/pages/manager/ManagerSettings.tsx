@@ -38,7 +38,6 @@ interface PasswordData {
 interface Venue {
   id: string;
   name: string;
-  stripe_account_id: string | null;
 }
 
 interface ConnectStatus {
@@ -86,7 +85,7 @@ export default function ManagerSettings() {
 
   useEffect(() => {
     if (!venuesLoading) {
-      const mapped = managerVenues.map(v => ({ id: v.id, name: v.name, stripe_account_id: v.stripe_account_id }));
+      const mapped = managerVenues.map(v => ({ id: v.id, name: v.name }));
       setVenues(mapped);
       if (mapped.length > 0 && !selectedVenueId) setSelectedVenueId(mapped[0].id);
       setLoading(false);

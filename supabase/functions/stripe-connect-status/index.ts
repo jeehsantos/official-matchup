@@ -41,10 +41,10 @@ serve(async (req) => {
     let stripeAccountId: string | null = null;
 
     if (venueId) {
-      // Venue-specific check
+      // Venue-specific check: verify ownership first
       const { data: venue, error: venueError } = await supabaseAdmin
         .from("venues")
-        .select("stripe_account_id, name, owner_id")
+        .select("id, name, owner_id")
         .eq("id", venueId)
         .single();
 
@@ -56,7 +56,14 @@ serve(async (req) => {
         throw new Error("You don't have permission to view this venue's payment settings");
       }
 
-      stripeAccountId = venue.stripe_account_id;
+      // Fetch from venue_payment_settings
+      const { data: paymentSettings } = await supabaseAdmin
+        .from("venue_payment_settings")
+        .select("stripe_account_id")
+        .eq("venue_id", venueId)
+        .maybeSingle();
+
+      stripeAccountId = paymentSettings?.stripe_account_id || null;
     } else {
       // User-level check (no venue yet)
       const { data: profile } = await supabaseAdmin

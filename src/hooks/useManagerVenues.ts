@@ -5,13 +5,15 @@ import { useAuth } from "@/lib/auth-context";
 interface ManagerVenue {
   id: string;
   name: string;
-  stripe_account_id: string | null;
 }
 
 /**
  * Shared hook that fetches venues accessible to the current user.
  * - court_manager: venues they own
  * - venue_staff: venues they're assigned to
+ * 
+ * NOTE: stripe_account_id is now stored in venue_payment_settings table
+ * and is not exposed through this hook for security reasons.
  */
 export function useManagerVenues() {
   const { user, userRole } = useAuth();
@@ -36,7 +38,7 @@ export function useManagerVenues() {
 
         const { data: venues, error } = await supabase
           .from("venues")
-          .select("id, name, stripe_account_id")
+          .select("id, name")
           .in("id", venueIds);
 
         if (error) throw error;
@@ -46,7 +48,7 @@ export function useManagerVenues() {
       // court_manager path
       const { data: venues, error } = await supabase
         .from("venues")
-        .select("id, name, stripe_account_id")
+        .select("id, name")
         .eq("owner_id", user.id);
 
       if (error) throw error;

@@ -1,28 +1,61 @@
 
-## Security Remediation Execution Plan
+Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-I will now implement the 7 approved security fixes. Here is the exact technical breakdown of the changes I will apply across the database, edge functions, and frontend components:
+What I found (already verified):
+1) Data inconsistency exists now:
+   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
+   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
+2) `ManagerCourtFormNew` root causes:
+   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
+   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
+   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
+3) Backend side effect confirmed:
+   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
 
-### 1. Privilege Escalation via Registration (`signup_metadata_role_escalation`)
-- **Database**: Modify the `handle_new_user` Postgres trigger to strictly sanitize the `role` field from signup metadata. It will only allow `'player'` or `'court_manager'`, falling back to `'player'` for any unrecognized or malicious inputs.
+Implementation plan (execute in this order):
+1. Database integrity hardening + backfill (migration)
+   - Backfill: set `is_multi_court=true` for any court that already has children.
+   - Add DB validation trigger(s) on `courts` to enforce:
+     - child cannot reference itself
+     - child parent must be in same venue
+     - parent cannot be set `is_multi_court=false` while children exist
+     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
+   - This guarantees the bug cannot recur from any client path.
 
-### 2. User Credit Balance Manipulation (`user_credits_balance_manipulation`)
-- **Database**: Drop the `UPDATE` policy for the `authenticated` role on the `user_credits` table. Direct mutations will be blocked, ensuring the `add_user_credits` and `use_user_credits` `SECURITY DEFINER` functions remain the only way to alter balances.
+2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
+   - Remove direct `window.history.replaceState` usage.
+   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
+   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
+   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
 
-### 3. Court Manager Self-Assignment (`user_roles_court_manager_self_assignment`)
-- **Database**: Update the `INSERT` RLS policy on the `user_roles` table to explicitly exclude `'court_manager'` from self-assignment (alongside `admin` and `venue_staff`). Valid assignments will continue securely via the `handle_new_user` trigger.
+3. Multi-court UI behavior safeguards
+   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
+   - Disable/harden turning off multi-court when children exist (with clear message).
+   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
 
-### 4. Group Invitations Public Exposure (`group_invitations_public_exposure`)
-- **Database**: Drop the overly permissive `SELECT` and `UPDATE` policies on the `group_invitations` table. Create a secure RPC function `get_group_invitation(code)` to fetch and validate invites server-side.
-- **Frontend**: Refactor `src/pages/JoinGroup.tsx` and `src/pages/GroupDetail.tsx` to call the new RPC instead of making direct table queries.
+4. Availability resilience (backend function)
+   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
+   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
 
-### 5. Stripe Session Exposure (`quick_challenge_players_stripe_session_exposure`)
-- **Database**: Implement PostgreSQL Column-Level Security (CLS) to revoke `SELECT` access on the `stripe_session_id` column of the `quick_challenge_players` table for `anon` and `authenticated` roles, keeping it readable only by service roles.
+5. Verification I will perform (not asking you to test manually)
+   - DB checks:
+     - verify parent `57e11168...` becomes `is_multi_court=true`
+     - verify child links remain unchanged
+     - verify no rows exist with `children > 0 AND is_multi_court=false`
+   - Functional checks:
+     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
+   - UI checks:
+     - exercise add-sub-court flow and confirm:
+       - main court remains main
+       - child appears as child tab
+       - subsequent saves update correct court record
+       - no panel collapse/desync
 
-### 6. Venue Financial Account Data Exposure (`venues_stripe_account_id_public_exposure`)
-- **Database**: Create a highly-restricted `venue_payment_settings` table to store `stripe_account_id`. Migrate existing data from the `venues` table and drop the exposed column.
-- **Codebase**: Update `src/pages/manager/ManagerSettings.tsx` and the Stripe Connect Edge Functions (`stripe-connect-onboard`, `stripe-connect-status`) to interact with this new isolated table.
-
-### 7. Contact Form Abuse Prevention (`contact_form_no_rate_limit`)
-- **Database**: Drop the public `INSERT` policy on `contact_messages`.
-- **Edge Function**: Update the `send-contact-email` function to enforce IP-based or token-based validation, acting as the exclusive, secure entry point for contact submissions.
+Technical details:
+- Files to update:
+  - `supabase/migrations/<new>.sql`
+  - `src/pages/manager/ManagerCourtFormNew.tsx`
+  - `supabase/functions/get-availability/index.ts`
+- No money/payment logic touched.
+- No auth model changes.
+- Existing routing and form schema preserved; this is a consistency + state synchronization fix.

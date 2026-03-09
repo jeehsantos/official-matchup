@@ -46,10 +46,10 @@ serve(async (req) => {
     let accountId: string | null = null;
 
     if (venueId) {
-      // Venue-based flow: verify ownership and use venue's stripe_account_id
+      // Venue-based flow: verify ownership
       const { data: venue, error: venueError } = await supabaseClient
         .from("venues")
-        .select("*")
+        .select("id, name, owner_id")
         .eq("id", venueId)
         .eq("owner_id", user.id)
         .single();
@@ -58,7 +58,14 @@ serve(async (req) => {
         throw new Error("Venue not found or you don't have permission");
       }
 
-      accountId = venue.stripe_account_id;
+      // Check venue_payment_settings for existing Stripe account
+      const { data: paymentSettings } = await supabaseAdmin
+        .from("venue_payment_settings")
+        .select("stripe_account_id")
+        .eq("venue_id", venueId)
+        .maybeSingle();
+
+      accountId = paymentSettings?.stripe_account_id || null;
 
       if (!accountId) {
         // Check if user already has a Stripe account on their profile
@@ -89,12 +96,16 @@ serve(async (req) => {
         accountId = account.id;
       }
 
-      // Save to both venue and profile
+      // Save to venue_payment_settings (upsert)
       await supabaseAdmin
-        .from("venues")
-        .update({ stripe_account_id: accountId })
-        .eq("id", venueId);
+        .from("venue_payment_settings")
+        .upsert({
+          venue_id: venueId,
+          stripe_account_id: accountId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "venue_id" });
 
+      // Also save to profile for user-level reference
       await supabaseAdmin
         .from("profiles")
         .update({ stripe_account_id: accountId })
