@@ -594,10 +594,14 @@ export default function Courts() {
             
             {/* Header */}
             <div id="browse-courts" className="scroll-mt-24 flex items-center justify-between">
-              <div>
-                <h1 className="font-display text-2xl font-bold">
-                  {isQuickGameMode ? "Select a Court" : "Browse Courts"}
-                </h1>
+              <div className="flex items-center gap-3">
+                <button onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Go back">
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+                <div>
+                  <h1 className="font-display text-2xl font-bold">
+                    {isQuickGameMode ? "Select a Court" : "Browse Courts"}
+                  </h1>
                 <p className="text-muted-foreground text-sm">
                   {filteredCourts.length} court{filteredCourts.length !== 1 ? "s" : ""} available
                 </p>
