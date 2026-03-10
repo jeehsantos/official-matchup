@@ -601,7 +601,7 @@ export default function Courts() {
             {/* Header */}
             <div id="browse-courts" className="scroll-mt-24 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <button onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Go back">
+                <button onClick={() => window.history.length > 1 ? navigate(-1) : navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Go back">
                   <ArrowLeft className="h-5 w-5" />
                 </button>
                 <div>
