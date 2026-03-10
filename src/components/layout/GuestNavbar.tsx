@@ -15,6 +15,7 @@ export const GuestNavbar = forwardRef<HTMLElement, GuestNavbarProps>(({ classNam
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useTranslation("common");
+  const { canInstall, isInstalled, promptInstall } = useInstallPrompt();
 
   const navLinks = [
     { label: t("nav.home"), href: "/" },
