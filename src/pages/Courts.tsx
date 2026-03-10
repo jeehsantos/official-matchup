@@ -551,6 +551,7 @@ export default function Courts() {
                 </button>
               )}
             </div>
+            </div>
           </div>
 
           {/* Draggable bottom sheet with cards - highest z-index via portal */}
