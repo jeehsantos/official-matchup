@@ -8,7 +8,7 @@ import { CourtsPagination } from "@/components/courts/CourtsPagination";
 import { MobileCourtSheet } from "@/components/courts/MobileCourtSheet";
 import { MobileCourtFilters } from "@/components/courts/MobileCourtFilters";
 import { Button } from "@/components/ui/button";
-import { Search, MapPin, SlidersHorizontal, Building2, Loader2, Zap, X, Filter } from "lucide-react";
+import { Search, MapPin, SlidersHorizontal, Building2, Loader2, Zap, X, Filter, ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
