@@ -8,6 +8,12 @@
   "theme_color": "#0b5ed7",
   "icons": [
     {
+      "src": "/sportarena-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "/pwa-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
