@@ -1,56 +1,61 @@
 
+Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-## Plan: "Pay for Player" Feature for Organizers
+What I found (already verified):
+1) Data inconsistency exists now:
+   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
+   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
+2) `ManagerCourtFormNew` root causes:
+   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
+   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
+   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
+3) Backend side effect confirmed:
+   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
 
-### Problem
-In split-payment sessions, players can confirm attendance but forget to pay before the payment deadline, risking automatic session cancellation.
+Implementation plan (execute in this order):
+1. Database integrity hardening + backfill (migration)
+   - Backfill: set `is_multi_court=true` for any court that already has children.
+   - Add DB validation trigger(s) on `courts` to enforce:
+     - child cannot reference itself
+     - child parent must be in same venue
+     - parent cannot be set `is_multi_court=false` while children exist
+     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
+   - This guarantees the bug cannot recur from any client path.
 
-### Solution
-Allow the organizer to pay on behalf of one or more unpaid players via Stripe, directly from the `/games/{id}` page.
+2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
+   - Remove direct `window.history.replaceState` usage.
+   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
+   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
+   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
 
-### Build Errors Fix (prerequisite)
-Fix `NodeJS.Timeout` type errors in `useBookingHold.ts` (line 29) and `useDeviceType.ts` (line 14) by replacing `NodeJS.Timeout` with `ReturnType<typeof setTimeout>`.
+3. Multi-court UI behavior safeguards
+   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
+   - Disable/harden turning off multi-court when children exist (with clear message).
+   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
 
-### Frontend Changes (`src/pages/GameDetail.tsx`)
+4. Availability resilience (backend function)
+   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
+   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
 
-1. **New "Pay for Players" section** — visible only to the organizer, only for split-payment sessions, only when there are unpaid confirmed players, and only before the game.
+5. Verification I will perform (not asking you to test manually)
+   - DB checks:
+     - verify parent `57e11168...` becomes `is_multi_court=true`
+     - verify child links remain unchanged
+     - verify no rows exist with `children > 0 AND is_multi_court=false`
+   - Functional checks:
+     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
+   - UI checks:
+     - exercise add-sub-court flow and confirm:
+       - main court remains main
+       - child appears as child tab
+       - subsequent saves update correct court record
+       - no panel collapse/desync
 
-2. **UI**: A card below the payment section containing:
-   - A multi-select dropdown (using checkboxes) listing unpaid players by name
-   - A summary showing: number of selected players × price per player = total
-   - A "Pay for Selected Players" button that triggers Stripe checkout
-
-3. **New handler `handlePayForPlayers`**: Calls a new edge function `create-payment-for-players` with `{ sessionId, playerUserIds: string[] }`.
-
-### Backend: New Edge Function `supabase/functions/create-payment-for-players/index.ts`
-
-This function:
-1. Authenticates the caller and verifies they are the group organizer
-2. Validates the session is split-payment and not cancelled/past
-3. For each selected player: calculates per-player court share (same formula as existing split logic)
-4. Sums up all player shares + platform fees into a single Stripe Checkout session
-5. Creates pending `payments` records for each player (using the organizer's checkout but each player's `user_id`)
-6. Stores metadata mapping `player_user_ids` so the webhook can confirm all players
-7. Returns the Stripe checkout URL
-
-### Backend: Update `supabase/functions/stripe-webhook/index.ts`
-
-Add handling for the `pay_for_players` payment type:
-- When `checkout.session.completed` fires with metadata containing `player_user_ids`:
-  - Update each player's payment record to `completed`
-  - Set each player's `is_confirmed = true` in `session_players`
-  - Update `court_availability.payment_status` if fully funded
-  - Run `recalculate_and_maybe_confirm_session`
-
-### Backend: Update `supabase/config.toml`
-
-Add the new edge function entry with `verify_jwt = false`.
-
-### Summary of files to create/modify
-- **Fix**: `src/hooks/useBookingHold.ts` — replace `NodeJS.Timeout`
-- **Fix**: `src/hooks/useDeviceType.ts` — replace `NodeJS.Timeout`
-- **Modify**: `src/pages/GameDetail.tsx` — add pay-for-players UI section
-- **Create**: `supabase/functions/create-payment-for-players/index.ts` — new edge function
-- **Modify**: `supabase/functions/stripe-webhook/index.ts` — handle multi-player payment completion
-- **Modify**: `supabase/config.toml` — register new function
-
+Technical details:
+- Files to update:
+  - `supabase/migrations/<new>.sql`
+  - `src/pages/manager/ManagerCourtFormNew.tsx`
+  - `supabase/functions/get-availability/index.ts`
+- No money/payment logic touched.
+- No auth model changes.
+- Existing routing and form schema preserved; this is a consistency + state synchronization fix.

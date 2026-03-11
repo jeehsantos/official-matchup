@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SessionBadge } from "@/components/ui/session-badge";
 import { SportIcon } from "@/components/ui/sport-icon";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { EditPlayerLimits } from "@/components/session/EditPlayerLimits";
@@ -112,6 +113,9 @@ export default function GameDetail() {
   const [profileMissingFields, setProfileMissingFields] = useState<string[]>([]);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   
+  // Pay-for-players state
+  const [selectedPlayersToPay, setSelectedPlayersToPay] = useState<string[]>([]);
+  const [payForPlayersLoading, setPayForPlayersLoading] = useState(false);
   // Fetch user credits
   const { balance: credits, loading: loadingCredits, refetch: refetchCredits } = useUserCredits();
   
@@ -677,6 +681,45 @@ export default function GameDetail() {
   // Attendance confirmation is handled automatically by the payment webhook.
   // No manual frontend confirmation is allowed.
 
+  const handlePayForPlayers = async () => {
+    if (!gameData || !id || !user || selectedPlayersToPay.length === 0) return;
+
+    setPayForPlayersLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-payment-for-players", {
+        body: {
+          sessionId: id,
+          playerUserIds: selectedPlayersToPay,
+          origin: window.location.origin,
+          returnUrl: `/games/${id}`,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        const isInIframe = window.self !== window.top;
+        if (isInIframe) {
+          const opened = window.open(data.url, "_blank", "noopener,noreferrer");
+          if (!opened) window.location.href = data.url;
+        } else {
+          window.location.href = data.url;
+        }
+      } else {
+        throw new Error(data?.error || "No payment URL returned");
+      }
+    } catch (error) {
+      console.error("Error paying for players:", error);
+      toast({
+        title: "Payment Error",
+        description: error instanceof Error ? error.message : "Failed to initiate payment.",
+        variant: "destructive",
+      });
+    } finally {
+      setPayForPlayersLoading(false);
+    }
+  };
+
   const handleCancelSession = async () => {
     if (!gameData || !id) return;
 
@@ -1152,6 +1195,106 @@ const getGoogleMapsUrl = (address: string): string => {
           {isOrganizer && !isGamePast && !currentPlayerPayment?.isPaid && session.payment_deadline && (
             <PaymentDeadlineWarning paymentDeadline={session.payment_deadline} />
           )}
+
+          {/* Pay for Players - Organizer only, split payment, unpaid players exist */}
+          {isOrganizer && !isGamePast && session.payment_type === "split" && (() => {
+            const unpaidPlayers = players.filter(p => !p.isPaid && p.user_id !== user.id);
+            if (unpaidPlayers.length === 0) return null;
+
+            const togglePlayer = (playerId: string) => {
+              setSelectedPlayersToPay(prev =>
+                prev.includes(playerId)
+                  ? prev.filter(id => id !== playerId)
+                  : [...prev, playerId]
+              );
+            };
+
+            const selectAll = () => {
+              if (selectedPlayersToPay.length === unpaidPlayers.length) {
+                setSelectedPlayersToPay([]);
+              } else {
+                setSelectedPlayersToPay(unpaidPlayers.map(p => p.user_id));
+              }
+            };
+
+            return (
+              <Card className="border-primary/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-primary" />
+                    Pay for Players
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Select players to pay on their behalf and avoid late-payment cancellations.
+                  </p>
+
+                  {/* Select All */}
+                  <div className="flex items-center gap-2 pb-1">
+                    <Checkbox
+                      id="select-all-players"
+                      checked={selectedPlayersToPay.length === unpaidPlayers.length}
+                      onCheckedChange={selectAll}
+                    />
+                    <label htmlFor="select-all-players" className="text-sm font-medium cursor-pointer">
+                      Select all ({unpaidPlayers.length})
+                    </label>
+                  </div>
+
+                  {/* Player List */}
+                  <div className="space-y-2">
+                    {unpaidPlayers.map((player) => (
+                      <div
+                        key={player.user_id}
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
+                        onClick={() => togglePlayer(player.user_id)}
+                      >
+                        <Checkbox
+                          checked={selectedPlayersToPay.includes(player.user_id)}
+                          onCheckedChange={() => togglePlayer(player.user_id)}
+                        />
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={player.profile?.avatar_url || undefined} />
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                            {player.profile?.full_name?.split(" ").map(n => n[0]).join("") || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm font-medium flex-1 truncate">
+                          {player.profile?.full_name || "Player"}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          ${totalPerPlayer.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Summary & Pay Button */}
+                  {selectedPlayersToPay.length > 0 && (
+                    <div className="pt-2 border-t space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {selectedPlayersToPay.length} player{selectedPlayersToPay.length > 1 ? "s" : ""} × ${totalPerPlayer.toFixed(2)}
+                        </span>
+                        <span className="font-semibold">
+                          ${(selectedPlayersToPay.length * totalPerPlayer).toFixed(2)} + fees
+                        </span>
+                      </div>
+                      <Button
+                        className="w-full"
+                        onClick={handlePayForPlayers}
+                        disabled={payForPlayersLoading}
+                      >
+                        {payForPlayersLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Pay for {selectedPlayersToPay.length} Player{selectedPlayersToPay.length > 1 ? "s" : ""}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Unified Players Section */}
           <Card>

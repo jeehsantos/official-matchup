@@ -11,7 +11,7 @@ export function useDeviceType(): DeviceType {
   });
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
     const handleResize = () => {
       // Clear existing timeout

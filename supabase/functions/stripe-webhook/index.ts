@@ -174,13 +174,165 @@ async function handleCheckoutCompleted(
   const session = event.data.object as Stripe.Checkout.Session;
   const metadata = session.metadata || {};
 
-  const isQuickChallenge = metadata.type === "quick_challenge";
-
-  if (isQuickChallenge) {
+  if (metadata.type === "quick_challenge") {
     return await handleQuickChallengePayment(session, metadata, supabaseAdmin);
+  } else if (metadata.type === "pay_for_players") {
+    return await handlePayForPlayersPayment(session, metadata, supabaseAdmin);
   } else {
     return await handleSessionPayment(session, metadata, supabaseAdmin);
   }
+}
+
+// ── pay_for_players: organizer pays for multiple players ──────────────────
+async function handlePayForPlayersPayment(
+  stripeSession: Stripe.Checkout.Session,
+  metadata: Record<string, string>,
+  // deno-lint-ignore no-explicit-any
+  supabaseAdmin: any
+): Promise<boolean> {
+  const sessionId = metadata.session_id;
+  const payerUserId = metadata.payer_user_id;
+  const paymentIntentId = stripeSession.payment_intent as string;
+
+  let playerUserIds: string[] = [];
+  try {
+    playerUserIds = JSON.parse(metadata.player_user_ids || "[]");
+  } catch {
+    playerUserIds = [];
+  }
+
+  if (!sessionId || !payerUserId || playerUserIds.length === 0) {
+    console.error("Missing pay_for_players metadata:", metadata);
+    return false;
+  }
+
+  // Idempotency check: see if all players already completed
+  const { data: existingPayments } = await supabaseAdmin
+    .from("payments")
+    .select("user_id, status")
+    .eq("session_id", sessionId)
+    .in("user_id", playerUserIds)
+    .in("status", ["completed", "transferred"]);
+
+  if (existingPayments && existingPayments.length === playerUserIds.length) {
+    console.log("Pay-for-players already processed, skipping:", paymentIntentId);
+    return true;
+  }
+
+  const perPlayerCourtCents = parseInt(metadata.per_player_court_cents || "0");
+  const totalPlatformFeeCents = parseInt(metadata.platform_fee_cents || "0");
+  const totalServiceFeeCents = parseInt(metadata.service_fee_total_cents || "0");
+  const perPlayerPlatformFeeCents = Math.round(totalPlatformFeeCents / playerUserIds.length);
+  const perPlayerServiceFeeCents = Math.round(totalServiceFeeCents / playerUserIds.length);
+
+  let stripeFeeActual: number | null = null;
+  if (paymentIntentId) {
+    try {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+        expand: ["latest_charge.balance_transaction"],
+      });
+      const latestCharge = pi.latest_charge as Stripe.Charge | null;
+      const balanceTx = latestCharge?.balance_transaction as Stripe.BalanceTransaction | null;
+      if (balanceTx?.fee != null) {
+        stripeFeeActual = balanceTx.fee / 100;
+      }
+    } catch (feeErr) {
+      console.error("Unable to retrieve Stripe fee for pay-for-players (non-fatal):", feeErr);
+    }
+  }
+
+  const now = new Date().toISOString();
+
+  // Update each player's payment and confirmation
+  for (const playerId of playerUserIds) {
+    const { error: upsertError } = await supabaseAdmin
+      .from("payments")
+      .upsert(
+        {
+          session_id: sessionId,
+          user_id: playerId,
+          amount: (perPlayerCourtCents + perPlayerServiceFeeCents) / 100,
+          court_amount: perPlayerCourtCents / 100,
+          service_fee: perPlayerServiceFeeCents / 100,
+          platform_fee: perPlayerPlatformFeeCents / 100,
+          payment_type_snapshot: "split",
+          status: "completed",
+          paid_at: now,
+          stripe_payment_intent_id: paymentIntentId,
+          stripe_fee_actual: stripeFeeActual ? stripeFeeActual / playerUserIds.length : null,
+        },
+        { onConflict: "session_id,user_id" }
+      );
+
+    if (upsertError) {
+      console.error(`Failed to upsert payment for player ${playerId}:`, upsertError);
+      continue;
+    }
+
+    // Confirm player participation
+    await supabaseAdmin
+      .from("session_players")
+      .update({ is_confirmed: true, confirmed_at: now })
+      .eq("session_id", sessionId)
+      .eq("user_id", playerId);
+  }
+
+  // Update court availability
+  await supabaseAdmin
+    .from("court_availability")
+    .update({ payment_status: "completed", is_booked: true })
+    .eq("booked_by_session_id", sessionId);
+
+  // Process referral credits for each player
+  for (const playerId of playerUserIds) {
+    try {
+      await supabaseAdmin.rpc("process_referral_credit", { p_referred_user_id: playerId });
+    } catch (refErr) {
+      console.error("Referral credit error (non-fatal):", refErr);
+    }
+  }
+
+  // Recalculate session and maybe payout
+  try {
+    const { data: rpcResult } = await supabaseAdmin.rpc("recalculate_and_maybe_confirm_session", {
+      p_session_id: sessionId,
+    });
+
+    const result = rpcResult as any;
+    if (result?.session_confirmed) {
+      console.log("Session confirmed after pay-for-players — triggering payout:", sessionId);
+      try {
+        const payoutResponse = await fetch(
+          `${Deno.env.get("SUPABASE_URL")}/functions/v1/payout-session`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({ sessionId }),
+          }
+        );
+        const payoutResult = await payoutResponse.json();
+        if (!payoutResult.success) {
+          console.error("Payout failed (non-fatal):", payoutResult.error);
+        }
+      } catch (payoutErr) {
+        console.error("Payout call error (non-fatal):", payoutErr);
+      }
+    }
+  } catch (rpcErr) {
+    console.error("Session recalculation error (non-fatal):", rpcErr);
+  }
+
+  console.log("Pay-for-players payment processed:", {
+    sessionId,
+    payerUserId,
+    playerCount: playerUserIds.length,
+    paymentIntentId,
+  });
+
+  return false;
 }
 
 async function handleSessionPayment(
