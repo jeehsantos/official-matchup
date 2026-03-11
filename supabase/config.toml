@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.transfer-payment]
 verify_jwt = false
+
+[functions.create-payment-for-players]
+verify_jwt = false
