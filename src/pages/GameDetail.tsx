@@ -1295,6 +1295,8 @@ const getGoogleMapsUrl = (address: string): string => {
               </Card>
             );
           })()}
+
+          {/* Unified Players Section */}
           <Card>
             <CardContent className="p-4 lg:p-6 space-y-4">
               {/* Header: Players count + Rescue Mode toggle */}
