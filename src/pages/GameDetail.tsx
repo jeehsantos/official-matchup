@@ -681,6 +681,45 @@ export default function GameDetail() {
   // Attendance confirmation is handled automatically by the payment webhook.
   // No manual frontend confirmation is allowed.
 
+  const handlePayForPlayers = async () => {
+    if (!gameData || !id || !user || selectedPlayersToPay.length === 0) return;
+
+    setPayForPlayersLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-payment-for-players", {
+        body: {
+          sessionId: id,
+          playerUserIds: selectedPlayersToPay,
+          origin: window.location.origin,
+          returnUrl: `/games/${id}`,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        const isInIframe = window.self !== window.top;
+        if (isInIframe) {
+          const opened = window.open(data.url, "_blank", "noopener,noreferrer");
+          if (!opened) window.location.href = data.url;
+        } else {
+          window.location.href = data.url;
+        }
+      } else {
+        throw new Error(data?.error || "No payment URL returned");
+      }
+    } catch (error) {
+      console.error("Error paying for players:", error);
+      toast({
+        title: "Payment Error",
+        description: error instanceof Error ? error.message : "Failed to initiate payment.",
+        variant: "destructive",
+      });
+    } finally {
+      setPayForPlayersLoading(false);
+    }
+  };
+
   const handleCancelSession = async () => {
     if (!gameData || !id) return;
 
