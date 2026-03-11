@@ -26,7 +26,7 @@ export function useBookingHold(): UseBookingHoldReturn {
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const [isCreatingHold, setIsCreatingHold] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Calculate remaining seconds
   useEffect(() => {
