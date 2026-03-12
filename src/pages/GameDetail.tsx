@@ -175,36 +175,50 @@ export default function GameDetail() {
         sportCategory = await getSportCategory(groupData.sport_type);
       }
 
-      // Fetch players with profiles
+      // Fetch players
       const { data: playersData } = await supabase
         .from("session_players")
         .select("*")
         .eq("session_id", id)
         .order("joined_at", { ascending: true });
 
-      const playersWithProfiles = await Promise.all(
-        (playersData || []).map(async (player) => {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("user_id", player.user_id)
-            .maybeSingle();
-          
-          // Check payment status
-          const { data: payment } = await supabase
-            .from("payments")
-            .select("status")
-            .eq("session_id", id)
-            .eq("user_id", player.user_id)
-            .maybeSingle();
+      const playerIds = (playersData || []).map((player) => player.user_id);
 
-          return { 
-            ...player, 
-            profile: profile || undefined, 
-            isPaid: payment?.status === "completed" || payment?.status === "transferred" 
-          };
-        })
+      const [{ data: profilesData, error: profilesError }, { data: paymentsData, error: paymentsError }] =
+        await Promise.all([
+          playerIds.length > 0
+            ? supabase.from("profiles").select("*").in("user_id", playerIds)
+            : Promise.resolve({ data: [], error: null }),
+          playerIds.length > 0
+            ? supabase
+                .from("payments")
+                .select("user_id, status")
+                .eq("session_id", id)
+                .in("user_id", playerIds)
+            : Promise.resolve({ data: [], error: null }),
+        ]);
+
+      if (profilesError) throw profilesError;
+      if (paymentsError) throw paymentsError;
+
+      const profileByUserId = new Map(
+        (profilesData || []).map((profile) => [profile.user_id, profile as Profile])
       );
+      const paidByUserId = new Map<string, boolean>();
+
+      for (const payment of paymentsData || []) {
+        if (payment.status === "completed" || payment.status === "transferred") {
+          paidByUserId.set(payment.user_id, true);
+        } else if (!paidByUserId.has(payment.user_id)) {
+          paidByUserId.set(payment.user_id, false);
+        }
+      }
+
+      const playersWithProfiles = (playersData || []).map((player) => ({
+        ...player,
+        profile: profileByUserId.get(player.user_id),
+        isPaid: paidByUserId.get(player.user_id) ?? false,
+      }));
 
       // Separate confirmed players and waiting list based on max_players
       const confirmedPlayers = playersWithProfiles.slice(0, sessionData.max_players);
