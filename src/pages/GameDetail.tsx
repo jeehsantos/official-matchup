@@ -201,7 +201,7 @@ export default function GameDetail() {
           return { 
             ...player, 
             profile: profile || undefined, 
-            isPaid: payment?.status === "completed" 
+            isPaid: payment?.status === "completed" || payment?.status === "transferred" 
           };
         })
       );
