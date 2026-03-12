@@ -695,7 +695,15 @@ export default function GameDetail() {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // supabase.functions.invoke returns the error body in data for non-2xx
+        const errorBody = data?.error || error.message || "Failed to initiate payment";
+        throw new Error(errorBody);
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
       if (data?.url) {
         const isInIframe = window.self !== window.top;
@@ -706,7 +714,7 @@ export default function GameDetail() {
           window.location.href = data.url;
         }
       } else {
-        throw new Error(data?.error || "No payment URL returned");
+        throw new Error("No payment URL returned");
       }
     } catch (error) {
       console.error("Error paying for players:", error);
