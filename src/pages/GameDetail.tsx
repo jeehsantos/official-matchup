@@ -1266,32 +1266,27 @@ const getGoogleMapsUrl = (address: string): string => {
 
           {/* Pay for Players - Organizer only, split payment, unpaid players exist */}
           {isOrganizer && !isGamePast && session.payment_type === "split" && (() => {
-            const unpaidPlayers = players.filter(p => !p.isPaid && p.user_id !== user.id);
-            if (unpaidPlayers.length === 0) {
-              // Clear any stale selections
-              if (selectedPlayersToPay.length > 0) setSelectedPlayersToPay([]);
-              return null;
-            }
-            const unpaidIds = new Set(unpaidPlayers.map(p => p.user_id));
-            const validSelections = selectedPlayersToPay.filter(id => unpaidIds.has(id));
-            if (validSelections.length !== selectedPlayersToPay.length) {
-              // Prune stale selections on next tick to avoid render-time setState
-              setTimeout(() => setSelectedPlayersToPay(validSelections), 0);
-            }
+            const unpaidPlayers = players.filter((p) => !p.isPaid && p.user_id !== user.id);
+            if (unpaidPlayers.length === 0) return null;
+
+            const unpaidIds = new Set(unpaidPlayers.map((p) => p.user_id));
+            const selectedUnpaidPlayerIds = selectedPlayersToPay.filter((playerId) =>
+              unpaidIds.has(playerId)
+            );
 
             const togglePlayer = (playerId: string) => {
-              setSelectedPlayersToPay(prev =>
+              setSelectedPlayersToPay((prev) =>
                 prev.includes(playerId)
-                  ? prev.filter(id => id !== playerId)
+                  ? prev.filter((id) => id !== playerId)
                   : [...prev, playerId]
               );
             };
 
             const selectAll = () => {
-              if (selectedPlayersToPay.length === unpaidPlayers.length) {
+              if (selectedUnpaidPlayerIds.length === unpaidPlayers.length) {
                 setSelectedPlayersToPay([]);
               } else {
-                setSelectedPlayersToPay(unpaidPlayers.map(p => p.user_id));
+                setSelectedPlayersToPay(unpaidPlayers.map((p) => p.user_id));
               }
             };
 
