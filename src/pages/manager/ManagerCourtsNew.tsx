@@ -441,6 +441,43 @@ export default function ManagerCourtsNew() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Select Parent Court Dialog */}
+        <AlertDialog open={!!addCourtVenue} onOpenChange={(open) => !open && setAddCourtVenue(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("courts.selectMainCourt", "Select Main Court")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("courts.selectMainCourtDesc", "Choose the main court that the new sub-court will belong to. This enables multi-court configuration.")}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-2 py-2">
+              {addCourtVenue?.courts.map((court) => (
+                <button
+                  key={court.id}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors text-left"
+                  onClick={() => {
+                    setAddCourtVenue(null);
+                    navigate(`/manager/courts/${court.id}/edit?add_subcourt=true`);
+                  }}
+                >
+                  <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">
+                    <SportIcon sport={court.allowed_sports?.[0] || "other"} size="sm" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{court.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {getSportLabel(court.allowed_sports?.[0] || "other")} · ${court.hourly_rate.toFixed(2)}/hr
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t("courts.cancel")}</AlertDialogCancel>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </ManagerLayout>
   );
