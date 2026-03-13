@@ -188,6 +188,7 @@ export default function Auth() {
         description: error.message === "Invalid login credentials" ? `${t("incorrectCredentials")}${attemptsMsg}` : error.message === "Email not confirmed" ? t("emailNotConfirmed") : error.message
       });
     } else if (role) {
+      try {await supabase.rpc("clear_login_attempts", { p_email: data.email });} catch (e) {console.error("Failed to clear login attempts:", e);}
       setRemainingAttempts(null);
       setLockoutUntil(null);
       navigate(getRedirectPath(role), { replace: true });
