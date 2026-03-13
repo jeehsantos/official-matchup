@@ -65,6 +65,16 @@ export function ProtectedRoute({
   const { hasRole, isLoading: roleLoading } = useUserRole();
   const { isComplete, isLoading: profileLoading } = useUserProfile();
 
+  const hasRequiredAccess = () => {
+    if (allowedRoles) {
+      return allowedRoles.some(r => hasRole(r));
+    }
+    if (requiredRole) {
+      return hasRole(requiredRole);
+    }
+    return true;
+  };
+
   useEffect(() => {
     if (authLoading || roleLoading) return;
 
@@ -73,10 +83,10 @@ export function ProtectedRoute({
       return;
     }
 
-    if (requiredRole && !hasRole(requiredRole)) {
+    if (!hasRequiredAccess()) {
       navigate("/", { replace: true });
     }
-  }, [user, authLoading, roleLoading, requiredRole, hasRole, navigate, redirectTo]);
+  }, [user, authLoading, roleLoading, requiredRole, allowedRoles, hasRole, navigate, redirectTo]);
 
   if (authLoading || roleLoading || (requireCompleteProfile && profileLoading)) {
     return (
@@ -90,7 +100,7 @@ export function ProtectedRoute({
     return null;
   }
 
-  if (requiredRole && !hasRole(requiredRole)) {
+  if (!hasRequiredAccess()) {
     return null;
   }
 
