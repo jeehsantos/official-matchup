@@ -63,7 +63,34 @@ export default function Auth() {
     if (role === "admin") return "/admin";
     if (role === "court_manager") return "/manager";
     if (role === "venue_staff") return "/manager/availability";
-    return "/games";
+    return "/courts";
+  };
+
+  const isRedirectAllowedForRole = (path: string, role: string | null): boolean => {
+    const managerPaths = ["/manager"];
+    const adminPaths = ["/admin"];
+    const playerPaths = ["/courts", "/games", "/groups", "/discover", "/profile", "/quick-games", "/payment-success", "/join", "/archived-sessions"];
+
+    if (role === "court_manager" || role === "venue_staff") {
+      // Managers/staff should only go to manager paths
+      return managerPaths.some(p => path.startsWith(p));
+    }
+    if (role === "admin") {
+      return adminPaths.some(p => path.startsWith(p));
+    }
+    // Players should not access manager or admin paths
+    return !managerPaths.some(p => path.startsWith(p)) && !adminPaths.some(p => path.startsWith(p));
+  };
+
+  const getRedirectPath = (role: string | null): string => {
+    const storedPath = localStorage.getItem('redirectAfterAuth');
+    if (storedPath) {
+      localStorage.removeItem('redirectAfterAuth');
+      if (isRedirectAllowedForRole(storedPath, role)) {
+        return storedPath;
+      }
+    }
+    return getDefaultPathForRole(role);
   };
 
   const handleGoogleSignIn = async () => {
@@ -99,9 +126,7 @@ export default function Auth() {
 
   useEffect(() => {
     if (!isLoading && user && userRole && !window.location.pathname.includes('/auth')) {
-      const redirectPath = localStorage.getItem('redirectAfterAuth');
-      if (redirectPath) {localStorage.removeItem('redirectAfterAuth');navigate(redirectPath, { replace: true });} else
-      navigate(getDefaultPathForRole(userRole), { replace: true });
+      navigate(getRedirectPath(userRole), { replace: true });
     }
   }, [user, userRole, isLoading, navigate]);
 
@@ -166,9 +191,7 @@ export default function Auth() {
       try {await supabase.rpc("clear_login_attempts", { p_email: data.email });} catch (e) {console.error("Failed to clear login attempts:", e);}
       setRemainingAttempts(null);
       setLockoutUntil(null);
-      const redirectPath = localStorage.getItem('redirectAfterAuth');
-      if (redirectPath) {localStorage.removeItem('redirectAfterAuth');navigate(redirectPath, { replace: true });} else
-      navigate(getDefaultPathForRole(role), { replace: true });
+      navigate(getRedirectPath(role), { replace: true });
     }
   };
 
@@ -192,9 +215,7 @@ export default function Auth() {
     } else {
       if (referralCode) localStorage.removeItem("referralCode");
       toast({ title: t("accountCreated"), description: t("welcomeMessage") });
-      const redirectPath = localStorage.getItem('redirectAfterAuth');
-      if (redirectPath) {localStorage.removeItem('redirectAfterAuth');navigate(redirectPath, { replace: true });} else
-      navigate(getDefaultPathForRole(data.role), { replace: true });
+      navigate(getRedirectPath(data.role), { replace: true });
     }
   };
 
