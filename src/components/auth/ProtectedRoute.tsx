@@ -56,6 +56,7 @@ function ProfileCompletionPrompt() {
 export function ProtectedRoute({ 
   children, 
   requiredRole, 
+  allowedRoles,
   redirectTo = "/auth",
   requireCompleteProfile = false,
 }: ProtectedRouteProps) {
