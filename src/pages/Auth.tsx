@@ -214,9 +214,7 @@ export default function Auth() {
     } else {
       if (referralCode) localStorage.removeItem("referralCode");
       toast({ title: t("accountCreated"), description: t("welcomeMessage") });
-      const redirectPath = localStorage.getItem('redirectAfterAuth');
-      if (redirectPath) {localStorage.removeItem('redirectAfterAuth');navigate(redirectPath, { replace: true });} else
-      navigate(getDefaultPathForRole(data.role), { replace: true });
+      navigate(getRedirectPath(data.role), { replace: true });
     }
   };
 
