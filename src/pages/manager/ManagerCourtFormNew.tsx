@@ -218,6 +218,27 @@ export default function ManagerCourtFormNew() {
     }
   }, [isEditing, id]);
 
+  // Auto-trigger add sub-court when navigated with ?add_subcourt=true
+  const [hasTriggeredAddSubCourt, setHasTriggeredAddSubCourt] = useState(false);
+  useEffect(() => {
+    if (
+      searchParams.get("add_subcourt") === "true" &&
+      !hasTriggeredAddSubCourt &&
+      isEditing &&
+      existingVenueId &&
+      effectiveParentId &&
+      venueCourts.length > 0 &&
+      !loading
+    ) {
+      setHasTriggeredAddSubCourt(true);
+      // Remove the query param so it doesn't re-trigger
+      searchParams.delete("add_subcourt");
+      setSearchParams(searchParams, { replace: true });
+      // Trigger add sub-court
+      handleAddSubCourt();
+    }
+  }, [searchParams, hasTriggeredAddSubCourt, isEditing, existingVenueId, effectiveParentId, venueCourts, loading]);
+
   const fetchCourt = async (courtId: string) => {
     try {
       const { data, error } = await supabase
