@@ -65,6 +65,7 @@ export default function ManagerCourtsNew() {
   const { t } = useTranslation("manager");
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { data: stripeStatus, isLoading: stripeLoading } = useManagerStripeReady();
   const [venueGroups, setVenueGroups] = useState<VenueWithCourts[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +74,7 @@ export default function ManagerCourtsNew() {
   const [editingVenueId, setEditingVenueId] = useState<string | null>(null);
   const [editingVenueName, setEditingVenueName] = useState("");
   const [savingVenueName, setSavingVenueName] = useState(false);
+  const [addCourtVenue, setAddCourtVenue] = useState<{ venue: Venue; courts: Court[] } | null>(null);
 
   const startEditingVenue = (venue: Venue) => {
     setEditingVenueId(venue.id);
