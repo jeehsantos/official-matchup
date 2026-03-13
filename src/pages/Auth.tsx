@@ -63,7 +63,34 @@ export default function Auth() {
     if (role === "admin") return "/admin";
     if (role === "court_manager") return "/manager";
     if (role === "venue_staff") return "/manager/availability";
-    return "/games";
+    return "/courts";
+  };
+
+  const isRedirectAllowedForRole = (path: string, role: string | null): boolean => {
+    const managerPaths = ["/manager"];
+    const adminPaths = ["/admin"];
+    const playerPaths = ["/courts", "/games", "/groups", "/discover", "/profile", "/quick-games", "/payment-success", "/join", "/archived-sessions"];
+
+    if (role === "court_manager" || role === "venue_staff") {
+      // Managers/staff should only go to manager paths
+      return managerPaths.some(p => path.startsWith(p));
+    }
+    if (role === "admin") {
+      return adminPaths.some(p => path.startsWith(p));
+    }
+    // Players should not access manager or admin paths
+    return !managerPaths.some(p => path.startsWith(p)) && !adminPaths.some(p => path.startsWith(p));
+  };
+
+  const getRedirectPath = (role: string | null): string => {
+    const storedPath = localStorage.getItem('redirectAfterAuth');
+    if (storedPath) {
+      localStorage.removeItem('redirectAfterAuth');
+      if (isRedirectAllowedForRole(storedPath, role)) {
+        return storedPath;
+      }
+    }
+    return getDefaultPathForRole(role);
   };
 
   const handleGoogleSignIn = async () => {
