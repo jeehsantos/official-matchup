@@ -1041,8 +1041,6 @@ export default function ManagerCourtFormNew() {
     </ManagerLayout>
   );
 }
-
-  isMultiCourt: boolean;
   showMultiCourtConfig: boolean;
   hasChildren: boolean;
   tabCourts: VenueCourt[];
