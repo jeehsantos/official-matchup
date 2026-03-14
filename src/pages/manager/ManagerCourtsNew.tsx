@@ -16,7 +16,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Building2, 
   Plus,
@@ -27,8 +37,8 @@ import {
   Users,
   Trash2,
   Pencil,
-  Check,
-  X
+  Settings,
+  AlertTriangle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -54,6 +64,7 @@ interface Court {
   photo_url: string | null;
   venue_id: string;
   parent_court_id: string | null;
+  is_multi_court: boolean | null;
 }
 
 interface VenueWithCourts {
@@ -71,47 +82,159 @@ export default function ManagerCourtsNew() {
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Court | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [editingVenueId, setEditingVenueId] = useState<string | null>(null);
-  const [editingVenueName, setEditingVenueName] = useState("");
-  const [savingVenueName, setSavingVenueName] = useState(false);
-  const [addCourtVenue, setAddCourtVenue] = useState<{ venue: Venue; courts: Court[] } | null>(null);
 
-  const startEditingVenue = (venue: Venue) => {
-    setEditingVenueId(venue.id);
-    setEditingVenueName(venue.name);
+  // Venue Edit Dialog state
+  const [editVenue, setEditVenue] = useState<{ venue: Venue; courts: Court[] } | null>(null);
+  const [editVenueName, setEditVenueName] = useState("");
+  const [editMainCourtId, setEditMainCourtId] = useState<string | null>(null);
+  const [savingVenueEdit, setSavingVenueEdit] = useState(false);
+
+  // Venue Delete state
+  const [deleteVenueTarget, setDeleteVenueTarget] = useState<{ venue: Venue; courts: Court[] } | null>(null);
+  const [deleteVenueLoading, setDeleteVenueLoading] = useState(false);
+
+  const openVenueEditDialog = (venue: Venue, courts: Court[]) => {
+    setEditVenueName(venue.name);
+    // Find the current main court (is_multi_court=true and no parent)
+    const mainCourt = courts.find(c => c.is_multi_court && !c.parent_court_id);
+    setEditMainCourtId(mainCourt?.id || null);
+    setEditVenue({ venue, courts });
   };
 
-  const cancelEditingVenue = () => {
-    setEditingVenueId(null);
-    setEditingVenueName("");
-  };
-
-  const saveVenueName = async (venueId: string) => {
-    const trimmed = editingVenueName.trim();
+  const saveVenueEdit = async () => {
+    if (!editVenue) return;
+    const trimmed = editVenueName.trim();
     if (!trimmed) {
       toast({ title: t("courts.venueNameEmpty"), variant: "destructive" });
       return;
     }
-    setSavingVenueName(true);
+    setSavingVenueEdit(true);
     try {
-      const { error } = await supabase
+      // 1. Update venue name
+      const { error: venueError } = await supabase
         .from("venues")
         .update({ name: trimmed })
-        .eq("id", venueId);
-      if (error) throw error;
+        .eq("id", editVenue.venue.id);
+      if (venueError) throw venueError;
+
+      // 2. Update main court designation if changed
+      const mainCourts = editVenue.courts.filter(c => !c.parent_court_id);
+      if (editMainCourtId && mainCourts.length > 0) {
+        // Set the selected court as main (is_multi_court=true, parent_court_id=null)
+        const { error: mainError } = await supabase
+          .from("courts")
+          .update({ is_multi_court: true, parent_court_id: null } as any)
+          .eq("id", editMainCourtId);
+        if (mainError) throw mainError;
+
+        // Set all OTHER top-level courts to have parent_court_id = mainCourtId
+        const otherTopLevel = mainCourts.filter(c => c.id !== editMainCourtId);
+        for (const court of otherTopLevel) {
+          const { error } = await supabase
+            .from("courts")
+            .update({ parent_court_id: editMainCourtId } as any)
+            .eq("id", court.id);
+          if (error) throw error;
+        }
+
+        // Also update existing sub-courts to point to new main
+        const existingChildren = editVenue.courts.filter(c => c.parent_court_id);
+        for (const court of existingChildren) {
+          if (court.parent_court_id !== editMainCourtId) {
+            const { error } = await supabase
+              .from("courts")
+              .update({ parent_court_id: editMainCourtId } as any)
+              .eq("id", court.id);
+            if (error) throw error;
+          }
+        }
+      }
+
+      // Update local state
       setVenueGroups(prev =>
         prev.map(g =>
-          g.venue.id === venueId
+          g.venue.id === editVenue.venue.id
             ? { ...g, venue: { ...g.venue, name: trimmed } }
             : g
         )
       );
       toast({ title: t("courts.venueNameUpdated") });
-      setEditingVenueId(null);
+      setEditVenue(null);
+      // Re-fetch to get updated court relationships
+      fetchData();
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
-      setSavingVenueName(false);
+      setSavingVenueEdit(false);
+    }
+  };
+
+  const handleDeleteVenue = async () => {
+    if (!deleteVenueTarget) return;
+    setDeleteVenueLoading(true);
+    try {
+      const courtIds = deleteVenueTarget.courts.map(c => c.id);
+
+      if (courtIds.length > 0) {
+        // Check for active bookings
+        const { count, error: countError } = await supabase
+          .from("court_availability")
+          .select("id", { count: "exact", head: true })
+          .in("court_id", courtIds)
+          .eq("is_booked", true);
+
+        if (countError) throw countError;
+
+        if (count && count > 0) {
+          toast({
+            title: "Cannot delete venue",
+            description: "This venue has active bookings. Cancel them first before deleting.",
+            variant: "destructive",
+          });
+          setDeleteVenueTarget(null);
+          return;
+        }
+
+        // Delete court_availability for all courts
+        const { error: caError } = await supabase
+          .from("court_availability")
+          .delete()
+          .in("court_id", courtIds);
+        if (caError) throw caError;
+
+        // Delete sub-courts first (children), then main courts
+        const childCourts = deleteVenueTarget.courts.filter(c => c.parent_court_id);
+        const mainCourts = deleteVenueTarget.courts.filter(c => !c.parent_court_id);
+
+        for (const court of childCourts) {
+          const { error } = await supabase.from("courts").delete().eq("id", court.id);
+          if (error) throw error;
+        }
+        for (const court of mainCourts) {
+          const { error } = await supabase.from("courts").delete().eq("id", court.id);
+          if (error) throw error;
+        }
+      }
+
+      // Delete the venue
+      const { error: venueError } = await supabase
+        .from("venues")
+        .delete()
+        .eq("id", deleteVenueTarget.venue.id);
+      if (venueError) throw venueError;
+
+      toast({ title: "Venue deleted successfully" });
+      setVenueGroups(prev => prev.filter(g => g.venue.id !== deleteVenueTarget.venue.id));
+      setDeleteVenueTarget(null);
+      setEditVenue(null);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete venue",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteVenueLoading(false);
     }
   };
 
@@ -140,7 +263,7 @@ export default function ManagerCourtsNew() {
 
       const { data: courts, error: courtsError } = await supabase
         .from("courts")
-        .select("id, name, allowed_sports, capacity, hourly_rate, is_indoor, is_active, photo_url, venue_id, parent_court_id")
+        .select("id, name, allowed_sports, capacity, hourly_rate, is_indoor, is_active, photo_url, venue_id, parent_court_id, is_multi_court")
         .in("venue_id", venueIds)
         .order("created_at", { ascending: false });
 
@@ -207,6 +330,30 @@ export default function ManagerCourtsNew() {
     }
   };
 
+  const handleAddCourt = (venue: Venue, courts: Court[]) => {
+    if (courts.length === 0) {
+      // No courts yet — create the first court
+      navigate(`/manager/courts/new?venue_id=${venue.id}`);
+      return;
+    }
+
+    // Find the main court (is_multi_court=true, no parent)
+    const mainCourt = courts.find(c => c.is_multi_court && !c.parent_court_id);
+
+    if (!mainCourt) {
+      // No main court designated — warn user
+      toast({
+        title: "Main court required",
+        description: "Please select a main court in the venue settings (pencil icon) before adding a second court.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Navigate to add sub-court
+    navigate(`/manager/courts/${mainCourt.id}/edit?add_subcourt=true`);
+  };
+
   return (
     <ManagerLayout>
       <div className="p-4 md:p-6 space-y-6">
@@ -257,55 +404,15 @@ export default function ManagerCourtsNew() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        {editingVenueId === venue.id ? (
-                          <>
-                            <Input
-                              value={editingVenueName}
-                              onChange={(e) => setEditingVenueName(e.target.value)}
-                              className="h-8 text-lg font-bold max-w-[240px]"
-                              autoFocus
-                              disabled={savingVenueName}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") saveVenueName(venue.id);
-                                if (e.key === "Escape") cancelEditingVenue();
-                              }}
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={savingVenueName}
-                              onClick={() => saveVenueName(venue.id)}
-                            >
-                              {savingVenueName ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Check className="h-3.5 w-3.5 text-green-500" />
-                              )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={savingVenueName}
-                              onClick={cancelEditingVenue}
-                            >
-                              <X className="h-3.5 w-3.5 text-destructive" />
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <h2 className="text-lg md:text-xl font-bold">{venue.name}</h2>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => startEditingVenue(venue)}
-                            >
-                              <Pencil className="h-3.5 w-3.5 text-primary" />
-                            </Button>
-                          </>
-                        )}
+                        <h2 className="text-lg md:text-xl font-bold">{venue.name}</h2>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => openVenueEditDialog(venue, courts)}
+                        >
+                          <Settings className="h-3.5 w-3.5 text-primary" />
+                        </Button>
                       </div>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
                         <MapPin className="h-3.5 w-3.5" />
@@ -317,16 +424,7 @@ export default function ManagerCourtsNew() {
                       size="sm"
                       className="gap-1.5"
                       disabled={!stripeStatus?.isReady}
-                      onClick={() => {
-                        // Filter to only main courts (no parent_court_id) for parent selection
-                        const mainCourts = courts.filter(c => !c.parent_court_id);
-                        if (mainCourts.length === 0) {
-                          // No courts yet — create the first court for this venue
-                          navigate(`/manager/courts/new?venue_id=${venue.id}`);
-                        } else {
-                          setAddCourtVenue({ venue, courts: mainCourts });
-                        }
-                      }}
+                      onClick={() => handleAddCourt(venue, courts)}
                     >
                       <Plus className="h-3.5 w-3.5" />
                       {t("courts.addCourt")}
@@ -416,7 +514,7 @@ export default function ManagerCourtsNew() {
           </div>
         )}
 
-        {/* Delete Confirmation Dialog */}
+        {/* Delete Court Confirmation Dialog */}
         <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -442,39 +540,115 @@ export default function ManagerCourtsNew() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Select Parent Court Dialog */}
-        <AlertDialog open={!!addCourtVenue} onOpenChange={(open) => !open && setAddCourtVenue(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("courts.selectMainCourt", "Select Main Court")}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {t("courts.selectMainCourtDesc", "Choose the main court that the new sub-court will belong to. This enables multi-court configuration.")}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="space-y-2 py-2">
-              {addCourtVenue?.courts.map((court) => (
-                <button
-                  key={court.id}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors text-left"
+        {/* Venue Edit Dialog */}
+        <Dialog open={!!editVenue} onOpenChange={(open) => !open && setEditVenue(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Venue Settings</DialogTitle>
+              <DialogDescription>
+                Edit venue name, designate a main court, or delete this venue.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-5 py-2">
+              {/* Venue Name */}
+              <div className="space-y-1.5">
+                <Label>Venue Name</Label>
+                <Input
+                  value={editVenueName}
+                  onChange={(e) => setEditVenueName(e.target.value)}
+                  placeholder="Venue name"
+                />
+              </div>
+
+              {/* Main Court Selection */}
+              {editVenue && editVenue.courts.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Main Court</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Select which court is the main court. Other courts will become sub-courts.
+                  </p>
+                  <RadioGroup
+                    value={editMainCourtId || ""}
+                    onValueChange={(value) => setEditMainCourtId(value)}
+                  >
+                    {editVenue.courts
+                      .filter(c => !c.parent_court_id || c.id === editMainCourtId)
+                      .map((court) => (
+                        <div key={court.id} className="flex items-center gap-3 p-3 rounded-lg border border-border">
+                          <RadioGroupItem value={court.id} id={`court-${court.id}`} />
+                          <Label htmlFor={`court-${court.id}`} className="flex-1 cursor-pointer">
+                            <span className="font-medium text-sm">{court.name}</span>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              ${court.hourly_rate.toFixed(2)}/hr
+                            </span>
+                          </Label>
+                        </div>
+                      ))}
+                  </RadioGroup>
+                </div>
+              )}
+
+              {/* Delete Venue */}
+              <div className="pt-3 border-t border-border">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full gap-2"
                   onClick={() => {
-                    setAddCourtVenue(null);
-                    navigate(`/manager/courts/${court.id}/edit?add_subcourt=true`);
+                    if (editVenue) {
+                      setDeleteVenueTarget(editVenue);
+                    }
                   }}
                 >
-                  <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">
-                    <SportIcon sport={court.allowed_sports?.[0] || "other"} size="sm" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm truncate">{court.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {getSportLabel(court.allowed_sports?.[0] || "other")} · ${court.hourly_rate.toFixed(2)}/hr
-                    </p>
-                  </div>
-                </button>
-              ))}
+                  <Trash2 className="h-4 w-4" />
+                  Delete Venue
+                </Button>
+              </div>
             </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditVenue(null)}>
+                Cancel
+              </Button>
+              <Button onClick={saveVenueEdit} disabled={savingVenueEdit}>
+                {savingVenueEdit && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Venue Confirmation */}
+        <AlertDialog open={!!deleteVenueTarget} onOpenChange={(open) => !open && setDeleteVenueTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Delete "{deleteVenueTarget?.venue.name}"?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the venue and all its courts. This action cannot be undone.
+                {deleteVenueTarget && deleteVenueTarget.courts.length > 0 && (
+                  <span className="block mt-2 font-medium text-foreground">
+                    {deleteVenueTarget.courts.length} court{deleteVenueTarget.courts.length > 1 ? "s" : ""} will be deleted.
+                  </span>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>{t("courts.cancel")}</AlertDialogCancel>
+              <AlertDialogCancel disabled={deleteVenueLoading}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleteVenueLoading}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDeleteVenue();
+                }}
+              >
+                {deleteVenueLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Delete Venue
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

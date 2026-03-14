@@ -186,10 +186,6 @@ export default function ManagerCourtFormNew() {
   const paymentTiming = watch("payment_timing");
   const paymentHoursBefore = watch("payment_hours_before");
   const isMultiCourt = watch("is_multi_court");
-  const watchedName = watch("name");
-  const watchedRate = watch("hourly_rate");
-  const watchedGroundType = watch("ground_type");
-  const watchedPhotoUrls = watch("photo_urls");
 
   useEffect(() => {
     if (selectedCity) {
@@ -545,12 +541,6 @@ export default function ManagerCourtFormNew() {
     );
   }
 
-  // Preview court data for right panel
-  const previewName = watchedName || "Unnamed Court";
-  const previewRate = watchedRate || 0;
-  const previewSurface = groundTypeLabels[watchedGroundType] || watchedGroundType || "-";
-  const previewPhoto = watchedPhotoUrls?.[0] || null;
-
   // Determine label for active court
   const activeIsSubCourt = isAddingNewSubCourt || (activeCourt?.parent_court_id != null);
 
@@ -600,32 +590,45 @@ export default function ManagerCourtFormNew() {
           <StripeSetupAlert hasVenues={stripeStatus?.hasVenues ?? false} />
         )}
 
-        {/* Mobile: Preview Panel at top */}
-        <div className="lg:hidden">
-          <MobilePreviewPanel
-            isEditing={!!isEditing}
-            isMultiCourt={isMultiCourt}
-            showMultiCourtConfig={showMultiCourtConfig}
-            hasChildren={hasChildren}
-            tabCourts={tabCourts}
-            selectedTabCourtId={selectedTabCourtId}
-            isAddingNewSubCourt={isAddingNewSubCourt}
-            effectiveParentId={effectiveParentId}
-            activeCourt={activeCourt}
-            parentCourt={parentCourt}
-            isActiveTabParent={isActiveTabParent}
-            previewName={previewName}
-            previewRate={previewRate}
-            previewSurface={previewSurface}
-            previewPhoto={previewPhoto}
-            groundTypeLabels={groundTypeLabels}
-            onTabClick={loadCourtDataIntoForm}
-            onAddSubCourt={handleAddSubCourt}
-            onToggleMultiCourt={handleMultiCourtToggle}
-            venueName={venueName}
-            onVenueNameChange={setVenueName}
-          />
-        </div>
+        {/* Multi-court tabs (mobile) */}
+        {isEditing && showMultiCourtConfig && (
+          <div className="lg:hidden">
+            <Card className="rounded-2xl border border-border shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex gap-2 flex-wrap">
+                  {tabCourts.map((court, index) => (
+                    <button
+                      key={court.id}
+                      type="button"
+                      onClick={() => loadCourtDataIntoForm(court)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        !isAddingNewSubCourt && selectedTabCourtId === court.id
+                          ? "bg-primary/10 text-primary border-primary"
+                          : "bg-muted text-muted-foreground border-border"
+                      }`}
+                    >
+                      {index === 0 ? "Main" : court.name}
+                    </button>
+                  ))}
+                  {isAddingNewSubCourt && (
+                    <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary">
+                      New
+                    </span>
+                  )}
+                  {!isAddingNewSubCourt && (
+                    <button
+                      type="button"
+                      onClick={handleAddSubCourt}
+                      className="px-3 py-1.5 rounded-full text-xs font-medium border border-dashed border-muted-foreground/40 text-muted-foreground flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" /> Add
+                    </button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Two Column Layout */}
         <div className="flex gap-8 items-start max-w-[1600px] mx-auto w-full">
@@ -978,272 +981,55 @@ export default function ManagerCourtFormNew() {
             )}
           </form>
 
-          {/* Right Column - Sticky Preview Panel (Desktop) */}
-          <div className="hidden lg:block w-[420px] shrink-0 sticky top-24 space-y-4">
-            {/* Venue Name Editor */}
-            {isEditing && (
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Venue Name</Label>
-                <Input
-                  value={venueName}
-                  onChange={(e) => setVenueName(e.target.value)}
-                  placeholder="Venue name"
-                  className="text-lg font-bold"
-                />
-              </div>
-            )}
-
-            {/* Preview Header */}
-            <div className="bg-muted rounded-t-xl px-4 py-3 border-b border-border">
-              <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Preview</span>
-              <div className="bg-background mt-2 rounded-lg py-3 px-4 flex items-center justify-between border border-border">
-                <span className="text-foreground text-sm font-medium">{previewName}</span>
-              </div>
-            </div>
-
-            {/* Preview Content */}
-            <Card className="rounded-t-none rounded-b-xl border-t-0 -mt-4">
-              <CardContent className="p-6 space-y-6">
-                {/* Multi-Court Toggle — only show on parent tab */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold flex items-center gap-2">
-                      <Box className="h-4 w-4 text-primary" /> Multi-Court Configuration
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">Enable to subdivide this court</p>
-                  </div>
-                  {isActiveTabParent && !isAddingNewSubCourt && (
-                    <Switch
-                      checked={isMultiCourt || hasChildren}
-                      disabled={hasChildren && isMultiCourt}
-                      onCheckedChange={handleMultiCourtToggle}
-                    />
-                  )}
-                </div>
-
-                {/* Sub-Court Tabs */}
-                {showMultiCourtConfig && (
-                  <div className="space-y-4">
-                    <div className="flex gap-2 flex-wrap border-b border-border pb-4">
-                      {tabCourts.map((court, index) => (
-                        <button
-                          key={court.id}
-                          type="button"
-                          onClick={() => loadCourtDataIntoForm(court)}
-                          className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
-                            !isAddingNewSubCourt && activeCourtId === court.id
-                              ? "bg-primary/10 text-primary border-primary"
-                              : "bg-muted text-muted-foreground border-border hover:text-foreground"
-                          }`}
-                        >
-                          {index === 0 ? "Main Court" : court.name}
-                        </button>
-                      ))}
-                      {isAddingNewSubCourt && (
-                        <button type="button" className="px-4 py-1.5 rounded-full text-sm font-medium bg-primary/10 text-primary border border-primary">
-                          New Sub-Court
-                        </button>
-                      )}
-                      {!isAddingNewSubCourt && (
-                        <button
-                          type="button"
-                          onClick={handleAddSubCourt}
-                          className="px-3 py-1.5 rounded-full text-sm font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:text-primary hover:border-primary flex items-center gap-1 transition-colors"
-                        >
-                          <Plus className="h-4 w-4" /> Add
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Court Preview */}
-                <div className="flex gap-4">
-                  <div className="w-40 h-28 rounded-lg overflow-hidden border border-border bg-muted flex items-center justify-center shrink-0">
-                    {previewPhoto ? (
-                      <img src={previewPhoto} alt="Preview" className="w-full h-full object-cover" />
-                    ) : (
-                      <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
+          {/* Right Column - Multi-court tabs (Desktop) */}
+          {isEditing && showMultiCourtConfig && (
+            <div className="hidden lg:block w-[320px] shrink-0 sticky top-24 space-y-4">
+              <Card className="rounded-2xl border border-border shadow-sm">
+                <CardHeader className="pb-3 border-b border-border">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Box className="h-4 w-4 text-primary" />
+                    Court Tabs
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-3">
+                  <div className="flex gap-2 flex-wrap">
+                    {tabCourts.map((court, index) => (
+                      <button
+                        key={court.id}
+                        type="button"
+                        onClick={() => loadCourtDataIntoForm(court)}
+                        className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                          !isAddingNewSubCourt && activeCourtId === court.id
+                            ? "bg-primary/10 text-primary border-primary"
+                            : "bg-muted text-muted-foreground border-border hover:text-foreground"
+                        }`}
+                      >
+                        {index === 0 ? "Main Court" : court.name}
+                      </button>
+                    ))}
+                    {isAddingNewSubCourt && (
+                      <button type="button" className="px-4 py-1.5 rounded-full text-sm font-medium bg-primary/10 text-primary border border-primary">
+                        New Sub-Court
+                      </button>
+                    )}
+                    {!isAddingNewSubCourt && (
+                      <button
+                        type="button"
+                        onClick={handleAddSubCourt}
+                        className="px-3 py-1.5 rounded-full text-sm font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:text-primary hover:border-primary flex items-center gap-1 transition-colors"
+                      >
+                        <Plus className="h-4 w-4" /> Add
+                      </button>
                     )}
                   </div>
-                  <div className="flex flex-col justify-start pt-1 min-w-0">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                      {isAddingNewSubCourt ? "New Sub-Court" : activeIsSubCourt ? "Sub-Court" : "Main Court"}
-                    </span>
-                    <span className="text-lg font-bold text-primary mt-0.5 truncate">{previewName}</span>
-                    <div className="mt-3 space-y-1.5">
-                      <div className="text-xs text-muted-foreground">
-                        <span className="font-semibold text-foreground">Rate:</span> ${previewRate}/hr
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        <span className="font-semibold text-foreground">Surface:</span> {previewSurface}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Delete action for editing */}
-                {(isEditing || isAddingNewSubCourt) && (
-                  <div className="pt-4 border-t border-border">
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      className="w-full"
-                      onClick={isAddingNewSubCourt ? () => {
-                        setIsAddingNewSubCourt(false);
-                        if (parentCourt) loadCourtDataIntoForm(parentCourt);
-                      } : handleDelete}
-                      disabled={deleting}
-                    >
-                      {isAddingNewSubCourt ? t("courts.cancel") : deleting ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          {t("courts.deleteTitle")}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </ManagerLayout>
   );
 }
 
-/* ===== Mobile Preview Panel Component ===== */
-interface MobilePreviewPanelProps {
-  isEditing: boolean;
-  isMultiCourt: boolean;
-  showMultiCourtConfig: boolean;
-  hasChildren: boolean;
-  tabCourts: VenueCourt[];
-  selectedTabCourtId: string | null;
-  isAddingNewSubCourt: boolean;
-  effectiveParentId: string | null;
-  activeCourt: VenueCourt | null;
-  parentCourt: VenueCourt | null;
-  isActiveTabParent: boolean;
-  previewName: string;
-  previewRate: number;
-  previewSurface: string;
-  previewPhoto: string | null;
-  groundTypeLabels: Record<string, string>;
-  onTabClick: (court: VenueCourt) => void;
-  onAddSubCourt: () => void;
-  onToggleMultiCourt: (checked: boolean) => void;
-  venueName: string;
-  onVenueNameChange: (name: string) => void;
-}
 
-function MobilePreviewPanel({
-  isEditing,
-  isMultiCourt,
-  showMultiCourtConfig,
-  hasChildren,
-  tabCourts,
-  selectedTabCourtId,
-  isAddingNewSubCourt,
-  effectiveParentId,
-  activeCourt,
-  parentCourt,
-  isActiveTabParent,
-  previewName,
-  previewRate,
-  previewSurface,
-  previewPhoto,
-  groundTypeLabels,
-  onTabClick,
-  onAddSubCourt,
-  onToggleMultiCourt,
-  venueName,
-  onVenueNameChange,
-}: MobilePreviewPanelProps) {
-  if (!isEditing) return null;
-
-  return (
-    <Card className="rounded-2xl border border-border shadow-sm">
-      <CardContent className="p-4 space-y-4">
-        {/* Venue Name */}
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Venue</Label>
-          <Input
-            value={venueName}
-            onChange={(e) => onVenueNameChange(e.target.value)}
-            placeholder="Venue name"
-            className="font-semibold"
-          />
-        </div>
-
-        {/* Multi-Court Toggle — only on parent tab */}
-        {isActiveTabParent && !isAddingNewSubCourt && (
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Multi-Court</p>
-              <p className="text-xs text-muted-foreground">Enable sub-courts</p>
-            </div>
-            <Switch
-              checked={isMultiCourt || hasChildren}
-              disabled={hasChildren && isMultiCourt}
-              onCheckedChange={onToggleMultiCourt}
-            />
-          </div>
-        )}
-
-        {/* Tabs */}
-        {showMultiCourtConfig && (
-          <div className="flex gap-2 flex-wrap">
-            {tabCourts.map((court, index) => (
-              <button
-                key={court.id}
-                type="button"
-                onClick={() => onTabClick(court)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                  !isAddingNewSubCourt && selectedTabCourtId === court.id
-                    ? "bg-primary/10 text-primary border-primary"
-                    : "bg-muted text-muted-foreground border-border"
-                }`}
-              >
-                {index === 0 ? "Main" : court.name}
-              </button>
-            ))}
-            {isAddingNewSubCourt && (
-              <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary">
-                New
-              </span>
-            )}
-            {!isAddingNewSubCourt && (
-              <button
-                type="button"
-                onClick={onAddSubCourt}
-                className="px-3 py-1.5 rounded-full text-xs font-medium border border-dashed border-muted-foreground/40 text-muted-foreground flex items-center gap-1"
-              >
-                <Plus className="h-3 w-3" /> Add
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Preview */}
-        <div className="flex gap-3 items-center">
-          <div className="w-20 h-14 rounded-lg overflow-hidden border border-border bg-muted flex items-center justify-center shrink-0">
-            {previewPhoto ? (
-              <img src={previewPhoto} alt="Preview" className="w-full h-full object-cover" />
-            ) : (
-              <ImageIcon className="h-5 w-5 text-muted-foreground/40" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-sm text-primary truncate">{previewName}</p>
-            <p className="text-xs text-muted-foreground">${previewRate}/hr · {previewSurface}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
