@@ -1,61 +1,59 @@
 
-Goal: fix Multi-Court so adding a sub-court never corrupts main-court state, and ensure court `57e11168-3d26-42dc-b86a-d5356cdddce4` is corrected.
 
-What I found (already verified):
-1) Data inconsistency exists now:
-   - Parent: `57e11168-3d26-42dc-b86a-d5356cdddce4` has `is_multi_court=false`
-   - Child exists: `6b1acfdb-4245-45c4-acc0-744697546a90` with `parent_court_id=57e11168-3d26-42dc-b86a-d5356cdddce4`
-2) `ManagerCourtFormNew` root causes:
-   - It uses `window.history.replaceState(...)` (bypasses router state sync), so route param and selected tab can diverge.
-   - Sub-court creation path inserts child but does not persist parent `is_multi_court=true`.
-   - Multi-court panel visibility depends on `is_multi_court`, so valid child relations can disappear from UI if parent flag is false.
-3) Backend side effect confirmed:
-   - `get-availability` currently relies on `requestedCourt.is_multi_court` to include children, so this bad state hides sub-courts from booking dropdowns.
+## Plan: Revamp Venue Edit & Add Court Flow on /manager/courts
 
-Implementation plan (execute in this order):
-1. Database integrity hardening + backfill (migration)
-   - Backfill: set `is_multi_court=true` for any court that already has children.
-   - Add DB validation trigger(s) on `courts` to enforce:
-     - child cannot reference itself
-     - child parent must be in same venue
-     - parent cannot be set `is_multi_court=false` while children exist
-     - when child is inserted/updated with `parent_court_id`, parent is automatically promoted to `is_multi_court=true`
-   - This guarantees the bug cannot recur from any client path.
+### What changes
 
-2. Fix manager form state model (`ManagerCourtFormNew.tsx`)
-   - Remove direct `window.history.replaceState` usage.
-   - Use a single active-court source (`selectedTabCourtId` fallback to route id), and derive panel state from active court + real child relationships.
-   - Ensure “Add Sub-Court” flow keeps parent context stable and never reclassifies child as main in panel state.
-   - Keep existing save paths intact, but guarantee parent multi-court state remains correct when creating children.
+**1. Replace inline venue name edit with a Venue Edit Dialog on `/manager/courts`**
 
-3. Multi-court UI behavior safeguards
-   - Always show multi-court tabs when children exist (even for legacy inconsistent records).
-   - Disable/harden turning off multi-court when children exist (with clear message).
-   - Keep tab labeling deterministic: main court is always the root (no parent), sub-courts always children.
+The pencil/edit button next to each venue name will open a Dialog (popup) instead of inline editing. This dialog will contain:
+- **Venue Name** field (editable)
+- **Court list with "Main Court" selection** — radio-style list of all courts in the venue, letting the manager designate which court is the main court (sets `parent_court_id = null` on the selected court and `parent_court_id = selectedMainId` on all others)
+- **Delete Venue** button at the bottom with a red destructive style
 
-4. Availability resilience (backend function)
-   - Update `get-availability` to include children when a requested court has child rows, even if `is_multi_court` flag is temporarily wrong.
-   - This prevents booking UX breakage from legacy/inconsistent data and makes behavior relationship-driven.
+**2. Update "Add Court" button logic on `/manager/courts`**
 
-5. Verification I will perform (not asking you to test manually)
-   - DB checks:
-     - verify parent `57e11168...` becomes `is_multi_court=true`
-     - verify child links remain unchanged
-     - verify no rows exist with `children > 0 AND is_multi_court=false`
-   - Functional checks:
-     - call `get-availability` for `57e11168...` and confirm `venue_courts` includes both main + child.
-   - UI checks:
-     - exercise add-sub-court flow and confirm:
-       - main court remains main
-       - child appears as child tab
-       - subsequent saves update correct court record
-       - no panel collapse/desync
+Instead of the current AlertDialog that asks the user to select a parent court:
+- Check if the venue has a designated main court (a court with `parent_court_id = null` and `is_multi_court = true`, or simply the court that has no parent)
+- If a main court exists: navigate directly to `/manager/courts/{mainCourtId}/edit?add_subcourt=true`
+- If no main court is designated (e.g., venue has 1+ courts but none marked as main/multi-court): show a warning toast/alert saying "Please select a main court in the venue settings before adding a second court"
+- If venue has zero courts: navigate to `/manager/courts/new?venue_id={venueId}` (existing behavior)
 
-Technical details:
-- Files to update:
-  - `supabase/migrations/<new>.sql`
-  - `src/pages/manager/ManagerCourtFormNew.tsx`
-  - `supabase/functions/get-availability/index.ts`
-- No money/payment logic touched.
-- No auth model changes.
-- Existing routing and form schema preserved; this is a consistency + state synchronization fix.
+**3. Add Venue Delete with confirmation modal**
+
+Inside the new Venue Edit Dialog, add a "Delete Venue" button that:
+- Opens a confirmation AlertDialog
+- Checks for active bookings across ALL courts in the venue before allowing deletion
+- If no active bookings: deletes all courts, then the venue
+- If active bookings exist: shows error message
+
+**4. Remove the "Preview" section from `/manager/courts/{id}` edit page**
+
+The Preview panel (venue name editor + multi-court config + court preview card) on the court edit page will be removed since this functionality moves to the venue edit dialog on `/manager/courts`. The court edit form (`ManagerCourtFormNew`) will keep only the form fields (court details, location, policies, photos). The multi-court tab navigation and sub-court management will remain on the edit page since it's needed for switching between courts.
+
+### Files to modify
+
+- **`src/pages/manager/ManagerCourtsNew.tsx`**: Replace inline venue name editing with Dialog trigger. Add VenueEditDialog component with venue name, main court selector, and delete venue. Update "Add Court" button to check for main court. Remove the old AlertDialog for parent court selection.
+
+- **`src/pages/manager/ManagerCourtFormNew.tsx`**: Remove the Preview panel (desktop right column and MobilePreviewPanel). Keep multi-court tab navigation in the form area for court switching. Remove venue name editor from this page.
+
+### Technical details
+
+**Main court selection logic:**
+- When the user selects a court as "main" in the dialog, update the database:
+  - Set `is_multi_court = true` on the selected main court
+  - Set `parent_court_id = null` on the main court  
+  - Set `parent_court_id = mainCourtId` on all other courts in the venue
+- When a venue has only 1 court, that court is implicitly the main court
+
+**Venue deletion flow:**
+```
+1. Check court_availability where court_id IN (venue courts) AND is_booked = true
+2. If count > 0 → block with error
+3. If count = 0 → delete court_availability → delete courts → delete venue
+```
+
+**Add Court guard:**
+- A venue needs a main court (court with `is_multi_court = true`) before adding sub-courts
+- Single-court venues: the "Add Court" button should first prompt to set that court as main via the venue edit dialog
+
