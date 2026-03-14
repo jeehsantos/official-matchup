@@ -1042,8 +1042,6 @@ export default function ManagerCourtFormNew() {
   );
 }
 
-/* ===== Mobile Preview Panel Component ===== */
-interface MobilePreviewPanelProps {
   isEditing: boolean;
   isMultiCourt: boolean;
   showMultiCourtConfig: boolean;
