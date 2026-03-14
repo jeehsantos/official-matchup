@@ -531,6 +531,16 @@ export default function ManagerCourtFormNew() {
     setValue("is_multi_court", checked);
   };
 
+  if (loading) {
+    return (
+      <ManagerLayout>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </ManagerLayout>
+    );
+  }
+
   // Determine label for active court
   const activeIsSubCourt = isAddingNewSubCourt || (activeCourt?.parent_court_id != null);
 
