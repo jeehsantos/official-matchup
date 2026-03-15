@@ -591,12 +591,15 @@ export default function CourtDetail() {
     return slot?.available_courts || [];
   };
 
-  // Toggle slot selection
+  // Toggle slot selection with auto-fill: clicking two non-adjacent slots fills the range
   const toggleSlot = (slotTime: string) => {
     const normalizedTime = slotTime.slice(0, 5);
+    const interval = availabilityData?.slot_interval_minutes || 30;
+    const maxMinutes = availabilityData?.max_booking_minutes || 120;
+    const availableSlotTimes = (availabilityData?.slots || []).map(s => s.start_time.slice(0, 5));
     
     setSelectedSlots(prev => {
-      // If already selected, remove it
+      // If already selected, deselect it (and everything after if removing from middle)
       if (prev.includes(normalizedTime)) {
         return prev.filter(t => t !== normalizedTime);
       }
@@ -610,11 +613,7 @@ export default function CourtDetail() {
       const newSelection = [...prev, normalizedTime].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
       
       if (areSlotsConsecutive(newSelection)) {
-        // Check if we're within max booking duration
-        const interval = availabilityData?.slot_interval_minutes || 30;
-        const maxMinutes = availabilityData?.max_booking_minutes || 120;
         const totalDuration = newSelection.length * interval;
-        
         if (totalDuration <= maxMinutes) {
           return newSelection;
         } else {
@@ -627,7 +626,35 @@ export default function CourtDetail() {
         }
       }
       
-      // If not consecutive, start fresh with this slot
+      // Not consecutive — try to auto-fill the range between existing selection and clicked slot
+      const allTimes = [...prev, normalizedTime];
+      const minTime = Math.min(...allTimes.map(timeToMinutes));
+      const maxTime = Math.max(...allTimes.map(timeToMinutes));
+      
+      // Build the full range from available slots
+      const rangeSlots = availableSlotTimes
+        .filter(t => {
+          const m = timeToMinutes(t);
+          return m >= minTime && m <= maxTime;
+        })
+        .sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+      
+      // Verify the range is fully consecutive (no gaps in availability)
+      if (areSlotsConsecutive(rangeSlots)) {
+        const totalDuration = rangeSlots.length * interval;
+        if (totalDuration <= maxMinutes) {
+          return rangeSlots;
+        } else {
+          toast({
+            title: "Maximum duration reached",
+            description: `You can book up to ${formatDuration(maxMinutes)}`,
+            variant: "destructive",
+          });
+          return prev;
+        }
+      }
+      
+      // If range has gaps (unavailable slots in between), start fresh
       return [normalizedTime];
     });
   };
