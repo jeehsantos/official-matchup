@@ -465,11 +465,6 @@ export default function ManagerCourtsNew() {
                               </p>
                             </div>
 
-                            <div className="flex items-center justify-between text-xs">
-                              <div className="flex items-center gap-1 text-muted-foreground">
-                                <Users className="h-3 w-3" />
-                                {court.capacity} {t("courts.playersMax")}
-                              </div>
                               <div className="flex items-center gap-0.5 font-semibold text-primary">
                                 <DollarSign className="h-3 w-3" />
                                 {court.hourly_rate.toFixed(2)}<span className="text-muted-foreground font-normal">{t("courts.perHour")}</span>
