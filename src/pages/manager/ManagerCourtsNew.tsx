@@ -573,25 +573,23 @@ export default function ManagerCourtsNew() {
 
                   {/* Court Selection Chips */}
                   <div className="flex flex-wrap gap-2">
-                    {editVenue.courts
-                      .filter(c => !c.parent_court_id || c.id === editMainCourtId)
-                      .map((court) => {
-                        const isSelected = editMainCourtId === court.id;
-                        return (
-                          <button
-                            key={court.id}
-                            type="button"
-                            onClick={() => setEditMainCourtId(isSelected ? null : court.id)}
-                            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-                              isSelected
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-border bg-muted/50 text-foreground hover:border-primary/50"
-                            }`}
-                          >
-                            {court.name}
-                          </button>
-                        );
-                      })}
+                    {editVenue.courts.map((court) => {
+                      const isSelected = editMainCourtId === court.id;
+                      return (
+                        <button
+                          key={court.id}
+                          type="button"
+                          onClick={() => setEditMainCourtId(court.id)}
+                          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                            isSelected
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-muted/50 text-foreground hover:border-primary/50"
+                          }`}
+                        >
+                          {court.name}
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {/* Court Preview Cards */}
