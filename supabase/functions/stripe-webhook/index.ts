@@ -608,71 +608,108 @@ async function handleDeferredSessionPayment(
     }
   }
 
-  // Create session
-  const { data: session, error: sessionError } = await supabaseAdmin
-    .from("sessions")
-    .insert({
-      group_id: groupId,
-      court_id: courtId,
-      session_date: sessionDate,
-      start_time: startTime,
-      duration_minutes: durationMinutes,
-      court_price: courtPriceDollars,
-      min_players: paymentType === "split" && splitPlayers ? splitPlayers : 6,
-      max_players: courtCapacity,
-      payment_deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      state: "protected",
-      payment_type: paymentType,
-      sport_category_id: sportCategoryId,
-    })
-    .select("id")
-    .single();
+  let sessionId: string | null = null;
+  let bookingRecord: { id: string } | null = null;
 
-  if (sessionError || !session) {
-    throw new WebhookProcessingError("Failed to create deferred session", {
-      operation: "sessions.insert",
-      error: sessionError,
+  // Retry-safe lookup: webhook events can be retried after a partial failure.
+  const { data: existingBooking } = await supabaseAdmin
+    .from("court_availability")
+    .select("id, booked_by_session_id")
+    .eq("court_id", courtId)
+    .eq("available_date", sessionDate)
+    .eq("start_time", startTime)
+    .eq("end_time", endTime)
+    .eq("booked_by_user_id", userId)
+    .eq("booked_by_group_id", groupId)
+    .maybeSingle();
+
+  if (existingBooking?.booked_by_session_id) {
+    sessionId = existingBooking.booked_by_session_id;
+    bookingRecord = { id: existingBooking.id };
+    console.log("Deferred webhook retry detected, reusing existing session:", sessionId);
+  } else {
+    // Create session
+    const { data: session, error: sessionError } = await supabaseAdmin
+      .from("sessions")
+      .insert({
+        group_id: groupId,
+        court_id: courtId,
+        session_date: sessionDate,
+        start_time: startTime,
+        duration_minutes: durationMinutes,
+        court_price: courtPriceDollars,
+        min_players: paymentType === "split" && splitPlayers ? splitPlayers : 6,
+        max_players: courtCapacity,
+        payment_deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        state: "protected",
+        payment_type: paymentType,
+        sport_category_id: sportCategoryId,
+      })
+      .select("id")
+      .single();
+
+    if (sessionError || !session) {
+      throw new WebhookProcessingError("Failed to create deferred session", {
+        operation: "sessions.insert",
+        error: sessionError,
+      });
+    }
+
+    sessionId = session.id;
+    console.log("Deferred session created:", sessionId);
+
+    // Create court_availability
+    const { data: insertedBookingRecord, error: caError } = await supabaseAdmin
+      .from("court_availability")
+      .insert({
+        court_id: courtId,
+        available_date: sessionDate,
+        start_time: startTime,
+        end_time: endTime,
+        is_booked: true,
+        booked_by_user_id: userId,
+        booked_by_group_id: groupId,
+        booked_by_session_id: sessionId,
+        payment_status: "completed",
+      })
+      .select("id")
+      .single();
+
+    if (caError) {
+      throw new WebhookProcessingError("Failed to create court availability", {
+        operation: "court_availability.insert",
+        error: caError,
+      });
+    }
+
+    bookingRecord = insertedBookingRecord;
+  }
+
+  if (!sessionId) {
+    throw new WebhookProcessingError("Deferred flow missing session id", {
+      operation: "deferred.ensure_session",
+      courtId,
+      sessionDate,
+      startTime,
+      endTime,
+      userId,
+      groupId,
     });
   }
 
-  const sessionId = session.id;
-  console.log("Deferred session created:", sessionId);
-
-  // Create session_player
-  const { error: spError } = await supabaseAdmin.from("session_players").insert({
+  // Create or confirm session_player
+  const { error: spError } = await supabaseAdmin.from("session_players").upsert({
     session_id: sessionId,
     user_id: userId,
     is_confirmed: true,
     confirmed_at: new Date().toISOString(),
+  }, {
+    onConflict: "session_id,user_id",
   });
   if (spError) {
-    throw new WebhookProcessingError("Failed to create session player", {
-      operation: "session_players.insert",
+    throw new WebhookProcessingError("Failed to upsert session player", {
+      operation: "session_players.upsert",
       error: spError,
-    });
-  }
-
-  // Create court_availability
-  const { data: bookingRecord, error: caError } = await supabaseAdmin
-    .from("court_availability")
-    .insert({
-      court_id: courtId,
-      available_date: sessionDate,
-      start_time: startTime,
-      end_time: endTime,
-      is_booked: true,
-      booked_by_user_id: userId,
-      booked_by_group_id: groupId,
-      booked_by_session_id: sessionId,
-      payment_status: "completed",
-    })
-    .select("id")
-    .single();
-
-  if (caError) {
-    throw new WebhookProcessingError("Failed to create court availability", {
-      operation: "court_availability.insert",
-      error: caError,
     });
   }
 
@@ -716,7 +753,7 @@ async function handleDeferredSessionPayment(
     ? totalChargeCents / 100
     : (stripeSession.amount_total || 0) / 100;
 
-  const { error: paymentError } = await supabaseAdmin.from("payments").insert({
+  const { error: paymentError } = await supabaseAdmin.from("payments").upsert({
     session_id: sessionId,
     user_id: userId,
     amount: totalChargeDollars,
@@ -729,11 +766,13 @@ async function handleDeferredSessionPayment(
     status: "completed",
     paid_at: new Date().toISOString(),
     stripe_payment_intent_id: paymentIntentId,
+  }, {
+    onConflict: "session_id,user_id",
   });
 
   if (paymentError) {
-    throw new WebhookProcessingError("Failed to create deferred payment", {
-      operation: "payments.insert",
+    throw new WebhookProcessingError("Failed to upsert deferred payment", {
+      operation: "payments.upsert",
       error: paymentError,
     });
   }
